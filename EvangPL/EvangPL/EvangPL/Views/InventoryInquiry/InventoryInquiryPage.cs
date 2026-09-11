@@ -68,7 +68,7 @@ namespace EvangPL.Views.InventoryInquiry
 
         public InventoryInquiry() : base("strInventoryInquiry")
         {
-            Title = "在庫照会";
+            Title = "在庫照会1";
             BuildUI();
         }
 
