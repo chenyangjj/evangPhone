@@ -449,9 +449,17 @@ namespace EvangPL.Views.StockAdjust
 
                 // 卡片点击跳转
                 var tap = new TapGestureRecognizer();
-                tap.Tapped += (s, e) =>
+                tap.Tapped += async (s, e) =>
                 {
-                    // TODO：跳转详情
+                    try
+                    {
+                        var editPage = new EvangPL.Views.InventoryAdjustment.InventoryAdjustment(item);
+                        await Navigation.PushAsync(editPage);
+                    }
+                    catch (Exception ex)
+                    {
+                        await DisplayAlert("エラー", $"画面遷移に失敗しました: {ex.Message}", "OK");
+                    }
                 };
                 cardFrame.GestureRecognizers.Add(tap);
 
