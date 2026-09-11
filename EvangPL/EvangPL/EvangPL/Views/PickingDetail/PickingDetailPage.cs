@@ -6,53 +6,60 @@ using EvangPL.Components;
 using EvangPL.Utils;
 using MauiIcons.Core;
 using MauiIcons.Fluent;
-using Microsoft.Maui;
 using Microsoft.Maui.Controls.Shapes;
-using Microsoft.Maui.Graphics.Text;
 using System.Collections.ObjectModel;
 using System.Text.Json;
-using static System.Net.Mime.MediaTypeNames;
 using PickingDetailInfo = EvangPL.Utils.PickingDetailInfo;
 
-namespace InventorySys.Views.PickingDetail
+namespace EvangPL.Views.PickingDetail
 {
+    /// <summary>
+    /// 出荷明細画面（入庫明細画面 InputDetail をベースに出荷用に改造）
+    /// </summary>
     public class PickingDetail : EvangContentVM
     {
-        // ========== 主页面控件 ==========
+        // ==================== UIコントロール参照 ====================
         private Border? pageHeaderInfo;
         private PickingDetailInfo? _detailInfo;
-        private Grid? _mainGrid;
         private VerticalStackLayout? _scrollContainer;
-        private readonly List<StockInRow> _allBottomData = new List<StockInRow>();
+        private ContentView? _detailInputAreaHost;      // 明細登録エリア（選択中包裹専用）
+        private ContentView? _bottomPendingTableHost;   // 底部：全包裹の明細一覧
 
-        // ========== 分页参数 ==========
-        private Grid? paginationLayout;
-        private Button? prevButton;
-        private Button? nextButton;
-        private Label? pageLabel;
-        private int currentPage = 0;
-        private int pageSize = 5;
-        private int totalPages = 0;
+        // ==================== データソース ====================
+        // ① 出荷対象の包裹一覧（ヘッダー上部の選択テーブルの対象）
+        private List<PackageItem> _packageItems = new List<PackageItem>();
+        // ② 入力中の明細（まだ保存していない）
+        private readonly List<PendingDetailItem> _pendingDetails = new List<PendingDetailItem>();
 
-        // ========== 弹窗相关 ==========
+        // ==================== 選択状態 ====================
+        private PackageItem? _selectedPackage = null;   // 現在選択中の包裹
+
+        // ==================== 入力コントロール ====================
+        private Entry? _entryLocation;
+        private Entry? _entryLot;
+        private Entry? _entryQty;
+
+        // ==================== 色定数 ====================
+        private static readonly Color InputBorderColor = Color.FromArgb("#cdd2dc");
+        private static readonly Color InputBackgroundColor = Colors.White;
+        private const int InputCornerRadius = 6;
+        private static readonly Color SelectedRowColor = Color.FromArgb("#d7e8fa");
+
+        // ==================== ポップアップ関連 ====================
         private Frame? _popupFrame;
-        private BoxView? _maskLayer;
+        private BoxView? _popupMaskLayer;
         private Entry? _entryPackageNo;
         private Entry? _entryItemCode;
-        private Entry? _entryQty;
+        private Entry? _entryPopupQty;
         private Button? _btnAddItem;
         private Button? _btnFinishPopup;
         private Button? _btnClosePopup;
         private CollectionView? _popupList;
-        private Label? _popupCountLabel;
+        public ObservableCollection<PackageItem> AddedPackageList { get; set; } = new ObservableCollection<PackageItem>();
 
-        // ========== 弹窗数据源 ==========
-        public ObservableCollection<PackageItem> AddedPackageList { get; set; }
-
-        // ========== 构造函数 ==========
+        // ==================== コンストラクター ====================
         public PickingDetail() : base("strPickingDetail")
         {
-            AddedPackageList = new ObservableCollection<PackageItem>();
             _detailInfo = new PickingDetailInfo
             {
                 OrderNo = "SO-2026-0987",
@@ -62,59 +69,54 @@ namespace InventorySys.Views.PickingDetail
                 TotalQty = 210,
                 Status = "未出荷"
             };
+            InitializeMockData();
             BuildUI();
         }
 
         public PickingDetail(PickingDetailInfo detailInfo) : base("strPickingDetail")
         {
-            AddedPackageList = new ObservableCollection<PackageItem>();
             _detailInfo = detailInfo;
+            InitializeMockData();
             BuildUI();
         }
 
-        // ========== 主UI构建 ==========
-        private void BuildUI()
+        // ==================== モックデータ初期化 ====================
+        private void InitializeMockData()
         {
-            // 假数据
-            List<StockInRow> topExistLotList = new List<StockInRow>()
+            _packageItems = new List<PackageItem>
             {
-                new StockInRow{ ItemCode = "部品A-1010", LotNo = "LOT20260620", Qty = 50 },
-                new StockInRow{ ItemCode = "部品A-1010", LotNo = "LOT20260615", Qty = 30 }
-            };
-
-            List<StockInRow> registeredLotList = new List<StockInRow>()
-            {
-                new StockInRow{ LotNo = "LOT20260708", Qty = 80 },
-                new StockInRow{ LotNo = "LOT20260709", Qty = 40 }
-            };
-
-            _allBottomData.AddRange(new List<StockInRow>()
-            {
-                new StockInRow{ ItemCode = "部品Z-9999", LotNo = "LOT20260615", Qty = 10 },
-                new StockInRow{ ItemCode = "部品A-1010", LotNo = "LOT20260728", Qty = 20 },
-                new StockInRow{ ItemCode = "部品A-1010", LotNo = "LOT20260738", Qty = 30 },
-                new StockInRow{ ItemCode = "部品A-1010", LotNo = "LOT20260748", Qty = 40 },
-                new StockInRow{ ItemCode = "部品N-1010", LotNo = "LOT20260758", Qty = 50 },
-                new StockInRow{ ItemCode = "部品A-1010", LotNo = "LOT20260708", Qty = 60 },
-                new StockInRow{ ItemCode = "部品A-1010", LotNo = "LOT20260768", Qty = 70 },
-                new StockInRow{ ItemCode = "部品B-1010", LotNo = "LOT20260708", Qty = 80 },
-                new StockInRow{ ItemCode = "部品G-1010", LotNo = "LOT20260778", Qty = 90 },
-                new StockInRow{ ItemCode = "部品A-1010", LotNo = "LOT20260708", Qty = 80 },
-                new StockInRow{ ItemCode = "部品E-1010", LotNo = "LOT20260708", Qty = 70 },
-                new StockInRow{ ItemCode = "部品F-1010", LotNo = "LOT20260708", Qty = 60 },
-                new StockInRow{ ItemCode = "部品A-1010", LotNo = "LOT20260708", Qty = 50 },
-                new StockInRow{ ItemCode = "部品D-1010", LotNo = "LOT20260708", Qty = 40 }
-            });
-
-            totalPages = (int)Math.Ceiling((double)_allBottomData.Count / pageSize);
-
-            // ========== 主Grid ==========
-            _mainGrid = new Grid
-            {
-                RowDefinitions =
+                new PackageItem
                 {
-                    new RowDefinition { Height = GridLength.Star }
+                    PackageNo = "BOX-0009",
+                    ItemCode = "部品B-2020",
+                    Qty = 20,
+                    Customer = _detailInfo?.CustomerName ?? "山田工業(株)",
+                    ShipDate = _detailInfo?.ScheduleDate ?? "2026-07-08",
+                    Details = new List<PackageDetail>()
                 },
+                new PackageItem
+                {
+                    PackageNo = "BOX-0010",
+                    ItemCode = "部品C-3030",
+                    Qty = 10,
+                    Customer = _detailInfo?.CustomerName ?? "山田工業(株)",
+                    ShipDate = _detailInfo?.ScheduleDate ?? "2026-07-08",
+                    Details = new List<PackageDetail>()
+                }
+            };
+        }
+
+        // ==================== UI構築 ====================
+        private async void BuildUI()
+        {
+            await BuildCompleteUI();
+        }
+
+        private async Task BuildCompleteUI()
+        {
+            var mainGrid = new Grid
+            {
+                RowDefinitions = { new RowDefinition { Height = GridLength.Star } },
                 ColumnDefinitions = { new ColumnDefinition { Width = GridLength.Star } },
                 BackgroundColor = Color.FromArgb("#eff0f0"),
                 RowSpacing = 0,
@@ -122,20 +124,17 @@ namespace InventorySys.Views.PickingDetail
                 VerticalOptions = LayoutOptions.Fill
             };
 
-            // ========== 头部信息 ==========
-            string displayOrderNo = _detailInfo?.OrderNo ?? "SO-2026-0987";
-            string displayCustomer = _detailInfo?.CustomerName ?? "山田工業(株)";
-            string displayPlanDate = _detailInfo?.ScheduleDate ?? "2026-07-08";
+            // 1. ヘッダー（顧客/出荷予定日 + 包裹選択テーブル）
+            pageHeaderInfo = BuildHeader();
 
-            pageHeaderInfo = BuildStockInHeader(displayOrderNo, displayCustomer, displayPlanDate, topExistLotList);
-            var detailInputArea = BuildDetailInputArea(registeredLotList);
-            CreatePaginationControls();
+            // 2. 明細登録エリア（選択なしの場合は非表示）
+            var detailInputArea = BuildDetailInputArea();
+            _detailInputAreaHost = new ContentView { Content = detailInputArea };
 
-            // 初始化加载第一页数据
-            var firstPageData = _allBottomData.Take(pageSize).ToList();
-            var bottomTable = BuildBottomRegisteredTable(firstPageData, _allBottomData.Count);
+            // 3. 底部：全包裹の明細一覧
+            _bottomPendingTableHost = new ContentView { Content = BuildBottomPendingTable() };
 
-            // ========== 保存按钮（点击弹出弹窗） ==========
+            // 4. 保存ボタン（クリックでポップアップを表示）
             var saveBtn = new Button
             {
                 Text = "保存",
@@ -144,15 +143,13 @@ namespace InventorySys.Views.PickingDetail
                 Margin = new Thickness(10, 5, 10, 10),
                 CornerRadius = 6
             };
-            saveBtn.Clicked += OnSaveButtonClicked;
+            saveBtn.Clicked += OnSaveButtonClicked;   // ★ 内部でポップアップ表示に変更
 
-            // ========== 滚动容器 ==========
             _scrollContainer = new VerticalStackLayout { Spacing = 6, Padding = new Thickness(10) };
-            _scrollContainer.Children.Add(pageHeaderInfo);
-            _scrollContainer.Children.Add(detailInputArea);
-            _scrollContainer.Children.Add(paginationLayout);
-            _scrollContainer.Children.Add(bottomTable);
-            _scrollContainer.Children.Add(saveBtn);
+            _scrollContainer.Children.Add(pageHeaderInfo);          // [0]
+            _scrollContainer.Children.Add(_detailInputAreaHost);   // [1]
+            _scrollContainer.Children.Add(_bottomPendingTableHost); // [2]
+            _scrollContainer.Children.Add(saveBtn);                 // [3]
 
             var scrollView = new ScrollView
             {
@@ -160,26 +157,23 @@ namespace InventorySys.Views.PickingDetail
                 VerticalScrollBarVisibility = ScrollBarVisibility.Always
             };
 
-            _mainGrid.Add(scrollView, 0, 0);
+            mainGrid.Add(scrollView, 0, 0);
 
-            // ========== 构建弹窗（添加到主Grid最上层） ==========
-            BuildPopup();
+            // ★ ポップアップを最前面に追加（GridのRowSpanで全画面カバー）
+            BuildPopup(mainGrid);
 
-            Content = _mainGrid;
-
-            // 初始化分页按钮状态
-            UpdatePaginationControls();
+            Content = mainGrid;
         }
 
-        // ========== 构建弹窗 ==========
-        private void BuildPopup()
+        // ==================== ポップアップ構築（StockOutDetail を模倣） ====================
+        private void BuildPopup(Grid parentGrid)
         {
-            // ---- 弹窗输入控件 ----
+            // ---- 入力コントロール ----
             _entryPackageNo = new Entry { Placeholder = "梱包No.(スキャン可)", BackgroundColor = Colors.White };
             _entryItemCode = new Entry { Placeholder = "品目(スキャン可)", BackgroundColor = Colors.White };
-            _entryQty = new Entry { Keyboard = Keyboard.Numeric, Placeholder = "数量", BackgroundColor = Colors.White };
+            _entryPopupQty = new Entry { Keyboard = Keyboard.Numeric, Placeholder = "数量", BackgroundColor = Colors.White };
 
-            // ---- 追加按钮 ----
+            // ---- 追加ボタン ----
             _btnAddItem = new Button
             {
                 Text = "+ この内容を追加",
@@ -192,7 +186,7 @@ namespace InventorySys.Views.PickingDetail
             };
             _btnAddItem.Clicked += OnPopupAddClick;
 
-            // ---- 完了按钮 ----
+            // ---- 完了ボタン ----
             _btnFinishPopup = new Button
             {
                 Text = "完了",
@@ -203,7 +197,7 @@ namespace InventorySys.Views.PickingDetail
             };
             _btnFinishPopup.Clicked += (s, e) => ClosePopup();
 
-            // ---- 关闭按钮 ----
+            // ---- 閉じるボタン ----
             _btnClosePopup = new Button
             {
                 Text = "×",
@@ -214,7 +208,7 @@ namespace InventorySys.Views.PickingDetail
             };
             _btnClosePopup.Clicked += (s, e) => ClosePopup();
 
-            // ---- 弹窗标题 ----
+            // ---- タイトル行 ----
             var titleRow = new Grid
             {
                 ColumnDefinitions =
@@ -235,7 +229,34 @@ namespace InventorySys.Views.PickingDetail
             titleRow.Children.Add(titleLabel);
             titleRow.Children.Add(_btnClosePopup);
 
-            // ---- 弹窗内列表表头 ----
+            // ---- ★ 梱包No. 行（Entry + バーコードアイコン） ----
+            var packageRow = new Grid
+            {
+                ColumnDefinitions =
+                {
+                    new ColumnDefinition { Width = GridLength.Star },
+                    new ColumnDefinition { Width = 50 }
+                }
+            };
+            packageRow.Add(_entryPackageNo, 0, 0);
+            packageRow.Add(BuildBarcodeIcon(), 1, 0);
+
+            // ---- ★ 品目 行（Entry + バーコードアイコン） ----
+            var itemRow = new Grid
+            {
+                ColumnDefinitions =
+                {
+                    new ColumnDefinition { Width = GridLength.Star },
+                    new ColumnDefinition { Width = 50 }
+                }
+            };
+            itemRow.Add(_entryItemCode, 0, 0);
+            itemRow.Add(BuildBarcodeIcon(), 1, 0);
+
+            // ---- 数量行（バーコードなし） ----
+            // _entryPopupQty はそのまま使用
+
+            // ---- 表頭 ----
             var tableHeader = new Grid
             {
                 BackgroundColor = Color.FromArgb("#e6edf7"),
@@ -249,11 +270,11 @@ namespace InventorySys.Views.PickingDetail
             };
             tableHeader.Children.Add(new Label { Text = "梱包No.", FontAttributes = FontAttributes.Bold });
             tableHeader.Children.Add(new Label { Text = "品目", FontAttributes = FontAttributes.Bold });
-            var qtyLabel = new Label { Text = "数量", FontAttributes = FontAttributes.Bold, HorizontalOptions = LayoutOptions.End };
-            Grid.SetColumn(qtyLabel, 2);
-            tableHeader.Children.Add(qtyLabel);
+            var qtyHeader = new Label { Text = "数量", FontAttributes = FontAttributes.Bold, HorizontalOptions = LayoutOptions.End };
+            Grid.SetColumn(qtyHeader, 2);
+            tableHeader.Children.Add(qtyHeader);
 
-            // ---- 弹窗内列表 ----
+            // ---- ポップアップ内リスト ----
             _popupList = new CollectionView
             {
                 ItemsSource = AddedPackageList,
@@ -286,16 +307,7 @@ namespace InventorySys.Views.PickingDetail
                 })
             };
 
-            // ---- 弹窗内计数标签 ----
-            _popupCountLabel = new Label
-            {
-                Text = "追加済み: 0件",
-                FontSize = 12,
-                TextColor = Colors.Gray,
-                Margin = new Thickness(0, 5, 0, 0)
-            };
-
-            // ---- 弹窗内容布局 ----
+            // ---- ポップアップ内容レイアウト ----
             var popupContent = new VerticalStackLayout
             {
                 Padding = new Thickness(20),
@@ -304,18 +316,17 @@ namespace InventorySys.Views.PickingDetail
                 Children =
                 {
                     titleRow,
-                    _entryPackageNo,
-                    _entryItemCode,
-                    _entryQty,
+                    packageRow,       // ★ バーコード付き
+                    itemRow,          // ★ バーコード付き
+                    _entryPopupQty,   // 数量（バーコードなし）
                     _btnAddItem,
                     tableHeader,
                     _popupList,
-                    _popupCountLabel,
                     _btnFinishPopup
                 }
             };
 
-            // ---- 弹窗Frame（默认隐藏） ----
+            // ---- ポップアップ Frame ----
             _popupFrame = new Frame
             {
                 IsVisible = false,
@@ -329,116 +340,75 @@ namespace InventorySys.Views.PickingDetail
                 VerticalOptions = LayoutOptions.Center
             };
 
-            // ---- 半透明遮罩 ----
-            _maskLayer = new BoxView
+            // ---- 半透明マスク ----
+            _popupMaskLayer = new BoxView
             {
                 BackgroundColor = Colors.Black.WithAlpha(0.5f),
-                InputTransparent = false,
-                IsVisible = false
+                InputTransparent = false
             };
-            // 遮罩点击关闭弹窗
-            var tapGesture = new TapGestureRecognizer();
-            tapGesture.Tapped += (s, e) => ClosePopup();
-            _maskLayer.GestureRecognizers.Add(tapGesture);
+            _popupMaskLayer.SetBinding(BoxView.IsVisibleProperty, new Binding(nameof(_popupFrame.IsVisible), source: _popupFrame));
 
-            // ---- 添加到主Grid（覆盖全屏） ----
-            Grid.SetRowSpan(_maskLayer, 1);
-            Grid.SetColumnSpan(_maskLayer, 1);
+            // ---- Grid にオーバーレイとして追加 ----
+            Grid.SetRowSpan(_popupMaskLayer, 1);
+            Grid.SetColumnSpan(_popupMaskLayer, 1);
             Grid.SetRowSpan(_popupFrame, 1);
             Grid.SetColumnSpan(_popupFrame, 1);
 
-            _mainGrid?.Children.Add(_maskLayer);
-            _mainGrid?.Children.Add(_popupFrame);
+            parentGrid.Children.Add(_popupMaskLayer);
+            parentGrid.Children.Add(_popupFrame);
         }
 
-        // ========== 弹窗控制方法 ==========
-        private void ShowPopup()
-        {
-            if (_maskLayer != null) _maskLayer.IsVisible = true;
-            if (_popupFrame != null) _popupFrame.IsVisible = true;
-            UpdatePopupCount();
-        }
-
+        // ==================== ポップアップ制御 ====================
         private void ClosePopup()
         {
-            if (_maskLayer != null) _maskLayer.IsVisible = false;
             if (_popupFrame != null) _popupFrame.IsVisible = false;
         }
 
-        private void UpdatePopupCount()
+        // ==================== ポップアップの「+ この内容を追加」 ====================
+        private async void OnPopupAddClick(object? sender, EventArgs e)
         {
-            if (_popupCountLabel != null)
+            if (!int.TryParse(_entryPopupQty?.Text?.Trim(), out int qty) || qty <= 0)
             {
-                _popupCountLabel.Text = $"追加済み: {AddedPackageList.Count}件";
+                await DisplayAlert("エラー", "数量は1以上を入力してください。", "OK");
+                return;
+            }
+            if (string.IsNullOrWhiteSpace(_entryPackageNo?.Text) || string.IsNullOrWhiteSpace(_entryItemCode?.Text))
+            {
+                await DisplayAlert("エラー", "梱包No、品目は必須です。", "OK");
+                return;
+            }
+
+            AddedPackageList.Add(new PackageItem
+            {
+                PackageNo = _entryPackageNo.Text!.Trim(),
+                ItemCode = _entryItemCode.Text!.Trim(),
+                Qty = qty
+            });
+
+            _entryPackageNo.Text = string.Empty;
+            _entryItemCode.Text = string.Empty;
+            _entryPopupQty.Text = string.Empty;
+
+            if (_popupList != null && AddedPackageList.Count > 0)
+            {
+                _popupList.ScrollTo(AddedPackageList[AddedPackageList.Count - 1], position: ScrollToPosition.End);
             }
         }
 
-        // ========== 保存按钮点击事件 ==========
+        // ==================== 保存ボタン（ポップアップを開く） ====================
         private void OnSaveButtonClicked(object? sender, EventArgs e)
         {
-            // 清空旧数据
+            // 開く前にデータをクリア
             AddedPackageList.Clear();
             if (_entryPackageNo != null) _entryPackageNo.Text = string.Empty;
             if (_entryItemCode != null) _entryItemCode.Text = string.Empty;
-            if (_entryQty != null) _entryQty.Text = string.Empty;
-            UpdatePopupCount();
-            ShowPopup();
+            if (_entryPopupQty != null) _entryPopupQty.Text = string.Empty;
+
+            if (_popupFrame != null) _popupFrame.IsVisible = true;
         }
 
-        // ========== 弹窗追加按钮点击事件 ==========
-        private async void OnPopupAddClick(object? sender, EventArgs e)
-        {
-            try
-            {
-                string packageNo = _entryPackageNo?.Text?.Trim() ?? "";
-                string itemCode = _entryItemCode?.Text?.Trim() ?? "";
-                string qtyText = _entryQty?.Text?.Trim() ?? "";
-
-                if (string.IsNullOrWhiteSpace(packageNo))
-                {
-                    await DisplayAlert("エラー", "梱包Noを入力してください。", "OK");
-                    return;
-                }
-                if (string.IsNullOrWhiteSpace(itemCode))
-                {
-                    await DisplayAlert("エラー", "品目を入力してください。", "OK");
-                    return;
-                }
-                if (!int.TryParse(qtyText, out int qty) || qty <= 0)
-                {
-                    await DisplayAlert("エラー", "数量は1以上の数値を入力してください。", "OK");
-                    return;
-                }
-
-                AddedPackageList.Add(new PackageItem
-                {
-                    PackageNo = packageNo,
-                    ItemCode = itemCode,
-                    Qty = qty
-                });
-
-                // 清空输入框
-                if (_entryPackageNo != null) _entryPackageNo.Text = string.Empty;
-                if (_entryItemCode != null) _entryItemCode.Text = string.Empty;
-                if (_entryQty != null) _entryQty.Text = string.Empty;
-
-                UpdatePopupCount();
-
-                // 滚动到最新项
-                if (_popupList != null)
-                {
-                     _popupList.ScrollTo(AddedPackageList[AddedPackageList.Count - 1], position: ScrollToPosition.End);
-                }
-            }
-            catch (Exception ex)
-            {
-                await DisplayAlert("エラー", $"追加に失敗しました: {ex.Message}", "OK");
-            }
-        }
-
-        // ========== 以下为原有的辅助方法（保持不变） ==========
-
-        private Border BuildStockInHeader(string poNumber, string customer, string planDate, List<StockInRow> topLotRows)
+        // ==================== ヘッダー（顧客/出荷予定日 + 包裹選択テーブル） ====================
+        private Border BuildHeader()
         {
             var innerGrid = new Grid
             {
@@ -449,15 +419,19 @@ namespace InventorySys.Views.PickingDetail
                     new RowDefinition()
                 },
                 ColumnDefinitions =
-                 {
+                {
                     new ColumnDefinition(),
                     new ColumnDefinition()
-                 },
+                },
                 Padding = new Thickness(5, 5, 5, 8),
                 BackgroundColor = Color.FromArgb("#edeff3")
             };
             innerGrid.Add(new Label { Text = "顧客", FontSize = 12, TextColor = Colors.Gray });
             innerGrid.Add(new Label { Text = "出荷予定日", FontSize = 12, TextColor = Colors.Gray }, 1, 0);
+
+            string customer = _detailInfo?.CustomerName ?? "";
+            string shipDate = _detailInfo?.ScheduleDate ?? "";
+
             var customerBorder = new Border
             {
                 Stroke = Color.FromArgb("#cdd2dc"),
@@ -467,9 +441,9 @@ namespace InventorySys.Views.PickingDetail
                 Padding = new Thickness(5, 5, 2, 4),
                 Margin = new Thickness(0, 0, 2, 15)
             };
-            var customerLabel = new Label { Text = customer, FontSize = 14, TextColor = Color.FromArgb("#6b727c"), FontAttributes = FontAttributes.Bold };
-            customerBorder.Content = customerLabel;
+            customerBorder.Content = new Label { Text = customer, FontSize = 14, TextColor = Color.FromArgb("#6b727c"), FontAttributes = FontAttributes.Bold };
             innerGrid.Add(customerBorder, 0, 1);
+
             var dateBorder = new Border
             {
                 Stroke = Color.FromArgb("#cdd2dc"),
@@ -479,23 +453,14 @@ namespace InventorySys.Views.PickingDetail
                 Padding = new Thickness(5, 5, 2, 4),
                 Margin = new Thickness(2, 0, 0, 15)
             };
-            var dateLabel = new Label { Text = planDate, FontSize = 15, TextColor = Color.FromArgb("#6b727c"), FontAttributes = FontAttributes.Bold };
-            dateBorder.Content = dateLabel;
+            dateBorder.Content = new Label { Text = shipDate, FontSize = 15, TextColor = Color.FromArgb("#6b727c"), FontAttributes = FontAttributes.Bold };
             innerGrid.Add(dateBorder, 1, 1);
 
-            var topTable = BuildSimpleTable(
-                new List<string> { "アイテム", "入庫済みロット", "数量" },
-                topLotRows.ConvertAll(r => new List<string> { r.ItemCode, r.LotNo, r.Qty.ToString() }),
-                new List<GridLength>
-                {
-                    new GridLength(2, GridUnitType.Star),
-                    new GridLength(2, GridUnitType.Star),
-                    new GridLength(1, GridUnitType.Star)
-                }
-            );
-            Grid.SetRow(topTable, 2);
-            Grid.SetColumnSpan(topTable, 2);
-            innerGrid.Add(topTable);
+            // 包裹選択テーブル（タップで選択）
+            var packageTable = BuildPackageSelectionTable();
+            Grid.SetRow(packageTable, 2);
+            Grid.SetColumnSpan(packageTable, 2);
+            innerGrid.Add(packageTable);
 
             var headerBorder = new Border
             {
@@ -506,227 +471,23 @@ namespace InventorySys.Views.PickingDetail
                 Padding = new Thickness(1)
             };
             headerBorder.Content = innerGrid;
-
             return headerBorder;
         }
 
-        private Border BuildDetailInputArea(List<StockInRow> regLots)
+        // ==================== 包裹選択テーブル ====================
+        private Border BuildPackageSelectionTable()
         {
-            var border = new Border
+            var headers = new List<string> { "アイテム", "出荷済みロット", "数量" };
+            var columnWidths = new List<GridLength>
             {
-                Stroke = Color.FromArgb("#b4cee8"),
-                Background = Color.FromArgb("#e6f0fa"),
-                StrokeShape = new RoundRectangle { CornerRadius = 6 },
-                Padding = new Thickness(5),
-                StrokeThickness = 2
+                new GridLength(2, GridUnitType.Star),
+                new GridLength(2, GridUnitType.Star),
+                new GridLength(1, GridUnitType.Star)
             };
 
-            var layout = new VerticalStackLayout { Spacing = 10 };
-            layout.Children.Add(new Label { Text = "明細登録", FontSize = 15, FontAttributes = FontAttributes.Bold });
-
-            var locRow = new Grid
-            {
-                ColumnDefinitions = { new ColumnDefinition { Width = GridLength.Star }, new ColumnDefinition { Width = 50 } }
-            };
-            locRow.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            layout.Children.Add(new Label { Text = "入庫先ロケーション (スキャン可)", FontSize = 12, TextColor = Colors.Gray });
-            var locPicker = new Picker
-            {
-                Title = "選択",
-                SelectedIndex = 0,
-                BackgroundColor = Colors.White,
-                ItemsSource = new List<string> { "WH1-A-03" }
-            };
-            locRow.Add(locPicker, 0, 1);
-            MauiIcon barcodeIcon1 = new MauiIcon
-            {
-                Icon = FluentIcons.BarcodeScanner20,
-                IconSize = 40,
-                IconColor = Color.FromRgba("#1e3a5f"),
-                HorizontalOptions = LayoutOptions.End
-            };
-            locRow.Add(barcodeIcon1, 1, 1);
-            layout.Children.Add(locRow);
-
-            layout.Children.Add(new Label { Text = "ロット / シリアル (スキャン可)", FontSize = 12, TextColor = Colors.Gray });
-
-            var lotRow = new Grid
-            {
-                ColumnDefinitions = { new ColumnDefinition { Width = GridLength.Star }, new ColumnDefinition { Width = 50 } }
-            };
-            lotRow.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            var lotEntry = new Entry { Text = "LOT20260708", BackgroundColor = Colors.White, };
-            lotRow.Add(lotEntry, 0, 1);
-            MauiIcon barcodeIcon2 = new MauiIcon
-            {
-                Icon = FluentIcons.BarcodeScanner20,
-                IconSize = 40,
-                IconColor = Color.FromRgba("#1e3a5f"),
-                HorizontalOptions = LayoutOptions.End
-            };
-            lotRow.Add(barcodeIcon2, 1, 1);
-            layout.Children.Add(lotRow);
-
-            var qtyRow = new Grid
-            {
-                ColumnDefinitions = { new ColumnDefinition { Width = GridLength.Star }, new ColumnDefinition { Width = 60 } }
-            };
-            var qtyEntry = new Entry { Text = "120", Keyboard = Keyboard.Numeric, BackgroundColor = Colors.White, };
-            qtyRow.Add(qtyEntry, 0, 0);
-            qtyRow.Add(new Label { Text = "個", VerticalOptions = LayoutOptions.Center, HorizontalTextAlignment = TextAlignment.Center }, 1, 0);
-            layout.Children.Add(new Label { Text = "入庫数量", FontSize = 12, TextColor = Colors.Gray });
-            layout.Children.Add(qtyRow);
-
-            var innerTable = BuildSimpleTable(
-                new List<string> { "登録済みロット", "数量", "" },
-                regLots.ConvertAll(r => new List<string> { r.LotNo, $"{r.Qty}個", "❌" }),
-                new List<GridLength>
-                {
-                    new GridLength(3, GridUnitType.Star),
-                    new GridLength(2, GridUnitType.Star),
-                    new GridLength(1, GridUnitType.Star)
-                }
-            );
-            layout.Children.Add(innerTable);
-
-            var addLotBtn = new Button
-            {
-                Text = "+ロットを追加",
-                BackgroundColor = Colors.Transparent,
-                TextColor = Color.FromArgb("#245a96"),
-                BorderColor = Color.FromArgb("#245a96"),
-                BorderWidth = 3,
-                FontAttributes = FontAttributes.Bold
-            };
-            layout.Children.Add(addLotBtn);
-
-            border.Content = layout;
-            return border;
-        }
-
-        private void CreatePaginationControls()
-        {
-            paginationLayout = new Grid
-            {
-                IsVisible = true,
-                RowDefinitions =
-                {
-                    new RowDefinition { Height = GridLength.Auto },
-                    new RowDefinition { Height = GridLength.Auto },
-                },
-                ColumnDefinitions =
-                {
-                    new ColumnDefinition { Width = GridLength.Star }
-                },
-                HorizontalOptions = LayoutOptions.Center,
-                VerticalOptions = LayoutOptions.Center,
-                Margin = new Thickness(0, 5),
-                RowSpacing = 3
-            };
-            var buttonRow = new HorizontalStackLayout
-            {
-                HorizontalOptions = LayoutOptions.Center,
-                VerticalOptions = LayoutOptions.Center,
-                Spacing = 25
-            };
-
-            prevButton = new Button
-            {
-                Text = "◀ 前明細",
-                FontSize = 12,
-                BackgroundColor = Color.FromArgb("#245a96"),
-                TextColor = Colors.White,
-                FontAttributes = FontAttributes.Bold,
-                BorderColor = Color.FromArgb("#245a96"),
-                BorderWidth = 2,
-                CornerRadius = 5,
-                WidthRequest = 100,
-                HeightRequest = 45,
-                MinimumWidthRequest = 60,
-                MinimumHeightRequest = 30,
-                IsEnabled = false,
-                HorizontalOptions = LayoutOptions.Center,
-                Padding = new Thickness(2),
-            };
-            prevButton.Clicked += OnPrevButtonClicked;
-
-            pageLabel = new Label
-            {
-                Text = "1 / 1",
-                FontSize = 12,
-                TextColor = Colors.Black,
-                VerticalOptions = LayoutOptions.End,
-                HorizontalTextAlignment = TextAlignment.Center,
-                Margin = new Thickness(0, 5, 0, 5),
-                Padding = new Thickness(0, 5, 0, 0),
-            };
-
-            nextButton = new Button
-            {
-                Text = "次明細 ▶",
-                FontSize = 12,
-                BackgroundColor = Color.FromArgb("#245a96"),
-                TextColor = Colors.White,
-                FontAttributes = FontAttributes.Bold,
-                BorderColor = Color.FromArgb("#245a96"),
-                BorderWidth = 2,
-                CornerRadius = 5,
-                WidthRequest = 100,
-                HeightRequest = 45,
-                MinimumWidthRequest = 60,
-                MinimumHeightRequest = 30,
-                IsEnabled = false,
-                HorizontalOptions = LayoutOptions.Center,
-                Padding = new Thickness(2),
-            };
-            nextButton.Clicked += OnNextButtonClicked;
-
-            buttonRow.Children.Add(prevButton);
-            buttonRow.Children.Add(pageLabel);
-            buttonRow.Children.Add(nextButton);
-
-            Grid.SetRow(buttonRow, 0);
-            paginationLayout.Children.Add(buttonRow);
-        }
-
-        private VerticalStackLayout BuildBottomRegisteredTable(List<StockInRow> rows, int totalCount)
-        {
-            var container = new VerticalStackLayout { Spacing = 4 };
-            container.Children.Add(new Label
-            {
-                Text = $"登録済み明細({totalCount}件)",
-                FontSize = 14,
-                FontAttributes = FontAttributes.Bold
-            });
-            var table = BuildSimpleTable(
-                new List<string> { "品目", "ロット", "数量", "" },
-                rows.ConvertAll(r => new List<string> { r.ItemCode, r.LotNo, $"{r.Qty}個", "❌" }),
-                new List<GridLength>
-                {
-                    new GridLength(3, GridUnitType.Star),
-                    new GridLength(3, GridUnitType.Star),
-                    new GridLength(1, GridUnitType.Star),
-                    new GridLength(1, GridUnitType.Star)
-                }
-            );
-            container.Children.Add(table);
-            return container;
-        }
-
-        private Border BuildSimpleTable(List<string> headers, List<List<string>> rowDatas, List<GridLength>? columnWidths = null)
-        {
-            Grid tableGrid = new Grid();
-
-            if (columnWidths != null && columnWidths.Count == headers.Count)
-            {
-                foreach (var width in columnWidths)
-                    tableGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = width });
-            }
-            else
-            {
-                foreach (var _ in headers)
-                    tableGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Star });
-            }
+            var tableGrid = new Grid();
+            foreach (var width in columnWidths)
+                tableGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = width });
 
             tableGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             for (int c = 0; c < headers.Count; c++)
@@ -741,30 +502,36 @@ namespace InventorySys.Views.PickingDetail
                 }, c, 0);
             }
 
-            for (int r = 0; r < rowDatas.Count; r++)
+            for (int r = 0; r < _packageItems.Count; r++)
             {
                 int separatorRowIndex = tableGrid.RowDefinitions.Count;
                 tableGrid.RowDefinitions.Add(new RowDefinition { Height = 1 });
-                var separator = new BoxView
-                {
-                    Color = Color.FromArgb("#e0e3e8"),
-                    HeightRequest = 1
-                };
+                var separator = new BoxView { Color = Color.FromArgb("#e0e3e8"), HeightRequest = 1 };
                 tableGrid.Add(separator, 0, separatorRowIndex);
                 Grid.SetColumnSpan(separator, headers.Count);
 
                 int dataRowIndex = tableGrid.RowDefinitions.Count;
                 tableGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-                var rowData = rowDatas[r];
-                for (int c = 0; c < rowData.Count; c++)
-                {
-                    tableGrid.Add(new Label
-                    {
-                        Text = rowData[c],
-                        FontSize = 11,
-                        Padding = new Thickness(4)
-                    }, c, dataRowIndex);
-                }
+
+                var item = _packageItems[r];
+                bool isSelected = _selectedPackage != null && _selectedPackage.PackageNo == item.PackageNo;
+                var rowBg = isSelected ? SelectedRowColor : Colors.White;
+
+                var pkgLabel = new Label { Text = item.ItemCode, FontSize = 11, Padding = new Thickness(4), BackgroundColor = rowBg };
+                var itemLabel = new Label { Text = item.PackageNo, FontSize = 11, Padding = new Thickness(4), BackgroundColor = rowBg };
+                var qtyLabel = new Label { Text = item.Qty.ToString(), FontSize = 11, Padding = new Thickness(4), BackgroundColor = rowBg };
+
+                tableGrid.Add(pkgLabel, 0, dataRowIndex);
+                tableGrid.Add(itemLabel, 1, dataRowIndex);
+                tableGrid.Add(qtyLabel, 2, dataRowIndex);
+
+                // 行全体をタップ可能にする
+                var capturedItem = item;
+                var tapGesture = new TapGestureRecognizer();
+                tapGesture.Tapped += (s, e) => OnPackageRowSelected(capturedItem);
+                pkgLabel.GestureRecognizers.Add(tapGesture);
+                itemLabel.GestureRecognizers.Add(new TapGestureRecognizer { Command = new Command(() => OnPackageRowSelected(capturedItem)) });
+                qtyLabel.GestureRecognizers.Add(new TapGestureRecognizer { Command = new Command(() => OnPackageRowSelected(capturedItem)) });
             }
 
             var tableBorder = new Border
@@ -775,118 +542,427 @@ namespace InventorySys.Views.PickingDetail
                 Background = Colors.White
             };
             tableBorder.Content = tableGrid;
-
             return tableBorder;
         }
 
-        #region 分页逻辑
-        private void OnPrevButtonClicked(object sender, EventArgs e)
+        // ==================== 包裹行選択イベント ====================
+        private void OnPackageRowSelected(PackageItem item)
         {
-            if (currentPage > 0)
-            {
-                LoadPage(currentPage - 1);
-            }
+            _selectedPackage = item;
+            RefreshHeaderAndDetailArea();
         }
 
-        private void OnNextButtonClicked(object sender, EventArgs e)
+        // ==================== ヘッダーと明細登録エリアを再構築して差し替え ====================
+        private void RefreshHeaderAndDetailArea()
         {
-            if (currentPage < totalPages - 1)
+            var newHeader = BuildHeader();
+            var newDetailInputArea = BuildDetailInputArea();
+
+            if (_scrollContainer != null && _scrollContainer.Children.Count > 1)
             {
-                LoadPage(currentPage + 1);
+                _scrollContainer.Children[0] = newHeader;
+                _scrollContainer.Children[1] = newDetailInputArea;
             }
+            pageHeaderInfo = newHeader;
+            RefreshBottomPendingTable();
         }
 
-        private void LoadPage(int pageIndex)
+        // ==================== 明細登録エリア ====================
+        private View BuildDetailInputArea()
         {
-            if (_allBottomData == null || pageIndex < 0 || pageIndex >= totalPages)
+            if (_selectedPackage == null)
+            {
+                return new ContentView { IsVisible = false };
+            }
+
+            var currentPackage = _selectedPackage;
+
+            var border = new Border
+            {
+                Stroke = Color.FromArgb("#b4cee8"),
+                Background = Color.FromArgb("#e6f0fa"),
+                StrokeShape = new RoundRectangle { CornerRadius = 6 },
+                Padding = new Thickness(5),
+                StrokeThickness = 2
+            };
+
+            var layout = new VerticalStackLayout { Spacing = 10 };
+            layout.Children.Add(new Label
+            {
+                Text = $"明細登録（{currentPackage.PackageNo}）",
+                FontSize = 15,
+                FontAttributes = FontAttributes.Bold
+            });
+
+            // 1. 出荷元ロケーション行（Entry + バーコードアイコン）
+            layout.Children.Add(new Label { Text = "出荷元ロケーション (スキャン可)", FontSize = 12, TextColor = Colors.Gray });
+            var locRow = new Grid
+            {
+                ColumnDefinitions =
+                {
+                    new ColumnDefinition { Width = GridLength.Star },
+                    new ColumnDefinition { Width = 50 }
+                }
+            };
+            _entryLocation = new Entry { Placeholder = "スキャンまたは入力", BackgroundColor = Colors.Transparent };
+            locRow.Add(WrapInputControl(_entryLocation), 0, 0);
+            locRow.Add(BuildBarcodeIcon(), 1, 0);
+            layout.Children.Add(locRow);
+
+            // 2. ロット行（Entry + バーコードアイコン）
+            layout.Children.Add(new Label { Text = "ロット (スキャン可)", FontSize = 12, TextColor = Colors.Gray });
+            var lotRow = new Grid
+            {
+                ColumnDefinitions =
+                {
+                    new ColumnDefinition { Width = GridLength.Star },
+                    new ColumnDefinition { Width = 50 }
+                }
+            };
+            _entryLot = new Entry { Placeholder = "スキャンまたは入力", BackgroundColor = Colors.Transparent };
+            lotRow.Add(WrapInputControl(_entryLot), 0, 0);
+            lotRow.Add(BuildBarcodeIcon(), 1, 0);
+            layout.Children.Add(lotRow);
+
+            // 3. 数量
+            layout.Children.Add(new Label { Text = "数量", FontSize = 12, TextColor = Colors.Gray });
+            var qtyRow = new Grid
+            {
+                ColumnDefinitions =
+                {
+                    new ColumnDefinition { Width = GridLength.Star },
+                    new ColumnDefinition { Width = 60 }
+                }
+            };
+            _entryQty = new Entry { Placeholder = "数量を入力", Keyboard = Keyboard.Numeric, BackgroundColor = Colors.Transparent };
+            qtyRow.Add(WrapInputControl(_entryQty), 0, 0);
+            qtyRow.Add(new Label { Text = "個", VerticalOptions = LayoutOptions.Center, HorizontalTextAlignment = TextAlignment.Center }, 1, 0);
+            layout.Children.Add(qtyRow);
+
+            // 4. 選択中包裹に紐づく明細プレビュー表（登録済み明細）
+            var detailTable = BuildEditableDetailTableForCurrentPackage();
+            layout.Children.Add(detailTable);
+
+            // 5. 「+明細を追加」ボタン
+            var addBtn = new Button
+            {
+                Text = "+ 明細を追加",
+                BackgroundColor = Colors.Transparent,
+                TextColor = Color.FromArgb("#245a96"),
+                BorderColor = Color.FromArgb("#245a96"),
+                BorderWidth = 3,
+                FontAttributes = FontAttributes.Bold
+            };
+            addBtn.Clicked += OnAddDetailClicked;
+            layout.Children.Add(addBtn);
+
+            border.Content = layout;
+            return border;
+        }
+
+        // ==================== 現在選択中の包裹の明細一覧（ロット/数量/❌） ====================
+        private Border BuildEditableDetailTableForCurrentPackage()
+        {
+            var currentPackage = _selectedPackage;
+            if (currentPackage == null || currentPackage.Details.Count == 0)
+            {
+                var emptyLabel = new Label
+                {
+                    Text = "登録済み明細(0件)",
+                    FontSize = 12,
+                    TextColor = Colors.Gray,
+                    Margin = new Thickness(0, 4, 0, 0)
+                };
+                var border = new Border
+                {
+                    Background = Colors.White,
+                    Padding = new Thickness(8),
+                    Stroke = InputBorderColor,
+                    StrokeThickness = 1,
+                    StrokeShape = new RoundRectangle { CornerRadius = 4 }
+                };
+                border.Content = emptyLabel;
+                return border;
+            }
+
+            var items = currentPackage.Details;
+            var headers = new List<string> { "ロット", "数量", "" };
+            var columnWidths = new List<GridLength>
+            {
+                new GridLength(3, GridUnitType.Star),
+                new GridLength(2, GridUnitType.Star),
+                new GridLength(1, GridUnitType.Star)
+            };
+
+            var tableGrid = new Grid();
+            foreach (var width in columnWidths)
+                tableGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = width });
+
+            tableGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            for (int c = 0; c < headers.Count; c++)
+            {
+                tableGrid.Add(new Label
+                {
+                    Text = headers[c],
+                    FontSize = 12,
+                    FontAttributes = FontAttributes.Bold,
+                    BackgroundColor = Color.FromArgb("#dbe2ec"),
+                    Padding = new Thickness(2)
+                }, c, 0);
+            }
+
+            for (int r = 0; r < items.Count; r++)
+            {
+                int separatorRowIndex = tableGrid.RowDefinitions.Count;
+                tableGrid.RowDefinitions.Add(new RowDefinition { Height = 1 });
+                var separator = new BoxView { Color = Color.FromArgb("#e0e3e8"), HeightRequest = 1 };
+                tableGrid.Add(separator, 0, separatorRowIndex);
+                Grid.SetColumnSpan(separator, headers.Count);
+
+                int dataRowIndex = tableGrid.RowDefinitions.Count;
+                tableGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+                var detail = items[r];
+                tableGrid.Add(new Label { Text = detail.DetailNo, FontSize = 11, Padding = new Thickness(4) }, 0, dataRowIndex);
+                tableGrid.Add(new Label { Text = $"{detail.DetailQty}個", FontSize = 11, Padding = new Thickness(4) }, 1, dataRowIndex);
+
+                var deleteLabel = new Label
+                {
+                    Text = "❌",
+                    FontSize = 11,
+                    Padding = new Thickness(4),
+                    HorizontalOptions = LayoutOptions.Center
+                };
+                var capturedDetail = detail;
+                var tapGesture = new TapGestureRecognizer();
+                tapGesture.Tapped += (s, e) => OnDeleteDetail(capturedDetail);
+                deleteLabel.GestureRecognizers.Add(tapGesture);
+                tableGrid.Add(deleteLabel, 2, dataRowIndex);
+            }
+
+            var tableBorder = new Border
+            {
+                Stroke = Color.FromArgb("#cdd2dc"),
+                StrokeThickness = 1,
+                StrokeShape = new RoundRectangle { },
+                Background = Colors.White
+            };
+            tableBorder.Content = tableGrid;
+            return tableBorder;
+        }
+
+        // ==================== 明細追加イベント ====================
+        private async void OnAddDetailClicked(object? sender, EventArgs e)
+        {
+            if (_selectedPackage == null)
+            {
+                await DisplayAlert("エラー", "梱包が選択されていません。", "OK");
                 return;
-
-            currentPage = pageIndex;
-            var pageData = _allBottomData.Skip(pageIndex * pageSize).Take(pageSize).ToList();
-            var newBottomTable = BuildBottomRegisteredTable(pageData, _allBottomData.Count);
-
-            if (_scrollContainer != null && _scrollContainer.Children.Count > 3)
-            {
-                _scrollContainer.Children[3] = newBottomTable;
             }
 
-            UpdatePaginationControls();
-        }
+            var location = _entryLocation?.Text?.Trim();
+            var detailNo = _entryLot?.Text?.Trim();
+            var qtyText = _entryQty?.Text?.Trim();
 
-        private void UpdatePaginationControls()
-        {
-            if (paginationLayout == null || pageLabel == null ||
-                prevButton == null || nextButton == null)
+            if (string.IsNullOrEmpty(location))
+            {
+                await DisplayAlert("エラー", "出荷元ロケーションを入力してください。", "OK");
                 return;
+            }
+            if (string.IsNullOrEmpty(detailNo))
+            {
+                await DisplayAlert("エラー", "ロットを入力してください。", "OK");
+                return;
+            }
+            if (!int.TryParse(qtyText, out int qty) || qty <= 0)
+            {
+                await DisplayAlert("エラー", "数量は1以上の整数で入力してください。", "OK");
+                return;
+            }
 
-            pageLabel.Text = $"{currentPage + 1} / {totalPages}";
+            _selectedPackage.Details.Add(new PackageDetail
+            {
+                DetailNo = detailNo,
+                DetailQty = qty,
+                Location = location
+            });
 
-            prevButton.IsEnabled = currentPage > 0;
-            nextButton.IsEnabled = currentPage < totalPages - 1;
+            // 入力クリア
+            if (_entryLocation != null) _entryLocation.Text = string.Empty;
+            if (_entryLot != null) _entryLot.Text = string.Empty;
+            if (_entryQty != null) _entryQty.Text = string.Empty;
 
-            prevButton.BackgroundColor = prevButton.IsEnabled ? Color.FromArgb("#245a96") : Colors.LightGray;
-            nextButton.BackgroundColor = nextButton.IsEnabled ? Color.FromArgb("#245a96") : Colors.LightGray;
-            prevButton.TextColor = prevButton.IsEnabled ? Colors.White : Colors.DarkGray;
-            nextButton.TextColor = nextButton.IsEnabled ? Colors.White : Colors.DarkGray;
-            prevButton.BorderColor = prevButton.IsEnabled ? Color.FromArgb("#245a96") : Colors.DarkGray;
-            nextButton.BorderColor = nextButton.IsEnabled ? Color.FromArgb("#245a96") : Colors.DarkGray;
+            RefreshHeaderAndDetailArea();
+            RefreshBottomPendingTable();
         }
-        #endregion
 
-        public class StockInRow
+        // ==================== 明細削除イベント ====================
+        private void OnDeleteDetail(PackageDetail detail)
         {
-            public string ItemCode { get; set; } = "";
-            public string LotNo { get; set; } = "";
+            if (_selectedPackage == null) return;
+            _selectedPackage.Details.Remove(detail);
+            RefreshHeaderAndDetailArea();
+            RefreshBottomPendingTable();
+        }
+
+        // ==================== 底部：全包裹の明細一覧 ====================
+        private View BuildBottomPendingTable()
+        {
+            var allDetails = _packageItems
+                .SelectMany(p => p.Details.Select(d => new { Package = p, Detail = d }))
+                .ToList();
+
+            if (allDetails.Count == 0)
+            {
+                return new ContentView { IsVisible = false };
+            }
+
+            var container = new VerticalStackLayout { Spacing = 4 };
+            container.Children.Add(new Label
+            {
+                Text = $"登録済み明細({allDetails.Count}件)",
+                FontSize = 14,
+                FontAttributes = FontAttributes.Bold
+            });
+
+            var headers = new List<string> { "品目", "ロット", "数量" };
+            var columnWidths = new List<GridLength>
+            {
+                new GridLength(3, GridUnitType.Star),
+                new GridLength(3, GridUnitType.Star),
+                new GridLength(1, GridUnitType.Star)
+            };
+
+            var tableGrid = new Grid();
+            foreach (var width in columnWidths)
+                tableGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = width });
+
+            tableGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            for (int c = 0; c < headers.Count; c++)
+            {
+                tableGrid.Add(new Label
+                {
+                    Text = headers[c],
+                    FontSize = 12,
+                    FontAttributes = FontAttributes.Bold,
+                    BackgroundColor = Color.FromArgb("#dbe2ec"),
+                    Padding = new Thickness(2)
+                }, c, 0);
+            }
+
+            for (int r = 0; r < allDetails.Count; r++)
+            {
+                int separatorRowIndex = tableGrid.RowDefinitions.Count;
+                tableGrid.RowDefinitions.Add(new RowDefinition { Height = 1 });
+                var separator = new BoxView { Color = Color.FromArgb("#e0e3e8"), HeightRequest = 1 };
+                tableGrid.Add(separator, 0, separatorRowIndex);
+                Grid.SetColumnSpan(separator, headers.Count);
+
+                int dataRowIndex = tableGrid.RowDefinitions.Count;
+                tableGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+                var item = allDetails[r];
+                tableGrid.Add(new Label { Text = item.Package.ItemCode, FontSize = 11, Padding = new Thickness(4) }, 0, dataRowIndex);
+                tableGrid.Add(new Label { Text = item.Detail.DetailNo, FontSize = 11, Padding = new Thickness(4) }, 1, dataRowIndex);
+                tableGrid.Add(new Label { Text = $"{item.Detail.DetailQty}個", FontSize = 11, Padding = new Thickness(4) }, 2, dataRowIndex);
+            }
+
+            var tableBorder = new Border
+            {
+                Stroke = Color.FromArgb("#cdd2dc"),
+                StrokeThickness = 1,
+                StrokeShape = new RoundRectangle { },
+                Background = Colors.White
+            };
+            tableBorder.Content = tableGrid;
+            container.Children.Add(tableBorder);
+            return container;
+        }
+
+        // ==================== 底部テーブルのリフレッシュ ====================
+        private void RefreshBottomPendingTable()
+        {
+            if (_bottomPendingTableHost != null)
+            {
+                _bottomPendingTableHost.Content = BuildBottomPendingTable();
+            }
+        }
+
+        // ==================== ヘルパー：入力コントロールをBorderでラップ ====================
+        private Border WrapInputControl(View control)
+        {
+            return new Border
+            {
+                Stroke = InputBorderColor,
+                StrokeThickness = 1,
+                StrokeShape = new RoundRectangle { CornerRadius = InputCornerRadius },
+                BackgroundColor = InputBackgroundColor,
+                Padding = new Thickness(8, 0),
+                Content = control
+            };
+        }
+
+        // ==================== バーコードアイコン描画 ====================
+        private Border BuildBarcodeIcon()
+        {
+            var barsLayout = new HorizontalStackLayout
+            {
+                Spacing = 2,
+                HorizontalOptions = LayoutOptions.Center,
+                VerticalOptions = LayoutOptions.Center
+            };
+
+            double[] barWidths = { 2, 4, 2, 6, 2, 4, 2 };
+            foreach (var w in barWidths)
+            {
+                barsLayout.Children.Add(new BoxView
+                {
+                    Color = Color.FromArgb("#1e3a5f"),
+                    WidthRequest = w,
+                    HeightRequest = 22,
+                    VerticalOptions = LayoutOptions.Center
+                });
+            }
+
+            return new Border
+            {
+                Stroke = Color.FromArgb("#cdd2dc"),
+                StrokeThickness = 1,
+                StrokeShape = new RoundRectangle { CornerRadius = 6 },
+                BackgroundColor = Colors.White,
+                Padding = new Thickness(8, 6),
+                WidthRequest = 50,
+                HeightRequest = 45,
+                HorizontalOptions = LayoutOptions.End,
+                Content = barsLayout
+            };
+        }
+
+        // ==================== データモデル ====================
+        public class PackageDetail
+        {
+            public string DetailNo { get; set; } = string.Empty;
+            public int DetailQty { get; set; }
+            public string Location { get; set; } = string.Empty;
+        }
+
+        public class PackageItem
+        {
+            public string PackageNo { get; set; } = string.Empty;
+            public string ItemCode { get; set; } = string.Empty;
+            public int Qty { get; set; }
+            public string Customer { get; set; } = string.Empty;
+            public string ShipDate { get; set; } = string.Empty;
+            public List<PackageDetail> Details { get; set; } = new List<PackageDetail>();
+        }
+
+        public class PendingDetailItem
+        {
+            public string PackageNo { get; set; } = string.Empty;
+            public string ItemCode { get; set; } = string.Empty;
+            public string Location { get; set; } = string.Empty;
+            public string LotNo { get; set; } = string.Empty;
             public int Qty { get; set; }
         }
-
-        private string GetJsonStringValue(JsonElement jsonElement, string propertyName)
-        {
-            try
-            {
-                if (jsonElement.TryGetProperty(propertyName, out JsonElement propertyValue))
-                {
-                    return propertyValue.GetString() ?? string.Empty;
-                }
-                return string.Empty;
-            }
-            catch
-            {
-                return string.Empty;
-            }
-        }
-
-        private int GetJsonIntValue(JsonElement jsonElement, string propertyName)
-        {
-            try
-            {
-                if (jsonElement.TryGetProperty(propertyName, out JsonElement propertyValue))
-                {
-                    if (propertyValue.ValueKind == JsonValueKind.Number)
-                    {
-                        return propertyValue.GetInt32();
-                    }
-                    else if (propertyValue.ValueKind == JsonValueKind.String)
-                    {
-                        string strValue = propertyValue.GetString() ?? "0";
-                        int.TryParse(strValue, out int intValue);
-                        return intValue;
-                    }
-                }
-                return 0;
-            }
-            catch
-            {
-                return 0;
-            }
-        }
-    }
-
-    // ========== PackageItem 类 ==========
-    public class PackageItem
-    {
-        public string PackageNo { get; set; } = string.Empty;
-        public string ItemCode { get; set; } = string.Empty;
-        public int Qty { get; set; }
     }
 }
