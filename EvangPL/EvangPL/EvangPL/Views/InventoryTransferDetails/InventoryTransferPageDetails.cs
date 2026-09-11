@@ -14,6 +14,7 @@ using System.Collections.Generic;
 using System.Text.Json;
 using static System.Net.Mime.MediaTypeNames;
 using InventoryTransferInfo = EvangPL.Utils.InventoryTransferInfo;
+using EvangPL.Views.InventoryTransfer;
 
 namespace EvangPL.Views.InventoryTransferPageDetails
 {
@@ -34,25 +35,43 @@ namespace EvangPL.Views.InventoryTransferPageDetails
         private int pageSize = 5;
         private int totalPages = 0;
 
-        // 新增：全局滚动容器引用 + 全部明细数据源
+        // グローバルスクロールコンテナ参照 + 全明細データソース
         private VerticalStackLayout? _scrollContainer;
         private readonly List<StockInRow> _allBottomData = new List<StockInRow>();
 
-        public InventoryTransferPageDetails() : base("strInventoryTransfer")
+        // ★ 入力中（未保存）のロットリスト
+        private readonly List<PendingLotItem> _pendingLots = new List<PendingLotItem>();
+
+        // ★ 入力コントロール参照
+        private Picker? _locationPicker;
+        private Entry? _lotEntry;
+        private Entry? _qtyEntry;
+
+        // ★ プレビュー表と底部表のホスト
+        private ContentView? _pendingLotTableHost;
+        private ContentView? _bottomPendingTableHost;
+
+        // ★ 色定数
+        private static readonly Color InputBorderColor = Color.FromArgb("#cdd2dc");
+        private static readonly Color InputBackgroundColor = Colors.White;
+        private const int InputCornerRadius = 6;
+
+        private readonly TransferRecord? _editRecord;
+        private bool IsEditMode => _editRecord != null;
+
+
+        public InventoryTransferPageDetails() : this(null)
         {
+        }
+        public InventoryTransferPageDetails(TransferRecord? editRecord) : base("strInventoryTransfer")
+        {
+            _editRecord = editRecord;
+            Title = IsEditMode ? "在庫振替 - 編集" : "在庫振替 - 新規登録";  // ★ タイトル設定
             BuildUI();
         }
 
         private void BuildUI()
         {
-            #region 接口请求占位
-            //var request = new RequestData<ProcessParamInfo, EvangJsonModel>("GetStockInDetail");
-            //request.Info = paramInfoToNext;
-            // var resultList = await this.Post<ProcessParamInfo, EvangJsonModel, EvangJsonModel, EvangJsonModel>(request);
-            // if (resultList == null || resultList!.SubData[0]!.SubJson == null)
-            //     return;
-            // var dbJson = resultList!.SubData[0]!.SubJson;
-            #endregion
 
             List<StockInRow> topExistLotList = new List<StockInRow>()
             {
@@ -66,34 +85,18 @@ namespace EvangPL.Views.InventoryTransferPageDetails
                 new StockInRow{ LotNo = "LOT20260709", Qty = 40 }
             };
 
-            // 明细数据存入全局字段，供分页使用
             _allBottomData.AddRange(new List<StockInRow>()
             {
                 new StockInRow{ ItemCode = "部品Z-9999", LotNo = "LOT20260615", Qty = 10 },
                 new StockInRow{ ItemCode = "部品A-1010", LotNo = "LOT20260728", Qty = 20 },
-                new StockInRow{ ItemCode = "部品A-1010", LotNo = "LOT20260738", Qty = 30 },
-                new StockInRow{ ItemCode = "部品A-1010", LotNo = "LOT20260748", Qty = 40 },
-                new StockInRow{ ItemCode = "部品N-1010", LotNo = "LOT20260758", Qty = 50 },
-                new StockInRow{ ItemCode = "部品A-1010", LotNo = "LOT20260708", Qty = 60 },
-                new StockInRow{ ItemCode = "部品A-1010", LotNo = "LOT20260768", Qty = 70 },
-                new StockInRow{ ItemCode = "部品B-1010", LotNo = "LOT20260708", Qty = 80 },
-                new StockInRow{ ItemCode = "部品G-1010", LotNo = "LOT20260778", Qty = 90 },
-                new StockInRow{ ItemCode = "部品A-1010", LotNo = "LOT20260708", Qty = 80 },
-                new StockInRow{ ItemCode = "部品E-1010", LotNo = "LOT20260708", Qty = 70 },
-                new StockInRow{ ItemCode = "部品F-1010", LotNo = "LOT20260708", Qty = 60 },
-                new StockInRow{ ItemCode = "部品A-1010", LotNo = "LOT20260708", Qty = 50 },
                 new StockInRow{ ItemCode = "部品D-1010", LotNo = "LOT20260708", Qty = 40 }
             });
 
-            // 计算总页数
             totalPages = (int)Math.Ceiling((double)_allBottomData.Count / pageSize);
 
             var mainGrid = new Grid
             {
-                RowDefinitions =
-                {
-                    new RowDefinition { Height = GridLength.Star }
-                },
+                RowDefinitions = { new RowDefinition { Height = GridLength.Star } },
                 ColumnDefinitions = { new ColumnDefinition { Width = GridLength.Star } },
                 BackgroundColor = Color.FromArgb("#eff0f0"),
                 RowSpacing = 0,
@@ -101,13 +104,15 @@ namespace EvangPL.Views.InventoryTransferPageDetails
                 VerticalOptions = LayoutOptions.Fill
             };
 
-            //pageHeaderInfo = BuildStockInHeader(poNo, customName, arrivalPlanDate, topExistLotList);
             var detailInputArea = BuildDetailInputArea(registeredLotList);
             CreatePaginationControls();
 
-            // 初始化加载第一页数据
-            var firstPageData = _allBottomData.Take(pageSize).ToList();
-            var bottomTable = BuildBottomRegisteredTable(firstPageData, _allBottomData.Count);
+            // ★ 修正：外側 host の IsVisible で表示/非表示を制御、Content は更新メソッドで動的に設定
+            _bottomPendingTableHost = new ContentView
+            {
+                IsVisible = false,   // 初期 0 件 → 非表示
+                Content = BuildBottomPendingTable()
+            };
 
             var saveBtn = new Button
             {
@@ -118,13 +123,11 @@ namespace EvangPL.Views.InventoryTransferPageDetails
                 CornerRadius = 6
             };
 
-            // 滚动容器存入全局字段，供分页刷新使用
             _scrollContainer = new VerticalStackLayout { Spacing = 6, Padding = new Thickness(10) };
-            //_scrollContainer.Children.Add(pageHeaderInfo);
-            _scrollContainer.Children.Add(detailInputArea);
-            _scrollContainer.Children.Add(paginationLayout);
-            _scrollContainer.Children.Add(bottomTable);
-            _scrollContainer.Children.Add(saveBtn);
+            _scrollContainer.Children.Add(detailInputArea);            // [0]
+            _scrollContainer.Children.Add(paginationLayout);           // [1]
+            _scrollContainer.Children.Add(_bottomPendingTableHost);    // [2]
+            _scrollContainer.Children.Add(saveBtn);                    // [3]
 
             var scrollView = new ScrollView
             {
@@ -135,82 +138,10 @@ namespace EvangPL.Views.InventoryTransferPageDetails
             mainGrid.Add(scrollView, 0, 0);
             Content = mainGrid;
 
-            // 初始化分页按钮状态
             UpdatePaginationControls();
         }
 
-        private Border BuildStockInHeader(string poNumber, string customer, string planDate, List<StockInRow> topLotRows)
-        {
-            var innerGrid = new Grid
-            {
-                RowDefinitions =
-                {
-                    new RowDefinition(),
-                    new RowDefinition(),
-                    new RowDefinition()
-                },
-                ColumnDefinitions =
-                 {
-                    new ColumnDefinition(),
-                    new ColumnDefinition()
-                 },
-                Padding = new Thickness(5, 5, 5, 8),
-                BackgroundColor = Color.FromArgb("#edeff3")
-            };
-            innerGrid.Add(new Label { Text = "顧客", FontSize = 12, TextColor = Colors.Gray });
-            innerGrid.Add(new Label { Text = "出荷予定日", FontSize = 12, TextColor = Colors.Gray }, 1, 0);
-            var customerBorder = new Border
-            {
-                Stroke = Color.FromArgb("#cdd2dc"),
-                StrokeThickness = 1,
-                StrokeShape = new RoundRectangle { CornerRadius = 6 },
-                Background = Color.FromArgb("#edeff3"),
-                Padding = new Thickness(5, 5, 2, 4),
-                Margin = new Thickness(0, 0, 2, 15)
-            };
-            var customerLabel = new Label { Text = customer, FontSize = 14, TextColor = Color.FromArgb("#6b727c"), FontAttributes = FontAttributes.Bold };
-            customerBorder.Content = customerLabel;
-            innerGrid.Add(customerBorder, 0, 1);
-            var dateBorder = new Border
-            {
-                Stroke = Color.FromArgb("#cdd2dc"),
-                StrokeThickness = 1,
-                StrokeShape = new RoundRectangle { CornerRadius = 6 },
-                Background = Color.FromArgb("#edeff3"),
-                Padding = new Thickness(5, 5, 2, 4),
-                Margin = new Thickness(2, 0, 0, 15)
-            };
-            var dateLabel = new Label { Text = planDate, FontSize = 15, TextColor = Color.FromArgb("#6b727c"), FontAttributes = FontAttributes.Bold };
-            dateBorder.Content = dateLabel;
-            innerGrid.Add(dateBorder, 1, 1);
-
-            var topTable = BuildSimpleTable(
-                new List<string> { "アイテム", "入庫済みロット", "数量" },
-                topLotRows.ConvertAll(r => new List<string> { r.ItemCode, r.LotNo, r.Qty.ToString() }),
-                new List<GridLength>
-                {
-                    new GridLength(2, GridUnitType.Star),
-                    new GridLength(2, GridUnitType.Star),
-                    new GridLength(1, GridUnitType.Star)
-                }
-            );
-            Grid.SetRow(topTable, 2);
-            Grid.SetColumnSpan(topTable, 2);
-            innerGrid.Add(topTable);
-
-            var headerBorder = new Border
-            {
-                Stroke = Color.FromArgb("#cdd2dc"),
-                StrokeThickness = 2,
-                StrokeShape = new RoundRectangle { CornerRadius = 6 },
-                Background = Color.FromArgb("#edeff3"),
-                Padding = new Thickness(1)
-            };
-            headerBorder.Content = innerGrid;
-
-            return headerBorder;
-        }
-
+        // ==================== 明細登録エリア ====================
         private Border BuildDetailInputArea(List<StockInRow> regLots)
         {
             var border = new Border
@@ -225,86 +156,64 @@ namespace EvangPL.Views.InventoryTransferPageDetails
             var layout = new VerticalStackLayout { Spacing = 10 };
             layout.Children.Add(new Label { Text = "明細登録", FontSize = 15, FontAttributes = FontAttributes.Bold });
 
+            // ============ 第一行：入庫先ロケーション（★ バーコード付き） ============
             var locRow = new Grid
             {
                 ColumnDefinitions = { new ColumnDefinition { Width = GridLength.Star }, new ColumnDefinition { Width = 50 } }
             };
             locRow.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             layout.Children.Add(new Label { Text = "入庫先ロケーション (スキャン可)", FontSize = 12, TextColor = Colors.Gray });
-            var locPicker = new Picker
+
+            _locationPicker = new Picker
             {
                 Title = "選択",
                 SelectedIndex = 0,
                 BackgroundColor = Colors.White,
                 ItemsSource = new List<string> { "WH1-A-03" }
             };
-            locRow.Add(locPicker, 0, 1);
-            MauiIcon barcodeIcon1 = new MauiIcon
-            {
-                Icon = FluentIcons.BarcodeScanner20,
-                IconSize = 40,
-                IconColor = Color.FromRgba("#1e3a5f"),
-                HorizontalOptions = LayoutOptions.End
-
-            };
-            locRow.Add(barcodeIcon1, 1, 1);
+            locRow.Add(WrapInputControl(_locationPicker), 0, 1);
+            locRow.Add(BuildBarcodeIcon(), 1, 1);
             layout.Children.Add(locRow);
 
+            // ============ 移動元 / 移動先 ============
             var innerGrid = new Grid
             {
-                RowDefinitions =
-                {
-                    new RowDefinition(),
-                    new RowDefinition()
-                },
-                ColumnDefinitions =
-                 {
-                    new ColumnDefinition(),
-                    new ColumnDefinition()
-                 },
-                //Padding = new Thickness(5, 5, 5, 8),
-                //BackgroundColor = Color.FromArgb("#edeff3")
+                RowDefinitions = { new RowDefinition(), new RowDefinition() },
+                ColumnDefinitions = { new ColumnDefinition(), new ColumnDefinition() }
             };
             innerGrid.Add(new Label { Text = "移動元ロケーション", FontSize = 12, TextColor = Colors.Gray });
             innerGrid.Add(new Label { Text = "移動先ロケーション", FontSize = 12, TextColor = Colors.Gray }, 1, 0);
-            var vendorBorder = new Border
-            {
-                //Stroke = Color.FromArgb("#b8bec9"),
-                //StrokeShape = new RoundRectangle { CornerRadius = 5 },
-                //StrokeThickness = 2,
-                //Background = Color.FromArgb("#edeff3"),
-                Padding = new Thickness(0),
-                Margin = new Thickness(2, 0, 0, 0)
-            };
-            var formPicker = new Picker
+
+            // 移動元（編集モード時は一覧の Source を初期選択）
+            var fromItems = new List<string> { "WH1-A-03" };
+            if (!string.IsNullOrEmpty(_editRecord?.Source) && !fromItems.Contains(_editRecord!.Source))
+                fromItems.Add(_editRecord.Source);
+
+            var fromPicker = new Picker
             {
                 Title = "選択",
-                SelectedIndex = 0,
                 BackgroundColor = Colors.White,
-                ItemsSource = new List<string> { "WH1-A-03" }
+                ItemsSource = fromItems
             };
-            vendorBorder.Content = formPicker;
-            innerGrid.Add(vendorBorder, 0, 1);
-            var dateBorder = new Border
-            {
-                //Stroke = Color.FromArgb("#b8bec9"),
-                //StrokeShape = new RoundRectangle { CornerRadius = 5 },
-                //StrokeThickness = 2,
-                //Background = Color.FromArgb("#edeff3"),
-                Padding = new Thickness(0),
-                Margin = new Thickness(0, 0, 2, 0)
-            };
+            fromPicker.SelectedItem = _editRecord?.Source ?? fromItems.FirstOrDefault();
+            innerGrid.Add(WrapInputControl(fromPicker), 0, 1);
+
+            // 移動先（編集モード時は一覧の Dest を初期選択）
+            var toItems = new List<string> { "WH2-C-01" };
+            if (!string.IsNullOrEmpty(_editRecord?.Dest) && !toItems.Contains(_editRecord!.Dest))
+                toItems.Add(_editRecord.Dest);
+
             var toPicker = new Picker
             {
                 Title = "選択",
-                SelectedIndex = 0,
                 BackgroundColor = Colors.White,
-                ItemsSource = new List<string> { "WH2-C-01" }
+                ItemsSource = toItems
             };
-            dateBorder.Content = toPicker;
-            innerGrid.Add(dateBorder, 1, 1);
+            toPicker.SelectedItem = _editRecord?.Dest ?? toItems.FirstOrDefault();
+            innerGrid.Add(WrapInputControl(toPicker), 1, 1);
             layout.Children.Add(innerGrid);
 
+            // ============ 第三行：ロット / シリアル（★ バーコード付き） ============
             layout.Children.Add(new Label { Text = "ロット / シリアル (スキャン可)", FontSize = 12, TextColor = Colors.Gray });
 
             var lotRow = new Grid
@@ -312,48 +221,27 @@ namespace EvangPL.Views.InventoryTransferPageDetails
                 ColumnDefinitions = { new ColumnDefinition { Width = GridLength.Star }, new ColumnDefinition { Width = 50 } }
             };
             lotRow.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            var lotEntry = new Entry { Text = "LOT20260708", BackgroundColor = Colors.White, };
-            lotRow.Add(lotEntry, 0, 1);
-            MauiIcon barcodeIcon2 = new MauiIcon
-            {
-                Icon = FluentIcons.BarcodeScanner20,
-                IconSize = 40,
-                IconColor = Color.FromRgba("#1e3a5f"),
-                HorizontalOptions = LayoutOptions.End
-            };
-            lotRow.Add(barcodeIcon2, 1, 1);
+            _lotEntry = new Entry { Placeholder = "ロット/シリアルをスキャンまたは入力", BackgroundColor = Colors.Transparent };
+            lotRow.Add(WrapInputControl(_lotEntry), 0, 1);
+            lotRow.Add(BuildBarcodeIcon(), 1, 1);
             layout.Children.Add(lotRow);
 
+            // ============ 数量 ============
             var qtyRow = new Grid
             {
                 ColumnDefinitions = { new ColumnDefinition { Width = GridLength.Star }, new ColumnDefinition { Width = 60 } }
             };
-            //var qtyBorder = new Border
-            //{
-            //    Stroke = Color.FromArgb("#b8bec9"),
-            //    StrokeShape = new RoundRectangle { CornerRadius = 5 },
-            //    StrokeThickness = 2,
-            //    Margin = new Thickness(0, 0, 7, 0)
-            //};
-            var qtyEntry = new Entry { Text = "120", Keyboard = Keyboard.Numeric, BackgroundColor = Colors.White, };
-            //qtyBorder.Content = qtyEntry;
-            qtyRow.Add(qtyEntry, 0, 0);
+            _qtyEntry = new Entry { Placeholder = "数量を入力", Keyboard = Keyboard.Numeric, BackgroundColor = Colors.Transparent };
+            qtyRow.Add(WrapInputControl(_qtyEntry), 0, 0);
             qtyRow.Add(new Label { Text = "個", VerticalOptions = LayoutOptions.Center, HorizontalTextAlignment = TextAlignment.Center }, 1, 0);
             layout.Children.Add(new Label { Text = "移動数量", FontSize = 12, TextColor = Colors.Gray });
             layout.Children.Add(qtyRow);
 
-            var innerTable = BuildSimpleTable(
-                new List<string> { "登録済みロット", "数量", "" },
-                regLots.ConvertAll(r => new List<string> { r.LotNo, $"{r.Qty}個", "❌" }),
-                new List<GridLength>
-                {
-                    new GridLength(3, GridUnitType.Star),
-                    new GridLength(2, GridUnitType.Star),
-                    new GridLength(1, GridUnitType.Star)
-                }
-            );
-            layout.Children.Add(innerTable);
+            // ============ 登録済みロット（未保存分のプレビュー、❌削除付き） ============
+            _pendingLotTableHost = new ContentView { Content = BuildEditableLotTableForPending() };
+            layout.Children.Add(_pendingLotTableHost);
 
+            // ============ 「+ロットを追加」ボタン ============
             var addLotBtn = new Button
             {
                 Text = "+ロットを追加",
@@ -363,22 +251,209 @@ namespace EvangPL.Views.InventoryTransferPageDetails
                 BorderWidth = 3,
                 FontAttributes = FontAttributes.Bold
             };
+            addLotBtn.Clicked += OnAddLotButtonClicked;
             layout.Children.Add(addLotBtn);
 
             border.Content = layout;
             return border;
         }
 
-        private HorizontalStackLayout BuildPager()
+        // ==================== 「+ロットを追加」押下時 ====================
+        private async void OnAddLotButtonClicked(object? sender, EventArgs e)
         {
-            var pager = new HorizontalStackLayout { Spacing = 10, Margin = new Thickness(0, 8) };
-            var prevBtn = new Button { Text = "◀ 前明細", IsEnabled = false, BackgroundColor = Colors.LightGray };
-            pager.Children.Add(prevBtn);
-            var nextBtn = new Button { Text = "次明細 ▶", BackgroundColor = Color.FromArgb("#245a96"), TextColor = Colors.White };
-            pager.Children.Add(nextBtn);
-            return pager;
+            // --- 入力値取得 ---
+            var locationName = _locationPicker?.SelectedItem as string;
+            var lotNo = _lotEntry?.Text?.Trim();
+            var qtyText = _qtyEntry?.Text?.Trim();
+
+            // --- 検証（InputDetail と同じ順序・メッセージ） ---
+            if (string.IsNullOrEmpty(locationName))
+            {
+                await DisplayAlert("エラー", "入庫先ロケーションを選択してください。", "OK");
+                return;
+            }
+            if (string.IsNullOrEmpty(lotNo))
+            {
+                await DisplayAlert("エラー", "ロット/シリアルを入力またはスキャンしてください。", "OK");
+                return;
+            }
+            if (!int.TryParse(qtyText, out int qty) || qty <= 0)
+            {
+                await DisplayAlert("エラー", "入庫数量を正しく入力してください。", "OK");
+                return;
+            }
+
+            // --- 1 行を _pendingLots に追加 ---
+            _pendingLots.Add(new PendingLotItem
+            {
+                ItemCode = locationName,   // 現状は入庫先ロケーション名を格納
+                LotNo = lotNo,
+                Qty = qty
+            });
+
+            // --- 入力欄クリア ---
+            if (_lotEntry != null) _lotEntry.Text = string.Empty;
+            if (_qtyEntry != null) _qtyEntry.Text = string.Empty;
+
+            // --- ★ 両方の表を再構築 ---
+            RefreshPendingLotTable();      // 明細登録エリア内のプレビュー表
+            RefreshBottomPendingTable();   // ページ下部の「登録済み明細」表
         }
 
+        // ==================== 未保存プレビュー表（登録済みロット） ====================
+        private Border BuildEditableLotTableForPending()
+        {
+            return BuildEditableLotTableInternal(_pendingLots, showItemColumn: false);
+        }
+
+        // ==================== ❌タップで該当行を削除 ====================
+        private void OnDeletePendingLot(PendingLotItem item)
+        {
+            _pendingLots.Remove(item);
+            RefreshPendingLotTable();
+            RefreshBottomPendingTable();
+        }
+
+        // 上のプレビュー表を再構築
+        private void RefreshPendingLotTable()
+        {
+            if (_pendingLotTableHost != null)
+            {
+                _pendingLotTableHost.Content = BuildEditableLotTableForPending();
+            }
+        }
+
+        // 下の「登録済み明細」表を再構築
+        // ★ InputDetail と同じく、0件かどうかで表示/非表示を切り替える
+        private void RefreshBottomPendingTable()
+        {
+            if (_bottomPendingTableHost == null) return;
+
+            if (_pendingLots.Count == 0)
+            {
+                // 0件 → 表そのものを隠す
+                _bottomPendingTableHost.IsVisible = false;
+            }
+            else
+            {
+                // 1件以上 → 先に IsVisible=true、その後 Content を更新
+                // （先に Content を入れてから IsVisible=true にすると、Android で反映されないケースがある）
+                _bottomPendingTableHost.IsVisible = true;
+                _bottomPendingTableHost.Content = BuildBottomPendingTable();
+            }
+        }
+
+        // ==================== 削除ボタン付き一覧テーブルの共通実装 ====================
+        private Border BuildEditableLotTableInternal(List<PendingLotItem> items, bool showItemColumn)
+        {
+            List<string> headers;
+            List<GridLength> columnWidths;
+            if (showItemColumn)
+            {
+                headers = new List<string> { "品目", "ロット", "数量", "" };
+                columnWidths = new List<GridLength>
+                {
+                    new GridLength(3, GridUnitType.Star),
+                    new GridLength(3, GridUnitType.Star),
+                    new GridLength(1, GridUnitType.Star),
+                    new GridLength(1, GridUnitType.Star)
+                };
+            }
+            else
+            {
+                headers = new List<string> { "登録済みロット", "数量", "" };
+                columnWidths = new List<GridLength>
+                {
+                    new GridLength(3, GridUnitType.Star),
+                    new GridLength(2, GridUnitType.Star),
+                    new GridLength(1, GridUnitType.Star)
+                };
+            }
+
+            var tableGrid = new Grid();
+            foreach (var width in columnWidths)
+                tableGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = width });
+
+            tableGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            for (int c = 0; c < headers.Count; c++)
+            {
+                tableGrid.Add(new Label
+                {
+                    Text = headers[c],
+                    FontSize = 12,
+                    FontAttributes = FontAttributes.Bold,
+                    BackgroundColor = Color.FromArgb("#dbe2ec"),
+                    Padding = new Thickness(2)
+                }, c, 0);
+            }
+
+            for (int r = 0; r < items.Count; r++)
+            {
+                int separatorRowIndex = tableGrid.RowDefinitions.Count;
+                tableGrid.RowDefinitions.Add(new RowDefinition { Height = 1 });
+                var separator = new BoxView { Color = Color.FromArgb("#e0e3e8"), HeightRequest = 1 };
+                tableGrid.Add(separator, 0, separatorRowIndex);
+                Grid.SetColumnSpan(separator, headers.Count);
+
+                int dataRowIndex = tableGrid.RowDefinitions.Count;
+                tableGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+                var item = items[r];
+                int col = 0;
+                if (showItemColumn)
+                {
+                    tableGrid.Add(new Label { Text = item.ItemCode, FontSize = 11, Padding = new Thickness(4) }, col++, dataRowIndex);
+                }
+                tableGrid.Add(new Label { Text = item.LotNo, FontSize = 11, Padding = new Thickness(4) }, col++, dataRowIndex);
+                tableGrid.Add(new Label { Text = $"{item.Qty}個", FontSize = 11, Padding = new Thickness(4) }, col++, dataRowIndex);
+
+                var deleteLabel = new Label
+                {
+                    Text = "❌",
+                    FontSize = 11,
+                    Padding = new Thickness(4),
+                    HorizontalOptions = LayoutOptions.Center
+                };
+                var capturedItem = item;
+                var tapGesture = new TapGestureRecognizer();
+                tapGesture.Tapped += (s, e) => OnDeletePendingLot(capturedItem);
+                deleteLabel.GestureRecognizers.Add(tapGesture);
+                tableGrid.Add(deleteLabel, col, dataRowIndex);
+            }
+
+            var tableBorder = new Border
+            {
+                Stroke = Color.FromArgb("#cdd2dc"),
+                StrokeThickness = 1,
+                StrokeShape = new RoundRectangle { },
+                Background = Colors.White
+            };
+            tableBorder.Content = tableGrid;
+            return tableBorder;
+        }
+
+        // ==================== 底部：全品目一覧（登録済み明細） ====================
+        // ★ 修正：IsVisible=false の ContentView を返さない（外側 host で表示制御を行う）
+        private View BuildBottomPendingTable()
+        {
+            // ★ 0件なら「登録済み明細(0件)」ごと非表示にする
+            if (_pendingLots.Count == 0)
+            {
+                return new ContentView { IsVisible = false };
+            }
+
+            var container = new VerticalStackLayout { Spacing = 4 };
+            container.Children.Add(new Label
+            {
+                Text = $"登録済み明細({_pendingLots.Count}件)",
+                FontSize = 14,
+                FontAttributes = FontAttributes.Bold
+            });
+            container.Children.Add(BuildEditableLotTableInternal(_pendingLots, showItemColumn: true));
+            return container;
+        }
+
+        // ==================== ページ送り部分 ====================
         private void CreatePaginationControls()
         {
             paginationLayout = new Grid
@@ -389,10 +464,7 @@ namespace EvangPL.Views.InventoryTransferPageDetails
                     new RowDefinition { Height = GridLength.Auto },
                     new RowDefinition { Height = GridLength.Auto },
                 },
-                ColumnDefinitions =
-                {
-                    new ColumnDefinition { Width = GridLength.Star }
-                },
+                ColumnDefinitions = { new ColumnDefinition { Width = GridLength.Star } },
                 HorizontalOptions = LayoutOptions.Center,
                 VerticalOptions = LayoutOptions.Center,
                 Margin = new Thickness(0, 5),
@@ -423,7 +495,6 @@ namespace EvangPL.Views.InventoryTransferPageDetails
                 HorizontalOptions = LayoutOptions.Center,
                 Padding = new Thickness(2),
             };
-            // 绑定上一页点击事件
             prevButton.Clicked += OnPrevButtonClicked;
 
             pageLabel = new Label
@@ -455,7 +526,6 @@ namespace EvangPL.Views.InventoryTransferPageDetails
                 HorizontalOptions = LayoutOptions.Center,
                 Padding = new Thickness(2),
             };
-            // 绑定下一页点击事件
             nextButton.Clicked += OnNextButtonClicked;
 
             buttonRow.Children.Add(prevButton);
@@ -466,160 +536,39 @@ namespace EvangPL.Views.InventoryTransferPageDetails
             paginationLayout.Children.Add(buttonRow);
         }
 
-        /// <summary>
-        /// 底部明细表格：总数动态显示
-        /// </summary>
-        private VerticalStackLayout BuildBottomRegisteredTable(List<StockInRow> rows, int totalCount)
-        {
-            var container = new VerticalStackLayout { Spacing = 4 };
-            // 总数动态显示，不再写死
-            container.Children.Add(new Label
-            {
-                Text = $"登録済み明細({totalCount}件)",
-                FontSize = 14,
-                FontAttributes = FontAttributes.Bold
-            });
-            var table = BuildSimpleTable(
-                new List<string> { "品目", "ロット", "数量", "" },
-                rows.ConvertAll(r => new List<string> { r.ItemCode, r.LotNo, $"{r.Qty}個", "❌" }),
-                new List<GridLength>
-                {
-                    new GridLength(3, GridUnitType.Star),
-                    new GridLength(3, GridUnitType.Star),
-                    new GridLength(1, GridUnitType.Star),
-                    new GridLength(1, GridUnitType.Star)
-                }
-            );
-            container.Children.Add(table);
-            return container;
-        }
-
-        private Border BuildSimpleTable(List<string> headers, List<List<string>> rowDatas, List<GridLength>? columnWidths = null)
-        {
-            Grid tableGrid = new Grid();
-
-            if (columnWidths != null && columnWidths.Count == headers.Count)
-            {
-                foreach (var width in columnWidths)
-                    tableGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = width });
-            }
-            else
-            {
-                foreach (var _ in headers)
-                    tableGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Star });
-            }
-
-            // 表头行
-            tableGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            for (int c = 0; c < headers.Count; c++)
-            {
-                tableGrid.Add(new Label
-                {
-                    Text = headers[c],
-                    FontSize = 12,
-                    FontAttributes = FontAttributes.Bold,
-                    BackgroundColor = Color.FromArgb("#dbe2ec"),
-                    Padding = new Thickness(2)
-                }, c, 0);
-            }
-
-            // 数据行 + 分隔线
-            for (int r = 0; r < rowDatas.Count; r++)
-            {
-                int separatorRowIndex = tableGrid.RowDefinitions.Count;
-                tableGrid.RowDefinitions.Add(new RowDefinition { Height = 1 });
-                var separator = new BoxView
-                {
-                    Color = Color.FromArgb("#e0e3e8"),
-                    HeightRequest = 1
-                };
-                tableGrid.Add(separator, 0, separatorRowIndex);
-                Grid.SetColumnSpan(separator, headers.Count);
-
-                int dataRowIndex = tableGrid.RowDefinitions.Count;
-                tableGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-                var rowData = rowDatas[r];
-                for (int c = 0; c < rowData.Count; c++)
-                {
-                    tableGrid.Add(new Label
-                    {
-                        Text = rowData[c],
-                        FontSize = 11,
-                        Padding = new Thickness(4)
-                    }, c, dataRowIndex);
-                }
-            }
-
-            var tableBorder = new Border
-            {
-                Stroke = Color.FromArgb("#cdd2dc"),
-                StrokeThickness = 1,
-                StrokeShape = new RoundRectangle { },
-                Background = Colors.White
-            };
-            tableBorder.Content = tableGrid;
-
-            return tableBorder;
-        }
-
         #region 分页逻辑
         private void OnPrevButtonClicked(object sender, EventArgs e)
         {
-            if (currentPage > 0)
-            {
-                LoadPage(currentPage - 1);
-            }
+            if (currentPage > 0) LoadPage(currentPage - 1);
         }
 
         private void OnNextButtonClicked(object sender, EventArgs e)
         {
-            if (currentPage < totalPages - 1)
-            {
-                LoadPage(currentPage + 1);
-            }
+            if (currentPage < totalPages - 1) LoadPage(currentPage + 1);
         }
 
-        /// <summary>
-        /// 加载指定页数据，仅刷新底部表格区域
-        /// </summary>
         private void LoadPage(int pageIndex)
         {
             if (_allBottomData == null || pageIndex < 0 || pageIndex >= totalPages)
                 return;
 
             currentPage = pageIndex;
-            // 截取当前页数据
-            var pageData = _allBottomData.Skip(pageIndex * pageSize).Take(pageSize).ToList();
-            // 生成新的底部表格
-            var newBottomTable = BuildBottomRegisteredTable(pageData, _allBottomData.Count);
 
-            // 替换滚动容器中的底部表格（索引2：0头部 0明细区 1分页 2底部表格 3保存按钮）
-            if (_scrollContainer != null && _scrollContainer.Children.Count > 2)
-            {
-                _scrollContainer.Children[2] = newBottomTable;
-            }
-
-            // 更新按钮状态
+            // ★ 保持：_bottomPendingTableHost は上書きしない
             UpdatePaginationControls();
         }
 
-        /// <summary>
-        /// 更新分页按钮状态与页码显示
-        /// </summary>
         private void UpdatePaginationControls()
         {
             if (paginationLayout == null || pageLabel == null ||
                 prevButton == null || nextButton == null)
                 return;
 
-            // 更新页码文本
             pageLabel.Text = $"{currentPage + 1} / {totalPages}";
 
-            // 控制按钮启用状态
             prevButton.IsEnabled = currentPage > 0;
             nextButton.IsEnabled = currentPage < totalPages - 1;
 
-            // 按钮颜色同步：禁用变灰，启用为蓝色b8bec9
             prevButton.BackgroundColor = prevButton.IsEnabled ? Color.FromArgb("#245a96") : Colors.LightGray;
             nextButton.BackgroundColor = nextButton.IsEnabled ? Color.FromArgb("#245a96") : Colors.LightGray;
             prevButton.TextColor = prevButton.IsEnabled ? Colors.White : Colors.DarkGray;
@@ -629,22 +578,57 @@ namespace EvangPL.Views.InventoryTransferPageDetails
         }
         #endregion
 
-        private void ShowPagination()
+        // ==================== ヘルパー：入力コントロールをBorderでラップ ====================
+        private Border WrapInputControl(View control)
         {
-            if (paginationLayout != null)
+            return new Border
             {
-                paginationLayout.IsVisible = true;
-            }
+                Stroke = InputBorderColor,
+                StrokeThickness = 1,
+                StrokeShape = new RoundRectangle { CornerRadius = InputCornerRadius },
+                BackgroundColor = InputBackgroundColor,
+                Padding = new Thickness(8, 0),
+                Content = control
+            };
         }
 
-        private void HidePagination()
+        // ==================== バーコードアイコン描画 ====================
+        private Border BuildBarcodeIcon()
         {
-            if (paginationLayout != null)
+            var barsLayout = new HorizontalStackLayout
             {
-                paginationLayout.IsVisible = false;
+                Spacing = 2,
+                HorizontalOptions = LayoutOptions.Center,
+                VerticalOptions = LayoutOptions.Center
+            };
+
+            double[] barWidths = { 2, 4, 2, 6, 2, 4, 2 };
+            foreach (var w in barWidths)
+            {
+                barsLayout.Children.Add(new BoxView
+                {
+                    Color = Color.FromArgb("#1e3a5f"),
+                    WidthRequest = w,
+                    HeightRequest = 22,
+                    VerticalOptions = LayoutOptions.Center
+                });
             }
+
+            return new Border
+            {
+                Stroke = Color.FromArgb("#cdd2dc"),
+                StrokeThickness = 1,
+                StrokeShape = new RoundRectangle { CornerRadius = 6 },
+                BackgroundColor = Colors.White,
+                Padding = new Thickness(8, 6),
+                WidthRequest = 50,
+                HeightRequest = 45,
+                HorizontalOptions = LayoutOptions.End,
+                Content = barsLayout
+            };
         }
 
+        // ==================== データモデル ====================
         public class StockInRow
         {
             public string ItemCode { get; set; } = "";
@@ -652,45 +636,11 @@ namespace EvangPL.Views.InventoryTransferPageDetails
             public int Qty { get; set; }
         }
 
-        private string GetJsonStringValue(JsonElement jsonElement, string propertyName)
+        public class PendingLotItem
         {
-            try
-            {
-                if (jsonElement.TryGetProperty(propertyName, out JsonElement propertyValue))
-                {
-                    return propertyValue.GetString() ?? string.Empty;
-                }
-                return string.Empty;
-            }
-            catch
-            {
-                return string.Empty;
-            }
-        }
-
-        private int GetJsonIntValue(JsonElement jsonElement, string propertyName)
-        {
-            try
-            {
-                if (jsonElement.TryGetProperty(propertyName, out JsonElement propertyValue))
-                {
-                    if (propertyValue.ValueKind == JsonValueKind.Number)
-                    {
-                        return propertyValue.GetInt32();
-                    }
-                    else if (propertyValue.ValueKind == JsonValueKind.String)
-                    {
-                        string strValue = propertyValue.GetString() ?? "0";
-                        int.TryParse(strValue, out int intValue);
-                        return intValue;
-                    }
-                }
-                return 0;
-            }
-            catch
-            {
-                return 0;
-            }
+            public string ItemCode { get; set; } = "";
+            public string LotNo { get; set; } = "";
+            public int Qty { get; set; }
         }
     }
 }
