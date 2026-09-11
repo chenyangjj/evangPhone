@@ -1,0 +1,107 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<TargetFrameworks>net9.0-android;net9.0-ios;net9.0-maccatalyst</TargetFrameworks>
+		<TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('windows'))">$(TargetFrameworks);net9.0-windows10.0.19041.0</TargetFrameworks>
+		<!-- Uncomment to also build the tizen app. You will need to install tizen by following this: https://github.com/Samsung/Tizen.NET -->
+		<!-- <TargetFrameworks>$(TargetFrameworks);net9.0-tizen</TargetFrameworks> -->
+		<UseMaui>true</UseMaui>
+		<SingleProject>true</SingleProject>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<Nullable>enable</Nullable>
+
+		<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios'">15.0</SupportedOSPlatformVersion>
+		<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst'">15.0</SupportedOSPlatformVersion>
+		<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">33.0</SupportedOSPlatformVersion>
+		<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">10.0.17763.0</SupportedOSPlatformVersion>
+		<TargetPlatformMinVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">10.0.17763.0</TargetPlatformMinVersion>
+		<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'tizen'">6.5</SupportedOSPlatformVersion>
+		<RootNamespace>EvangSol.Mobibrary</RootNamespace>
+	</PropertyGroup>
+
+	<PropertyGroup Condition="'$(Configuration)|$(TargetFramework)|$(Platform)'=='Release|net9.0-android|AnyCPU'">
+	  <AndroidPackageFormat>apk</AndroidPackageFormat>
+	</PropertyGroup>
+
+	<ItemGroup>
+	  <None Remove="Resources\Images\arrow_down.png" />
+	  <None Remove="Resources\Images\arrow_up.png" />
+	  <None Remove="Resources\Images\ic_clear.png" />
+	  <None Remove="Resources\Images\ic_clock.png" />
+	  <None Remove="Resources\Images\ic_error.png" />
+	  <None Remove="Resources\Images\ic_keyboard.png" />
+	  <None Remove="Resources\Images\setting.png" />
+	</ItemGroup>
+
+	<ItemGroup>
+	  <EmbeddedResource Include="Resources\Images\arrow_down.png" />
+	  <EmbeddedResource Include="Resources\Images\arrow_up.png" />
+	  <EmbeddedResource Include="Resources\Images\ic_clear.png" />
+	  <EmbeddedResource Include="Resources\Images\ic_clock.png" />
+	  <EmbeddedResource Include="Resources\Images\ic_error.png" />
+	  <EmbeddedResource Include="Resources\Images\ic_keyboard.png" />
+	  <EmbeddedResource Include="Resources\Images\setting.png" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<PackageReference Include="CommunityToolkit.Maui" Version="12.1.0" />
+		<PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.0" />
+		<PackageReference Include="Microsoft.Extensions.Configuration.Binder" Version="9.0.11" />
+		<PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="9.0.11" />
+		<PackageReference Include="Microsoft.Maui.Controls" Version="$(MauiVersion)" />
+		<PackageReference Include="Microsoft.Maui.Controls.Compatibility" Version="9.0.111" />
+		<PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
+		<PackageReference Include="sqlite-net-pcl" Version="1.9.172" />
+	</ItemGroup>
+
+	<ItemGroup>
+	  <Folder Include="Attribute\" />
+	  <Folder Include="Dialog\" />
+	  <Folder Include="EvangCustom\" />
+	  <Folder Include="EvangModel\" />
+	  <Folder Include="EvangView\" />
+	  <Folder Include="EvangViewModel\" />
+	  <Folder Include="EvangWidget\" />
+	  <Folder Include="LocalModel\" />
+	  <Folder Include="Platforms\Android\Resources\Layout\" />
+	  <Folder Include="Platforms\Android\Resources\values\" />
+	  <Folder Include="Platforms\Tizen\" />
+	  <Folder Include="TitleBar\" />
+	  <Folder Include="PlatformHandler\" />
+	  <Folder Include="PlatformControl\" />
+	  <Folder Include="Utilities\Behavior\" />
+	  <Folder Include="Utilities\Converter\" />
+	  <Folder Include="Utilities\Message\" />
+	</ItemGroup>
+
+	<ItemGroup Condition="$(TargetFramework.StartsWith('net9.0-android')) != true">
+		<Compile Remove="**\*_Android.cs" />
+		<None Include="**\*_Android.cs" Exclude="$(DefaultItemExcludes);$(DefaultExcludesInProjectFolder)" />
+	</ItemGroup>
+
+	<ItemGroup Condition="$(TargetFramework.StartsWith('net9.0-ios')) != true AND $(TargetFramework.StartsWith('net9.0-maccatalyst')) != true">
+		<Compile Remove="**\*_MaciOS.cs" />
+		<None Include="**\*_MaciOS.cs" Exclude="$(DefaultItemExcludes);$(DefaultExcludesInProjectFolder)" />
+	</ItemGroup>
+
+	<ItemGroup Condition="$(TargetFramework.Contains('-windows')) != true ">
+		<Compile Remove="**\*_Windows.cs" />
+		<None Include="**\*_Windows.cs" Exclude="$(DefaultItemExcludes);$(DefaultExcludesInProjectFolder)" />
+	</ItemGroup>
+
+	<ItemGroup>
+	  <Compile Update="Resources\Strings\StringResources.Designer.cs">
+	    <DesignTime>True</DesignTime>
+	    <AutoGen>True</AutoGen>
+	    <DependentUpon>StringResources.resx</DependentUpon>
+	  </Compile>
+	</ItemGroup>
+
+	<ItemGroup>
+	  <EmbeddedResource Update="Resources\Strings\StringResources.resx">
+	    <Generator>ResXFileCodeGenerator</Generator>
+	    <LastGenOutput>StringResources.Designer.cs</LastGenOutput>
+	  </EmbeddedResource>
+	</ItemGroup>
+
+</Project>

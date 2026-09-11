@@ -1,0 +1,31 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.14.36705.20
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EvangMobibrary", "EvangMobibrary\EvangMobibrary.csproj", "{0EF99EBF-3590-48CE-91D9-4365E9D20AB2}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TestEvangMobibrary", "TestEvangMobibrary\TestEvangMobibrary.csproj", "{6C962FCF-3491-4E8C-BF00-F4A13AE5A165}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{0EF99EBF-3590-48CE-91D9-4365E9D20AB2}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{0EF99EBF-3590-48CE-91D9-4365E9D20AB2}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{0EF99EBF-3590-48CE-91D9-4365E9D20AB2}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{0EF99EBF-3590-48CE-91D9-4365E9D20AB2}.Release|Any CPU.Build.0 = Release|Any CPU
+		{6C962FCF-3491-4E8C-BF00-F4A13AE5A165}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{6C962FCF-3491-4E8C-BF00-F4A13AE5A165}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{6C962FCF-3491-4E8C-BF00-F4A13AE5A165}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{6C962FCF-3491-4E8C-BF00-F4A13AE5A165}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {DCC85CD3-FBF5-4609-91CF-406239F2587A}
+	EndGlobalSection
+EndGlobal
