@@ -500,10 +500,17 @@ namespace EvangPL.Views.InventoryTransfer
 
             // タップイベント (詳細画面へ)
             var tap = new TapGestureRecognizer();
-            tap.Tapped += (_, _) =>
+            tap.Tapped += async (_, _) =>
             {
-                // TODO: 詳細画面へ遷移
-                DisplayAlert("詳細", $"{record.Id} の詳細を表示します", "OK");
+                try
+                {
+                    var editPage = new EvangPL.Views.InventoryTransferPageDetails.InventoryTransferPageDetails(record);
+                    await Navigation.PushAsync(editPage);
+                }
+                catch (Exception ex)
+                {
+                    await DisplayAlert("エラー", $"画面遷移に失敗しました: {ex.Message}", "OK");
+                }
             };
             border.GestureRecognizers.Add(tap);
 
