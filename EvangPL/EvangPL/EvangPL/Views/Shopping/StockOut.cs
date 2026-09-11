@@ -434,7 +434,7 @@ namespace EvangPL.Views.StockOut
                         };
 
                         // ✅ 创建详情页实例并传入数据
-                        var detailPage = new InventorySys.Views.PickingDetail.PickingDetail(detailInfo);
+                        var detailPage = new EvangPL.Views.PickingDetail.PickingDetail(detailInfo);
                         await Navigation.PushAsync(detailPage);
                     }
                     catch (Exception ex)
