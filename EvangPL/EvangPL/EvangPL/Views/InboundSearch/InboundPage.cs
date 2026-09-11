@@ -15,7 +15,7 @@ namespace EvangPL.Views.InboundSearch
 {
 
     /// <summary>
-    /// 搜索条件实体（用于传递给 StockIn 页面）
+    /// 検索条件エンティティ（StockIn画面への受け渡し用）
     /// </summary>
     public class SearchCondition
     {
@@ -23,25 +23,26 @@ namespace EvangPL.Views.InboundSearch
         public string? InboundType { get; set; }
         public string? Status { get; set; }
         public DateTime? ScheduledDate { get; set; }
-        public List<OrderInfo>? SearchResult { get; set; }  // 搜索结果
+        public List<OrderInfo>? SearchResult { get; set; }  // 検索結果
     }
 
     /// <summary>
-    /// 订单信息模型（根据 NetSuite 响应结构调整）
+    /// オーダー情報モデル（NetSuiteレスポンス構造に合わせて調整）
     /// </summary>
     public class OrderInfo
     {
-        public string? orderId { get; set; }           // 订单ID
-        public string? orderNumber { get; set; }       // 订单编号
-        public string? status { get; set; }            // 状态
-        public string? statusLabel { get; set; }        // 状态标签
-        public string? inboundType { get; set; }       // 入库类型
-        public DateTime? scheduledDate { get; set; }   // 预计入库日期
-        public string? supplierName { get; set; }      // 供应商名称
-        public decimal? totalQuantity { get; set; }    // 总数量
-        public string? itemCode { get; set; }          // 物料代码
-        public string? itemName { get; set; }          // 物料名称
-        
+        public string? orderId { get; set; }           // オーダーID
+        public string? orderNumber { get; set; }       // オーダー番号
+        public string? status { get; set; }            // ステータス
+        public string? statusLabel { get; set; }        // ステータスラベル
+        public string? inboundType { get; set; }       // 入庫区分
+        public DateTime? scheduledDate { get; set; }   // 入庫予定日
+        public string? supplierName { get; set; }      // サプライヤー名
+        public decimal? totalQuantity { get; set; }    // 合計数量
+        public string? itemCode { get; set; }          // 品目コード
+        public string? itemName { get; set; }          // 品目名称
+        public double? itemCount { get; set; }
+
     }
 
 
@@ -51,7 +52,7 @@ namespace EvangPL.Views.InboundSearch
     public class InboundSearch : EvangContentVM
     {
         // ==========================================
-        // [追加] Android原生の下線を消去するためのHandler登録
+        // [追加] Androidネイティブの下線を消去するためのHandler登録
         // ==========================================
         static InboundSearch()
         {
@@ -88,18 +89,11 @@ namespace EvangPL.Views.InboundSearch
         private Grid? filterFrame;
         private Grid? mainGrid;
 
+        // ✅ RESTlet URL(GetOrderList)は Menu.cs の GetBaseMasterData() で
+        //    LocalMemory.restlets に一元登録済み。ここでは登録処理を行わない。
         public InboundSearch() : base("strInboundSearch")
         {
             Title = "入庫処理";
-
-            if (!LocalMemory.restlets.ContainsKey("GetOrderList"))
-            {
-                //LocalMemory.restlets.Add("GetOrderList",
-                //    "https://9323639-sb1.restlets.api.netsuite.com/app/site/hosting/restlet.nl?script=1799&deploy=1");
-                LocalMemory.restlets.Add("GetOrderList",
-                   "https://9323639-sb1.restlets.api.netsuite.com/app/site/hosting/restlet.nl?script=2056&deploy=1");
-
-            }
 
             BuildUI();
         }
@@ -368,28 +362,28 @@ namespace EvangPL.Views.InboundSearch
                 request.Info = searchParam;
 
                 var result = await this.Post<OrderSearchParam, EvangJsonModel, EvangJsonModel, EvangJsonModel>(request);
-                // 3. 检查返回结果
+                // 3. 返却結果をチェック
                 if (result == null)
                 {
-                    await DisplayAlert("错误", "无法获取搜索结果", "OK");
+                    await DisplayAlert("エラー", "検索結果を取得できません", "OK");
                     return;
                 }
 
                 if (!result.Success)
                 {
-                    await DisplayAlert("错误", result.ErrorMessage ?? "搜索失败", "OK");
+                    await DisplayAlert("エラー", result.ErrorMessage ?? "検索に失敗しました", "OK");
                     return;
                 }
 
-                // 4. 解析搜索结果
+                // 4. 検索結果を解析
                 var orderList = ParseSearchResult(result);
                 if (orderList == null || orderList.Count == 0)
                 {
-                    await DisplayAlert("提示", "没有找到符合条件的入库数据", "OK");
+                    await DisplayAlert("お知らせ", "条件に一致する入庫データが見つかりません", "OK");
                     return;
                 }
 
-                // 和菜单完全一致，用框架工厂，禁止手动 new StockIn()
+                // メニューと同様にフレームワークファクトリを使用し、手動での new StockIn() は禁止
                 var pageObj = ClassMapping.CreatePageInstance(viewName);
                 if (pageObj == null)
                 {
@@ -400,8 +394,8 @@ namespace EvangPL.Views.InboundSearch
                 if (pageObj is EvangContentVM vm)
                 {
                     vm.IsFromMenu = true;
-                    // ========== 新增：传递检索条件（使用注释中的方式） ==========
-                    // 创建 SearchCondition 实体并赋值
+                    // ========== 新規追加：検索条件を渡す（コメント記載の方法を使用） ==========
+                    // SearchConditionエンティティを作成して値を設定
                     var cond = new SearchCondition();
                     cond.Keyword = keywordEntry?.Text;
                     cond.InboundType = inboundTypePicker?.SelectedIndex >= 0
@@ -411,11 +405,11 @@ namespace EvangPL.Views.InboundSearch
                         ? statusPicker.SelectedItem?.ToString()
                         : null;
                     cond.ScheduledDate = datePicker?.Date;
-                    cond.SearchResult = orderList;  // 把搜索结果也传过去
+                    cond.SearchResult = orderList;  // 検索結果も渡す
                     EvangPL.Views.StockIn.StockIn.PassedCondition = cond;
-                    // 按照注释中的方式传递第二个参数
+                    // コメント記載の方法に従って第2引数を渡す
                     await Navigation.PushAsync(vm);
-                    // =========将来传递检索条件在这里，第二个参数传实体========
+                    // =========将来的に検索条件をここで渡す場合、第2引数にエンティティを指定========
                     // SearchCondition cond = new SearchCondition();
                     // cond.Keyword = keywordEntry.Text;
                     // await Navigation.PushAsync(vm, cond);
@@ -432,31 +426,31 @@ namespace EvangPL.Views.InboundSearch
         }
 
         /// <summary>
-        /// 构建搜索条件对象（用于 RESTlet 调用）
+        /// 検索条件オブジェクトを構築（RESTlet呼び出し用）
         /// </summary>
         private object BuildSearchCondition()
         {
-            // 按照 NetSuite RESTlet 期望的请求格式构建
+            // NetSuite RESTletが期待するリクエスト形式に合わせて構築
             var condition = new
             {
                 Info = new
                 {
-                    // 入库类型
+                    // 入庫区分
                     InboundType = inboundTypePicker?.SelectedIndex >= 0
                         ? inboundTypePicker.SelectedItem?.ToString()
                         : null,
 
-                    // 状态
+                    // ステータス
                     Status = statusPicker?.SelectedIndex >= 0
                         ? statusPicker.SelectedItem?.ToString()
                         : null,
 
-                    // 预计入库日期（yyyy-MM-dd 格式）
+                    // 入庫予定日（yyyy-MM-dd形式）
                     ScheduledDate = datePicker?.Date != null
                         ? datePicker.Date.ToString("yyyy-MM-dd")
                         : null,
 
-                    // 搜索关键词（采购订单号 / 物料代码）
+                    // 検索キーワード（発注書番号 / 品目コード）
                     Keyword = string.IsNullOrWhiteSpace(keywordEntry?.Text)
                         ? null
                         : keywordEntry.Text.Trim()
@@ -467,10 +461,10 @@ namespace EvangPL.Views.InboundSearch
         }
 
         /// <summary>
-        /// 解析搜索结果
+        /// 検索結果を解析
         /// </summary>
-        /// <param name="result">ResponseData 类型的结果</param>
-        /// <returns>订单列表</returns>
+        /// <param name="result">ResponseData型の結果</param>
+        /// <returns>オーダーリスト</returns>
         private List<OrderInfo> ParseSearchResult(ResponseData<EvangJsonModel, EvangJsonModel> result)
         {
             var orderList = new List<OrderInfo>();
@@ -494,10 +488,10 @@ namespace EvangPL.Views.InboundSearch
         }
 
 
-     
+
 
         /// <summary>
-        /// 订单搜索请求参数
+        /// オーダー検索リクエストパラメータ
         /// </summary>
         public class OrderSearchParam : EvangJsonModel
         {
