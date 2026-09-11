@@ -7,6 +7,7 @@ using EvangSol.Mobibrary.Utilities.Common;
 using Microsoft.Maui.Controls.Shapes;
 using Microsoft.Maui.Platform;
 using System.Text.Json;
+using EvangPL.Views.StockAdjust;
 
 namespace EvangPL.Views.InventoryAdjustment
 {
@@ -34,7 +35,7 @@ namespace EvangPL.Views.InventoryAdjustment
 
         // UI コントロール
         private Entry? itemEntry;
-        private Border? scanButtonBorder;       // ← Button から Border に変更
+        private Border? scanButtonBorder;       // ← Border として保持（中身をバーコードに変更）
         private Picker? locationPicker;
         private Entry? currentStockEntry;
         private Entry? differenceEntry;
@@ -46,12 +47,36 @@ namespace EvangPL.Views.InventoryAdjustment
 
         private int _currentStockValue = 480;
 
-        public InventoryAdjustment() : base("strInventoryAdjustment")
+        private readonly StockAdjustItem? _editItem;
+        private bool IsEditMode => _editItem != null;
+
+        public InventoryAdjustment() : this(null)
         {
-            Title = "棚卸調整 - 新規登録";
+        }
+
+        public InventoryAdjustment(StockAdjustItem? editItem) : base("strInventoryAdjustment")
+        {
+            _editItem = editItem;
+
+            Title = IsEditMode
+                ? "棚卸調整 - 編集"
+                : "棚卸調整 - 新規登録";
+
             BuildUI();
             InitializeMockData();
+
+            if (IsEditMode)
+            {
+                LoadEditData();
+            }
         }
+
+        //public InventoryAdjustment() : base("strInventoryAdjustment")
+        //{
+        //    Title = "棚卸調整 - 新規登録";
+        //    BuildUI();
+        //    InitializeMockData();
+        //}
 
         private void BuildUI()
         {
@@ -81,7 +106,7 @@ namespace EvangPL.Views.InventoryAdjustment
                 ColumnDefinitions =
                 {
                     new ColumnDefinition { Width = GridLength.Star },
-                    new ColumnDefinition { Width = 40 }
+                    new ColumnDefinition { Width = 50 }
                 },
                 ColumnSpacing = 10
             };
@@ -98,30 +123,8 @@ namespace EvangPL.Views.InventoryAdjustment
             };
             var itemBorder = CreateInputBorder(itemEntry, Colors.White);
 
-            // --- スキャンボタン (Border + Image + TapGesture) ---
-            var scanImage = new Image
-            {
-                Source = "scan.png",
-                Aspect = Aspect.AspectFit,
-                WidthRequest = 33,
-                HeightRequest = 31,
-                HorizontalOptions = LayoutOptions.Center,
-                VerticalOptions = LayoutOptions.Center
-            };
-
-            scanButtonBorder = new Border
-            {
-                Stroke = Color.FromArgb("#cccccc"),
-                StrokeThickness = 1,
-                StrokeShape = new RoundRectangle { CornerRadius = 6 },
-                BackgroundColor = Colors.White,
-                Padding = 0,
-                HeightRequest = 35,
-                WidthRequest = 40,
-                Content = scanImage,
-                VerticalOptions = LayoutOptions.Center,
-                HorizontalOptions = LayoutOptions.Center,
-            };
+            // --- ★ スキャンボタン → バーコードアイコン に変更 ---
+            scanButtonBorder = BuildBarcodeIcon();
 
             var tapGesture = new TapGestureRecognizer();
             tapGesture.Tapped += OnScanClicked;
@@ -244,8 +247,8 @@ namespace EvangPL.Views.InventoryAdjustment
                 Title = "破損",
                 BackgroundColor = Colors.Transparent,
                 TextColor = Colors.Black,
-                HeightRequest = 35,          // ← 45 から 35 に統一
-                FontSize = 13,               // ← 14 から 13 に統一
+                HeightRequest = 35,
+                FontSize = 13,
                 Margin = new Thickness(10, 0)
             };
             reasonPicker.Items.Add("破損");
@@ -269,9 +272,9 @@ namespace EvangPL.Views.InventoryAdjustment
             registerButton = new Button
             {
                 Text = "調整を登録",
-                BackgroundColor = Color.FromArgb("#245a96"),   // ← 色を統一
+                BackgroundColor = Color.FromArgb("#245a96"),
                 TextColor = Colors.White,
-                HeightRequest = 35,                             // ← 45 から 35 に
+                HeightRequest = 35,
                 CornerRadius = 5,
                 FontAttributes = FontAttributes.Bold,
                 Margin = new Thickness(0, 10, 0, 0)
@@ -281,7 +284,7 @@ namespace EvangPL.Views.InventoryAdjustment
 
             mainGrid.Add(formContainer, 0, 0);
 
-            // 【修正】Border で包む（他の画面と統一）
+            // Border で包む（他の画面と統一）
             Content = new Border
             {
                 Padding = new Thickness(0),
@@ -305,7 +308,46 @@ namespace EvangPL.Views.InventoryAdjustment
                 BackgroundColor = backgroundColor,
                 Padding = 0,
                 Content = content,
-                HeightRequest = 35        // ← 40 から 35 に統一
+                HeightRequest = 35
+            };
+        }
+
+        /// <summary>
+        /// バーコードアイコン描画（InputDetail と同様）
+        /// </summary>
+        private Border BuildBarcodeIcon()
+        {
+            var barsLayout = new HorizontalStackLayout
+            {
+                Spacing = 2,
+                HorizontalOptions = LayoutOptions.Center,
+                VerticalOptions = LayoutOptions.Center
+            };
+
+            double[] barWidths = { 2, 4, 2, 6, 2, 4, 2 };
+            foreach (var w in barWidths)
+            {
+                barsLayout.Children.Add(new BoxView
+                {
+                    Color = Color.FromArgb("#1e3a5f"),
+                    WidthRequest = w,
+                    HeightRequest = 22,
+                    VerticalOptions = LayoutOptions.Center
+                });
+            }
+
+            return new Border
+            {
+                Stroke = Color.FromArgb("#cdd2dc"),
+                StrokeThickness = 1,
+                StrokeShape = new RoundRectangle { CornerRadius = 6 },
+                BackgroundColor = Colors.White,
+                Padding = new Thickness(8, 6),
+                WidthRequest = 50,
+                HeightRequest = 45,
+                HorizontalOptions = LayoutOptions.End,
+                VerticalOptions = LayoutOptions.Center,
+                Content = barsLayout
             };
         }
 
@@ -362,6 +404,31 @@ namespace EvangPL.Views.InventoryAdjustment
 
             await Task.CompletedTask;
         }
+        private void LoadEditData()
+        {
+            if (_editItem == null) return;
+
+            if (itemEntry != null)
+                itemEntry.Text = _editItem.ItemCode;
+
+            if (differenceEntry != null)
+                differenceEntry.Text = _editItem.DiffQty.ToString();
+
+            if (reasonPicker != null && !string.IsNullOrWhiteSpace(_editItem.AdjustReason))
+            {
+                if (!reasonPicker.Items.Contains(_editItem.AdjustReason))
+                    reasonPicker.Items.Add(_editItem.AdjustReason);
+
+                reasonPicker.SelectedItem = _editItem.AdjustReason;
+                reasonPicker.Title = _editItem.AdjustReason;
+            }
+
+            if (currentStockEntry != null)
+                currentStockEntry.Text = _currentStockValue.ToString();
+
+            if (adjustedStockEntry != null)
+                adjustedStockEntry.Text = CalculateAdjustedStock().ToString();
+        }
 
         private async void OnScanClicked(object sender, EventArgs e)
         {
@@ -370,7 +437,11 @@ namespace EvangPL.Views.InventoryAdjustment
 
         private async Task OnRegisterClicked(object sender, EventArgs e)
         {
-            await DisplayAlert("完了", "在庫調整を登録しました (ダミー)", "OK");
+            string message = IsEditMode
+       ? "在庫調整を更新しました (ダミー)"
+       : "在庫調整を登録しました (ダミー)";
+
+            await DisplayAlert("完了", message, "OK");
         }
 
         #endregion
