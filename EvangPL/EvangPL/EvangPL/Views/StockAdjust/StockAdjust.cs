@@ -28,6 +28,8 @@ namespace EvangPL.Views.StockAdjust
         private StackLayout? listContainer;
 
         // 筛选控件
+        private DatePicker? startDatePicker;
+        private DatePicker? endDatePicker;
         private Entry? dateRangeEntry;
         private Entry? keywordEntry;
 
@@ -35,6 +37,7 @@ namespace EvangPL.Views.StockAdjust
         private int _currentPage = 1;
         private int _totalPage = 1;
         private const int PageSize = 4; // 一页4条，和截图一致
+        private CancellationTokenSource? _keywordCts;
 
         // 查询条件实体
         private StockAdjustPageInfo SearchCondition;
@@ -133,31 +136,84 @@ namespace EvangPL.Views.StockAdjust
             var grid = new Grid
             {
                 ColumnDefinitions =
+                    {
+                        new ColumnDefinition { Width = GridLength.Star },
+                        new ColumnDefinition { Width = GridLength.Star }
+                    },
+                RowDefinitions =
+                    {
+                        new RowDefinition { Height = GridLength.Auto },
+                        new RowDefinition { Height = GridLength.Auto }
+                    },
+                    ColumnSpacing = 10,
+                    RowSpacing = 4
+            };
+
+            // --- 対象期間 ---
+            var lblDateTitle = new Label { Text = "対象期間", FontSize = 12, TextColor = Colors.Gray };
+
+            var dateRangeGrid = new Grid
+            {
+                ColumnDefinitions =
                 {
                     new ColumnDefinition { Width = GridLength.Star },
+                    new ColumnDefinition { Width = GridLength.Auto },
                     new ColumnDefinition { Width = GridLength.Star }
                 },
-                RowDefinitions =
-                {
-                    new RowDefinition { Height = GridLength.Auto },
-                    new RowDefinition { Height = GridLength.Auto }
-                },
-                ColumnSpacing = 10,
-                RowSpacing = 4
+                ColumnSpacing = 5,
+                VerticalOptions = LayoutOptions.Center
             };
 
-            // 対象期間
-            var lblDateTitle = new Label { Text = "対象期間", FontSize = 12, TextColor = Colors.Gray };
-            dateRangeEntry = new Entry
+            startDatePicker = new DatePicker
             {
-                Placeholder = "07/01~07/08",
-                Text = SearchCondition.DateRange,
-                BackgroundColor = Colors.White,
-                HeightRequest = 42
+                Date = DateTime.Today.AddDays(-7),
+                BackgroundColor = Colors.Transparent,
+                HeightRequest = 36,
+                Format = "MM/dd",
+                TextColor = Colors.Black,
+                Margin = new Thickness(8, 0)
             };
-            dateRangeEntry.TextChanged += (s, e) => SearchCondition.DateRange = e.NewTextValue;
+            var startBorder = CreateInputBorder(startDatePicker);
+            Grid.SetColumn(startBorder, 0);
+            dateRangeGrid.Children.Add(startBorder);
 
-            // 品目キーワード
+            var separator = new Label
+            {
+                Text = "~",
+                VerticalTextAlignment = TextAlignment.Center,
+                HorizontalTextAlignment = TextAlignment.Center,
+                FontSize = 14,
+                TextColor = Colors.Gray
+            };
+            Grid.SetColumn(separator, 1);
+            dateRangeGrid.Children.Add(separator);
+
+            endDatePicker = new DatePicker
+            {
+                Date = DateTime.Today,
+                BackgroundColor = Colors.Transparent,
+                HeightRequest = 36,
+                Format = "MM/dd",
+                TextColor = Colors.Black,
+                Margin = new Thickness(8, 0)
+            };
+            var endBorder = CreateInputBorder(endDatePicker);
+            Grid.SetColumn(endBorder, 2);
+            dateRangeGrid.Children.Add(endBorder);
+
+            // 日付変更時に SearchCondition.DateRange を更新
+            async Task UpdateDateRange()
+            {
+                SearchCondition.DateRangeFrom = startDatePicker.Date.ToString("yyyy/MM/dd");
+                SearchCondition.DateRangeTo = endDatePicker.Date.ToString("yyyy/MM/dd");
+                _currentPage = 1;
+                await LoadAdjustData();
+            }
+            startDatePicker.DateSelected += (s, e) => UpdateDateRange();
+            endDatePicker.DateSelected += (s, e) => UpdateDateRange();
+            UpdateDateRange(); // 初期値セット
+
+            // --- 品目キーワード ---
             var lblKeywordTitle = new Label { Text = "品目キーワード", FontSize = 12, TextColor = Colors.Gray };
             keywordEntry = new Entry
             {
@@ -166,19 +222,52 @@ namespace EvangPL.Views.StockAdjust
                 BackgroundColor = Colors.White,
                 HeightRequest = 42
             };
-            keywordEntry.TextChanged += (s, e) => SearchCondition.Keyword = e.NewTextValue;
+            keywordEntry.TextChanged += async (s, e) =>
+            {
+                SearchCondition.Keyword = e.NewTextValue;
+                _keywordCts?.Cancel();
+                _keywordCts = new CancellationTokenSource();
+                var token = _keywordCts.Token;
+
+                try
+                {
+                    await Task.Delay(400, token);   // 400ms 防抖
+                    if (token.IsCancellationRequested) return;
+
+                    _currentPage = 1;
+                    await LoadAdjustData();
+                }
+                catch (TaskCanceledException)
+                {
+                    // 被新的输入取消，忽略
+                }
+            };
 
             Grid.SetRow(lblDateTitle, 0); Grid.SetColumn(lblDateTitle, 0);
-            Grid.SetRow(dateRangeEntry, 1); Grid.SetColumn(dateRangeEntry, 0);
+            Grid.SetRow(dateRangeGrid, 1); Grid.SetColumn(dateRangeGrid, 0);
 
             Grid.SetRow(lblKeywordTitle, 0); Grid.SetColumn(lblKeywordTitle, 1);
             Grid.SetRow(keywordEntry, 1); Grid.SetColumn(keywordEntry, 1);
 
             grid.Children.Add(lblDateTitle);
-            grid.Children.Add(dateRangeEntry);
+            grid.Children.Add(dateRangeGrid);
             grid.Children.Add(lblKeywordTitle);
             grid.Children.Add(keywordEntry);
             return grid;
+        }
+
+        private Border CreateInputBorder(View content)
+        {
+            return new Border
+            {
+                Stroke = Color.FromArgb("#cccccc"),       // 薄いグレーの枠線
+                StrokeThickness = 1,
+                StrokeShape = new RoundRectangle { CornerRadius = 6 }, // 角丸
+                BackgroundColor = Colors.White,           // 背景色
+                Padding = 0,
+                Content = content,
+                HeightRequest = 40                        // 全体の高さを統一
+            };
         }
 
         /// <summary>
@@ -255,7 +344,7 @@ namespace EvangPL.Views.StockAdjust
             try
             {
                 CollectSearchCondition();
-                bool useMockData = true; // true=本地调试假数据
+                bool useMockData = false; // true=本地调试假数据
 
                 List<StockAdjustItem> dataList = new List<StockAdjustItem>();
 
@@ -289,7 +378,56 @@ namespace EvangPL.Views.StockAdjust
                 }
                 else
                 {
-                    // 接入后端接口的代码保持不变
+                    var startDate = SearchCondition.DateRangeFrom;
+                    var endDate = SearchCondition.DateRangeTo;
+                    var keyword = SearchCondition.Keyword;
+                    if (string.Compare(startDate, endDate) > 0)
+                    {
+                        await DisplayAlert("エーラ", "対象期間FROMは対象期間TOより大きくすることはできません。", "OK");
+                        return;
+                    }
+                    if (string.IsNullOrWhiteSpace(keyword))
+                    {
+                        return;
+                    }
+                    var searchParam = SearchCondition;
+                    var request = new RequestData<StockAdjustPageInfo, EvangJsonModel>("GetAdjust");
+                    request.Info = searchParam;
+                    var resultList = await this.Post<StockAdjustPageInfo, EvangJsonModel, EvangJsonModel, EvangJsonModel>(request);
+                    if (resultList == null || resultList.SubData == null)
+                    {
+                        RefreshPageUI();
+                        RenderCardList(dataList);
+                        return;
+                    }
+                    foreach (var item in resultList.SubData)
+                    {
+                        switch (item.SubName)
+                        {
+                            case "PH_DATA":
+                                if (item == null || item.SubJson == null)
+                                {
+                                    RefreshPageUI();
+                                    RenderCardList(dataList);
+                                    return;
+                                }
+                                dataList = BaseUtils.JsonToClass<List<StockAdjustItem>>(item.SubJson);
+                                break;
+                        }
+                    }
+                    // 分页计算
+                    int totalRecordCount = dataList.Count;
+                    _totalPage = (int)Math.Ceiling((double)totalRecordCount / PageSize);
+
+                    if (_currentPage > _totalPage && _totalPage > 0)
+                        _currentPage = _totalPage;
+
+                    // 截取当前页
+                    var pagedData = dataList
+                        .Skip((_currentPage - 1) * PageSize)
+                        .Take(PageSize)
+                        .ToList();
+                    dataList = pagedData;
                 }
 
                 RefreshPageUI();
@@ -505,7 +643,8 @@ namespace EvangPL.Views.StockAdjust
     /// </summary>
     public class StockAdjustPageInfo : EvangJsonModel
     {
-        public string DateRange { get; set; } = "";
+        public string DateRangeFrom { get; set; } = "";
+        public string DateRangeTo { get; set; } = "";
         public string Keyword { get; set; } = "";
         public int PageIndex { get; set; }
         public int PageSize { get; set; }
@@ -521,6 +660,7 @@ namespace EvangPL.Views.StockAdjust
         public string AdjustReason { get; set; } = "";
         public int DiffQty { get; set; }
         public string RegisterDate { get; set; } = "";
+        public int LocationId { get; set; }
     }
     #endregion
 }
