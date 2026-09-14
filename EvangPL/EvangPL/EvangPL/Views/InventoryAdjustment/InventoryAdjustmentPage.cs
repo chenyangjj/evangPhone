@@ -35,12 +35,12 @@ namespace EvangPL.Views.InventoryAdjustment
         // ==========================================
         // UI コントロール
         // ==========================================
-        private Picker? itemPicker;
+        private Entry? itemEntry;               // ★ Picker → Entry に変更
         private Border? scanButtonBorder;
         private Picker? locationPicker;
         private Entry? currentStockEntry;
         private Entry? differenceEntry;
-        private Border? _diffBorder;          // ★ 追加：差異入力枠のBorder参照（背景色切替用）
+        private Border? _diffBorder;
         private Entry? adjustedStockEntry;
         private Picker? reasonPicker;
         private Button? registerButton;
@@ -115,7 +115,7 @@ namespace EvangPL.Views.InventoryAdjustment
                 Padding = new Thickness(12)
             };
 
-            // === 1. 品目 (スキャン可) ===
+            // === 1. 品目 (スキャン可) ★ Entry に変更 ===
             var itemLabel = new Label { Text = "品目(スキャン可)", FontSize = 12, TextColor = Colors.Gray };
 
             var itemRow = new Grid
@@ -128,20 +128,20 @@ namespace EvangPL.Views.InventoryAdjustment
                 ColumnSpacing = 10
             };
 
-            itemPicker = new Picker
+            itemEntry = new Entry
             {
-                Title = "品目を選択",
+                Placeholder = "品目コードを入力またはスキャン",
                 BackgroundColor = Colors.Transparent,
                 TextColor = Colors.Black,
                 HeightRequest = 35,
                 FontSize = 13,
                 Margin = new Thickness(10, 0),
-                ItemsSource = _itemMasters,
-                ItemDisplayBinding = new Binding(nameof(ItemMaster.ItemCode))
+                VerticalOptions = LayoutOptions.Center
             };
-            itemPicker.SelectedIndexChanged += OnItemSelected;
+            // ★ 入力変化で IsLotItem 判定 → Lot セクション表示切替
+            itemEntry.TextChanged += OnItemTextChanged;
 
-            var itemBorder = CreateInputBorder(itemPicker, Colors.White);
+            var itemBorder = CreateInputBorder(itemEntry, Colors.White);
 
             scanButtonBorder = BuildBarcodeIcon();
             var tapGesture = new TapGestureRecognizer();
@@ -235,7 +235,6 @@ namespace EvangPL.Views.InventoryAdjustment
             };
             differenceEntry.TextChanged += OnDifferenceTextChanged;
 
-            // ★ Border をフィールドに保持（背景色を切り替えるため）
             _diffBorder = CreateInputBorder(differenceEntry, DiffEnabledBg);
             diffLayout.Children.Add(_diffBorder);
 
@@ -358,7 +357,6 @@ namespace EvangPL.Views.InventoryAdjustment
                 HorizontalTextAlignment = TextAlignment.Center,
                 Margin = new Thickness(10, 0)
             };
-            // ★ 移動数量入力中もリアルタイムで差異を更新
             _qtyEntry.TextChanged += OnQtyEntryTextChanged;
 
             var qtyBorder = CreateInputBorder(_qtyEntry, Colors.White);
@@ -429,23 +427,21 @@ namespace EvangPL.Views.InventoryAdjustment
         }
 
         // ==========================================
-        // ★ 品目選択時
+        // ★ 品目入力変化時（Entry 版）
+        //    入力テキストと _itemMasters の ItemCode を部分一致で照合
         // ==========================================
-        private void OnItemSelected(object? sender, EventArgs e)
+        private void OnItemTextChanged(object? sender, TextChangedEventArgs e)
         {
-            var item = itemPicker?.SelectedItem as ItemMaster;
+            var matched = GetMatchedItemMaster();
 
-            if (itemPicker != null)
-            {
-                itemPicker.Title = item != null ? item.ItemCode : "品目を選択";
-            }
-
+            // IsLotItem に応じて Lot セクション表示/非表示
             if (_lotSectionContainer != null)
             {
-                _lotSectionContainer.IsVisible = item?.IsLotItem ?? false;
+                _lotSectionContainer.IsVisible = matched?.IsLotItem ?? false;
             }
 
-            if (item == null || !item.IsLotItem)
+            // 非ロット品 or 未一致なら未保存ロットをクリア
+            if (matched == null || !matched.IsLotItem)
             {
                 _pendingLots.Clear();
                 RefreshPendingLotTable();
@@ -453,6 +449,17 @@ namespace EvangPL.Views.InventoryAdjustment
             }
 
             RecalculateDifference();
+        }
+
+        // ★ 入力テキストから ItemMaster を引く（部分一致）
+        private ItemMaster? GetMatchedItemMaster()
+        {
+            var text = itemEntry?.Text?.Trim();
+            if (string.IsNullOrEmpty(text)) return null;
+
+            return _itemMasters.FirstOrDefault(m =>
+                !string.IsNullOrEmpty(m.ItemCode) &&
+                m.ItemCode.Contains(text, StringComparison.OrdinalIgnoreCase));
         }
 
         private Border CreateInputBorder(View content, Color backgroundColor)
@@ -521,50 +528,41 @@ namespace EvangPL.Views.InventoryAdjustment
 
         // ==========================================
         // ★ 差異を自動計算
-        //    IsLotItem=true:
-        //      差異 = _pendingLots 同品目累加 + _qtyEntry 入力中数量（リアルタイム）
-        //      → 差異入力は無効化 + 灰色表示
-        //    IsLotItem=false:
-        //      → 差異はユーザー手入力 + 白表示
         // ==========================================
         private void RecalculateDifference()
         {
-            var selectedItem = itemPicker?.SelectedItem as ItemMaster;
+            var matchedItem = GetMatchedItemMaster();
             if (differenceEntry == null) return;
 
-            bool isLotItem = selectedItem != null && selectedItem.IsLotItem;
+            bool isLotItem = matchedItem != null && matchedItem.IsLotItem;
 
             if (isLotItem)
             {
-                // 同品目の Qty 累加
                 int sum = _pendingLots
-                    .Where(p => p.ItemCode == selectedItem!.ItemCode)
+                    .Where(p => p.ItemCode == matchedItem!.ItemCode)
                     .Sum(p => p.Qty);
 
-                // ★ 入力中（未追加）の移動数量も反映
                 if (int.TryParse(_qtyEntry?.Text?.Trim(), out int pendingQty) && pendingQty > 0)
                 {
                     sum += pendingQty;
                 }
 
-                // 差異を無効化
                 differenceEntry.IsReadOnly = true;
                 differenceEntry.TextColor = DiffDisabledFg;
                 if (_diffBorder != null)
                 {
-                    _diffBorder.BackgroundColor = DiffDisabledBg;   // ★ 灰色
+                    _diffBorder.BackgroundColor = DiffDisabledBg;
                 }
 
                 differenceEntry.Text = sum.ToString();
             }
             else
             {
-                // 有効化（ユーザー手入力）
                 differenceEntry.IsReadOnly = false;
                 differenceEntry.TextColor = DiffEnabledFg;
                 if (_diffBorder != null)
                 {
-                    _diffBorder.BackgroundColor = DiffEnabledBg;    // ★ 白
+                    _diffBorder.BackgroundColor = DiffEnabledBg;
                 }
             }
 
@@ -574,7 +572,6 @@ namespace EvangPL.Views.InventoryAdjustment
             }
         }
 
-        // ★ 移動数量入力中も差異をリアルタイム更新
         private void OnQtyEntryTextChanged(object? sender, TextChangedEventArgs e)
         {
             RecalculateDifference();
@@ -622,21 +619,17 @@ namespace EvangPL.Views.InventoryAdjustment
         {
             if (_editItem == null) return;
 
-            if (itemPicker != null && !string.IsNullOrWhiteSpace(_editItem.ItemCode))
+            // 品目：Entry にテキストをセット（TextChanged 経由で IsLotItem 判定される）
+            if (itemEntry != null && !string.IsNullOrWhiteSpace(_editItem.ItemCode))
             {
                 var matched = _itemMasters.FirstOrDefault(m => m.ItemCode == _editItem.ItemCode);
-                if (matched != null)
+                if (matched == null)
                 {
-                    itemPicker.SelectedItem = matched;
-                }
-                else
-                {
+                    // 仮データに無い場合は追加してから設定（判定できるようにする）
                     var newItem = new ItemMaster { ItemCode = _editItem.ItemCode, IsLotItem = true };
                     _itemMasters.Add(newItem);
-                    itemPicker.ItemsSource = null;
-                    itemPicker.ItemsSource = _itemMasters;
-                    itemPicker.SelectedItem = newItem;
                 }
+                itemEntry.Text = _editItem.ItemCode;
             }
 
             if (differenceEntry != null)
@@ -677,10 +670,10 @@ namespace EvangPL.Views.InventoryAdjustment
         // ==================== 「+ロットを追加」 ====================
         private async void OnAddLotButtonClicked(object? sender, EventArgs e)
         {
-            var selectedItem = itemPicker?.SelectedItem as ItemMaster;
-            if (selectedItem == null || !selectedItem.IsLotItem)
+            var matchedItem = GetMatchedItemMaster();
+            if (matchedItem == null || !matchedItem.IsLotItem)
             {
-                await DisplayAlert("エラー", "ロット対象の品目を選択してください。", "OK");
+                await DisplayAlert("エラー", "ロット対象の品目を入力してください。", "OK");
                 return;
             }
 
@@ -700,18 +693,17 @@ namespace EvangPL.Views.InventoryAdjustment
 
             _pendingLots.Add(new PendingLotItem
             {
-                ItemCode = selectedItem.ItemCode,
+                ItemCode = matchedItem.ItemCode,
                 LotNo = lotNo,
                 Qty = qty
             });
 
-            // ★ 先に _qtyEntry を空にする（TextChanged が走って差異が一旦 sum のみに戻る）
             if (_lotEntry != null) _lotEntry.Text = string.Empty;
             if (_qtyEntry != null) _qtyEntry.Text = string.Empty;
 
             RefreshPendingLotTable();
             RefreshBottomPendingTable();
-            RecalculateDifference();   // ★ 差異を再計算（_pendingLots に追加済みなので正しい値）
+            RecalculateDifference();
         }
 
         private Border BuildEditableLotTableForPending()
