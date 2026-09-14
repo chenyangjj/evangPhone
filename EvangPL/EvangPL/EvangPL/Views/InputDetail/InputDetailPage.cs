@@ -20,292 +20,225 @@ namespace EvangPL.Views.InputDetail
     public class InputDetail : EvangContentVM
     {
         private Border? pageHeaderInfo;
-        private readonly string poNo = "PO-2026-0114";
-        private readonly string supplierName = "東亜電子部品(株)";
-        private readonly string arrivalPlanDate = "2026-07-08";
         private InputDetailInfo paramInfoToNext;
 
-        // ページ分割
-        private Grid? paginationLayout;
-        private Button? prevButton;
-        private Button? nextButton;
-        private Label? pageLabel;
-        private int currentPage = 0;
-        private int pageSize = 5;
-        private int totalPages = 0;
-
-        // 新增：全局滚动容器引用 + 全部明细数据源
+        // 全局滚动容器引用
         private VerticalStackLayout? _scrollContainer;
-        private readonly List<StockInRow> _allBottomData = new List<StockInRow>();
         private InputDetailInfo? _detailInfo;
+
+        // ✅ RESTlet名（URL自体は Menu.cs の GetBaseMasterData() で LocalMemory.restlets に
+        //    一元登録済み。ここではキー名のみを保持し、値(URL)はそちらを参照する。
         private const string RESTLET_GET_DETAIL = "GetStockInDetail";
         private const string RESTLET_SAVE_STOCKIN = "SaveStockIn";
 
-        // ✅ 新增：页面加载状态标志
-        private bool _isDataLoaded = false;
+        // ✅ RESTletに渡すActionType（検索/保存の識別用）
+        private const string ACTION_SEARCH = "SEARCH";
+        private const string ACTION_SAVE = "SAVE";
 
-        // ✅ 新增：存储完整明细数据的列表（用于提取头部信息）
-        private List<DetailItem> _detailItems = new List<DetailItem>();
+        // ✅ 3つの独立したデータソース
+        //    ①PO自身の未入庫明細行（＝ヘッダー上部の選択テーブルの対象）
+        private List<PoLineItem> _poLines = new List<PoLineItem>();
+        //    ②実際に入庫済みの実績（現状ヘッダーには表示していないが、RESTletからは取得したままにしている）
+        private List<ReceiptHistoryRow> _receiptHistory = new List<ReceiptHistoryRow>();
+        //    ③入庫先ロケーション候補
+        private List<LocationItem> _locationList = new List<LocationItem>();
+
+        // ✅ 修正：「前明細/次明細」のページングを廃止。
+        //    代わりに、ヘッダー上部の「未受領PO明細」テーブルで行をタップして選択する方式に変更。
+        //    選択されていない（null）間は、明細登録エリアと登録済みロット表は非表示（空白）にする。
+        private PoLineItem? _selectedPoLine = null;
+
+        // ✅ 明細登録エリアの入力コントロール（Addボタン押下時に値を読むため保持）
+        private Picker? _locationPicker;
+        private Entry? _lotEntry;
+        private Entry? _qtyEntry;
+
+        // ✅ まだ保存していない「入力中の明細」リスト（+ロットを追加 で貯める。保存時にまとめてRESTletへ送る）
+        //    複数の品目にまたがるので、各要素が対象品目(ItemId/ItemCode)を持つ
+        private readonly List<PendingLotItem> _pendingLots = new List<PendingLotItem>();
+
+        // ✅ 「明細登録」エリア内：選択中の品目に絞った小さいプレビュー表（ロット/数量のみ）
+        private ContentView? _pendingLotTableHost;
+        // ✅ ページ最下部：全品目分をまとめた「登録済み明細(N件)」表（品目/ロット/数量）
+        private ContentView? _bottomPendingTableHost;
+
+        // ✅ 入力コントロール（Picker/Entry）の統一スタイル用定数
+        private static readonly Color InputBorderColor = Color.FromArgb("#cdd2dc");
+        private static readonly Color InputBackgroundColor = Colors.White;
+        private const int InputCornerRadius = 6;
+
+        // ✅ 選択中の行をハイライトする背景色
+        private static readonly Color SelectedRowColor = Color.FromArgb("#d7e8fa");
 
         public InputDetail() : base("strInputDetail")
         {
-            // 注册 RESTlet（参考 InboundSearch 的写法）
-            if (!LocalMemory.restlets.ContainsKey(RESTLET_GET_DETAIL))
-            {
-                LocalMemory.restlets.Add(RESTLET_GET_DETAIL,
-                    "https://9323639-sb1.restlets.api.netsuite.com/app/site/hosting/restlet.nl?script=2062&deploy=1");
-            }
-            if (!LocalMemory.restlets.ContainsKey(RESTLET_SAVE_STOCKIN))
-            {
-                LocalMemory.restlets.Add(RESTLET_SAVE_STOCKIN,
-                    "https://9323639-sb1.restlets.api.netsuite.com/app/site/hosting/restlet.nl?script=2061&deploy=1");
-            }
-            _detailInfo = new InputDetailInfo
-            {
-                PoNo = "PO-2026-0114",
-                SupplierName = "東亜電子部品(株)",
-                ArrivalPlanDate = "2026-07-08",
-                ItemCount = 5,
-                TotalQty = 320,
-                Status = "未入库"
-            };
+            // ✅ RESTlet URLは Menu.cs 側で一元登録済みのため、ここでは登録処理を行わない。
+            _detailInfo = new InputDetailInfo();
             BuildUI();
         }
 
         private string? _orderId;
         public InputDetail(InputDetailInfo detailInfo) : base("strInputDetail")
         {
-            if (!LocalMemory.restlets.ContainsKey(RESTLET_SAVE_STOCKIN))
-            {
-                LocalMemory.restlets.Add(RESTLET_SAVE_STOCKIN,
-                    "https://9323639-sb1.restlets.api.netsuite.com/app/site/hosting/restlet.nl?script=2061&deploy=1");
-            }
+            // ✅ RESTlet URLは Menu.cs 側で一元登録済みのため、ここでは登録処理を行わない。
             _detailInfo = detailInfo;
-            // ✅ 保存单据ID
             if (_detailInfo != null)
             {
                 _orderId = _detailInfo.OrderId;
             }
-            // ✅ 新增：注册 GetDetail RESTlet（带参构造函数中也需要注册）
-            if (!LocalMemory.restlets.ContainsKey(RESTLET_GET_DETAIL))
-            {
-                LocalMemory.restlets.Add(RESTLET_GET_DETAIL,
-                    "https://9323639-sb1.restlets.api.netsuite.com/app/site/hosting/restlet.nl?script=2062&deploy=1");
-            }
             BuildUI();
         }
 
-        // ✅ 修改：BuildUI 改为 async void，增加API调用逻辑
+        // 読み込み中の中間表示は無し。データ取得→完全なUI構築を直接行う。
         private async void BuildUI()
         {
-            // ✅ 新增：先构建基础UI框架，显示加载中提示
-            var mainGrid = new Grid
-            {
-                RowDefinitions =
-                {
-                    new RowDefinition { Height = GridLength.Star }
-                },
-                ColumnDefinitions = { new ColumnDefinition { Width = GridLength.Star } },
-                BackgroundColor = Color.FromArgb("#eff0f0"),
-                RowSpacing = 0,
-                HorizontalOptions = LayoutOptions.Fill,
-                VerticalOptions = LayoutOptions.Fill
-            };
-
-            // ✅ 新增：显示加载中提示
-            var loadingLabel = new Label
-            {
-                Text = "読み込み中...",
-                HorizontalOptions = LayoutOptions.Center,
-                VerticalOptions = LayoutOptions.Center,
-                FontSize = 16,
-                TextColor = Colors.Gray
-            };
-            mainGrid.Add(loadingLabel, 0, 0);
-            Content = mainGrid;
-
             try
             {
-                // ✅ 新增：从后端API加载数据
                 await LoadDataFromApi();
-
-                // ✅ 新增：数据加载完成后，重新构建完整UI
-                await BuildCompleteUI();
             }
             catch (Exception ex)
             {
-                // ✅ 新增：如果API调用失败，使用模拟数据
+                // ✅ API呼び出しで例外が発生してもモックへのフォールバックは行わない。0件のまま画面を構築する。
                 System.Diagnostics.Debug.WriteLine($"BuildUI Error: {ex.Message}");
-                LoadMockData();
-                await BuildCompleteUI();
+
+                await MainThread.InvokeOnMainThreadAsync(() =>
+                    DisplayAlert("エラー", $"初期データの読み込み中にエラーが発生しました: {ex.Message}", "OK"));
             }
+
+            await BuildCompleteUI();
         }
 
-        // ✅ 新增：从后端API加载数据
+        // ✅ 从后端API加载数据（PO头信息 / PO未入库明细行 / 入库实绩 / ロケーション候補）
         private async Task LoadDataFromApi()
         {
-            // 如果没有订单ID，直接使用模拟数据
             if (string.IsNullOrEmpty(_orderId))
             {
-                LoadMockData();
+                System.Diagnostics.Debug.WriteLine("LoadDataFromApi: _orderId が空のため検索を行いません。呼び出し元でOrderIdが正しく渡っているか確認してください。");
                 return;
             }
 
             try
             {
-                // ✅ 构建请求参数（与 InboundSearch / StockIn 风格一致）
                 var request = new RequestData<StockInDetailParam, EvangJsonModel>(RESTLET_GET_DETAIL);
                 request.Info = new StockInDetailParam
                 {
-                    OrderId = _orderId
+                    OrderId = _orderId,
+                    ActionType = ACTION_SEARCH,
+                    // ✅ 修正：前画面（InboundSearch等）から受け取った「入庫区分」をSEARCH時にもRESTletへ渡す。
+                    //    これが無いと、RESTlet側は常にデフォルトの「発注入庫(PurchOrd)」として検索してしまい、
+                    //    振替入庫(TrnfrOrd)・返品入庫(RtnAuth)のPO明細が0件になってしまう。
+                    InboundType = _detailInfo?.InboundType
                 };
 
-                // ✅ 调用后端API
-                var result = await this.Post<StockInDetailParam, EvangJsonModel, EvangJsonModel, EvangJsonModel>(request);
+                ResponseData<EvangJsonModel, EvangJsonModel>? result = null;
+                try
+                {
+                    result = await this.Post<StockInDetailParam, EvangJsonModel, EvangJsonModel, EvangJsonModel>(request);
+                }
+                finally
+                {
+                    // ⚠️ TODO: ここでローディング遮罩(オーバーレイ)を確実に閉じる。
+                    // EvangContentVM / Post 内部で ShowLoading() が呼ばれているなら、
+                    // 対応する HideLoading() をここで必ず呼ぶこと（例外・エラー時も含めて）。
+                    // 例: HideLoading();  もしくは  await HideLoadingAsync();
+                }
 
                 if (result == null)
                 {
                     System.Diagnostics.Debug.WriteLine("LoadDataFromApi: サーバーからの応答がありません。");
-                    LoadMockData();
+                    await MainThread.InvokeOnMainThreadAsync(() =>
+                        DisplayAlert("エラー", "サーバーからの応答がありません。", "OK"));
                     return;
                 }
 
                 if (!result.Success)
                 {
                     System.Diagnostics.Debug.WriteLine($"LoadDataFromApi: API Error - {result.ErrorMessage}");
-                    LoadMockData();
+                    await MainThread.InvokeOnMainThreadAsync(() =>
+                        DisplayAlert("エラー", result.ErrorMessage ?? "データ取得に失敗しました。", "OK"));
                     return;
                 }
 
-                // ✅ 解析返回的数据
-                var detailList = ParseDetailResult(result);
+                ParseSearchResult(result);
 
-                if (detailList == null || detailList.Count == 0)
-                {
-                    System.Diagnostics.Debug.WriteLine("LoadDataFromApi: 取得した明細データがありません。");
-                    LoadMockData();
-                    return;
-                }
-
-                // 清空现有数据并填充
-                _allBottomData.Clear();
-                _allBottomData.AddRange(detailList);
-
-                // ✅ 修复：从 _detailItems 获取头部信息
                 if (_detailInfo != null)
                 {
-                    // 从完整明细数据中提取头部信息
-                    if (_detailItems.Count > 0)
+                    // ✅ ヘッダー情報（仕入先/入荷予定日/PO番号）はPO明細行の先頭から取得
+                    var firstLine = _poLines.FirstOrDefault();
+                    if (firstLine != null)
                     {
-                        var firstItem = _detailItems.First();
-                        if (!string.IsNullOrEmpty(firstItem.tranid))
-                            _detailInfo.PoNo = firstItem.tranid;
-                        if (!string.IsNullOrEmpty(firstItem.entityName))
-                            _detailInfo.SupplierName = firstItem.entityName;
-                        if (!string.IsNullOrEmpty(firstItem.scheduledDate))
-                            _detailInfo.ArrivalPlanDate = firstItem.scheduledDate;
+                        if (!string.IsNullOrEmpty(firstLine.tranid))
+                            _detailInfo.PoNo = firstLine.tranid;
+                        if (!string.IsNullOrEmpty(firstLine.entityName))
+                            _detailInfo.SupplierName = firstLine.entityName;
+                        if (!string.IsNullOrEmpty(firstLine.scheduledDate))
+                            _detailInfo.ArrivalPlanDate = firstLine.scheduledDate;
                     }
 
-                    // 更新数量和件数
-                    _detailInfo.ItemCount = _allBottomData.Count;
-                    _detailInfo.TotalQty = _allBottomData.Sum(x => x.Qty);
+                    _detailInfo.ItemCount = _poLines.Count;
+                    _detailInfo.TotalQty = _poLines.Sum(x => x.remainingQty);
 
-                    // 如果状态为空，设置默认状态
                     if (string.IsNullOrEmpty(_detailInfo.Status))
                     {
                         _detailInfo.Status = "未入库";
                     }
                 }
 
-                System.Diagnostics.Debug.WriteLine($"LoadDataFromApi: データ読み込み成功 - {_allBottomData.Count}件");
+                System.Diagnostics.Debug.WriteLine($"LoadDataFromApi: データ読み込み成功 - 未入庫明細{_poLines.Count}件 / 入庫実績{_receiptHistory.Count}件 / ロケーション{_locationList.Count}件");
             }
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"LoadDataFromApi: API呼び出しエラー - {ex.Message}");
-                LoadMockData();
+
+                // ⚠️ TODO: 例外時もローディング遮罩を確実に閉じる（上のfinallyで既にカバーされていれば不要）
+                // HideLoading();
+
+                await MainThread.InvokeOnMainThreadAsync(() =>
+                    DisplayAlert("エラー", $"データ取得中にエラーが発生しました: {ex.Message}", "OK"));
             }
         }
 
-        // ✅ 新增：解析明细结果（与 InboundSearch 的 ParseSearchResult 风格一致）
-        private List<StockInRow> ParseDetailResult(ResponseData<EvangJsonModel, EvangJsonModel> result)
+        // ✅ PO_LINES / RECEIPT_HISTORY / LOCATION_LIST の3ブロックをそれぞれ独立してパースする
+        private void ParseSearchResult(ResponseData<EvangJsonModel, EvangJsonModel> result)
         {
-            var detailList = new List<StockInRow>();
-            _detailItems.Clear();  // ✅ 清空
+            _poLines.Clear();
+            _receiptHistory.Clear();
+            _locationList.Clear();
 
             if (result.SubData == null || result.SubData.Count == 0)
-                return detailList;
+                return;
 
             foreach (var subData in result.SubData)
             {
-                // 从 SubJson 解析为 DetailItem 列表
-                if (subData.SubName == "Data" || subData.SubName == "DETAIL_LIST")
+                try
                 {
-                    try
+                    if (subData.SubName == "PO_LINES")
                     {
-                        var items = BaseUtils.JsonToClass<List<DetailItem>>(subData.SubJson!);
-                        if (items != null)
-                        {
-                            _detailItems = items;  // ✅ 保存完整数据
-                            foreach (var item in items)
-                            {
-                                var stockRow = new StockInRow
-                                {
-                                    ItemCode = item.itemid ?? item.id ?? "",
-                                    LotNo = item.lotnum ?? "",
-                                    Qty = item.quantityshiprecv ?? 0
-                                };
-                                detailList.Add(stockRow);
-                            }
-                        }
+                        _poLines = BaseUtils.JsonToClass<List<PoLineItem>>(subData.SubJson!) ?? new List<PoLineItem>();
+                        System.Diagnostics.Debug.WriteLine($"ParseSearchResult: PO_LINES 解析成功 - {_poLines.Count}件");
                     }
-                    catch (Exception ex)
+                    else if (subData.SubName == "RECEIPT_HISTORY")
                     {
-                        System.Diagnostics.Debug.WriteLine($"ParseDetailResult: JSON解析エラー - {ex.Message}");
+                        _receiptHistory = BaseUtils.JsonToClass<List<ReceiptHistoryRow>>(subData.SubJson!) ?? new List<ReceiptHistoryRow>();
+                        System.Diagnostics.Debug.WriteLine($"ParseSearchResult: RECEIPT_HISTORY 解析成功 - {_receiptHistory.Count}件");
                     }
-                    break;
+                    else if (subData.SubName == "LOCATION_LIST")
+                    {
+                        System.Diagnostics.Debug.WriteLine($"ParseSearchResult: LOCATION_LIST 受信JSON = {subData.SubJson}");
+                        _locationList = BaseUtils.JsonToClass<List<LocationItem>>(subData.SubJson!) ?? new List<LocationItem>();
+                        System.Diagnostics.Debug.WriteLine($"ParseSearchResult: LOCATION_LIST 解析成功 - {_locationList.Count}件");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"ParseSearchResult: JSON解析エラー({subData.SubName}) - [{ex.GetType().Name}] {ex.Message}");
                 }
             }
-
-            return detailList;
         }
 
-        // ✅ 新增：加载模拟数据（原 _allBottomData 初始化逻辑移到这里）
-        private void LoadMockData()
-        {
-            _allBottomData.Clear();
-            _allBottomData.AddRange(new List<StockInRow>()
-            {
-                new StockInRow{ ItemCode = "部品Z-9999", LotNo = "LOT20260615", Qty = 10 },
-                new StockInRow{ ItemCode = "部品A-1010", LotNo = "LOT20260728", Qty = 20 },
-                new StockInRow{ ItemCode = "部品A-1010", LotNo = "LOT20260738", Qty = 30 },
-                new StockInRow{ ItemCode = "部品A-1010", LotNo = "LOT20260748", Qty = 40 },
-                new StockInRow{ ItemCode = "部品N-1010", LotNo = "LOT20260758", Qty = 50 },
-                new StockInRow{ ItemCode = "部品A-1010", LotNo = "LOT20260708", Qty = 60 },
-                new StockInRow{ ItemCode = "部品A-1010", LotNo = "LOT20260768", Qty = 70 },
-                new StockInRow{ ItemCode = "部品B-1010", LotNo = "LOT20260708", Qty = 80 },
-                new StockInRow{ ItemCode = "部品G-1010", LotNo = "LOT20260778", Qty = 90 },
-                new StockInRow{ ItemCode = "部品A-1010", LotNo = "LOT20260708", Qty = 80 },
-                new StockInRow{ ItemCode = "部品E-1010", LotNo = "LOT20260708", Qty = 70 },
-                new StockInRow{ ItemCode = "部品F-1010", LotNo = "LOT20260708", Qty = 60 },
-                new StockInRow{ ItemCode = "部品A-1010", LotNo = "LOT20260708", Qty = 50 },
-                new StockInRow{ ItemCode = "部品D-1010", LotNo = "LOT20260708", Qty = 40 }
-            });
-
-            // 如果是模拟数据，更新头部信息
-            if (_detailInfo != null)
-            {
-                _detailInfo.ItemCount = _allBottomData.Count;
-                _detailInfo.TotalQty = _allBottomData.Sum(x => x.Qty);
-            }
-        }
-
-        // ✅ 新增：构建完整的UI（原 BuildUI 中 UI 构建逻辑移到这里）
+        // ✅ 构建完整的UI
         private async Task BuildCompleteUI()
         {
-            // 计算总页数
-            totalPages = (int)Math.Ceiling((double)_allBottomData.Count / pageSize);
-            if (totalPages == 0) totalPages = 1;
-
             var mainGrid = new Grid
             {
                 RowDefinitions =
@@ -319,60 +252,14 @@ namespace EvangPL.Views.InputDetail
                 VerticalOptions = LayoutOptions.Fill
             };
 
-            // ✅ 修改：从实际数据构建顶部已存在批次列表
-            var topExistLotList = _allBottomData
-                .GroupBy(x => new { x.ItemCode, x.LotNo })
-                .Select(g => new StockInRow
-                {
-                    ItemCode = g.Key.ItemCode,
-                    LotNo = g.Key.LotNo,
-                    Qty = g.Sum(x => x.Qty)
-                })
-                .Take(5)
-                .ToList();
+            // ✅ ヘッダー（仕入先/入荷予定日 + タップ選択可能な「未受領PO明細」テーブル）
+            pageHeaderInfo = BuildHeader();
 
-            // 如果没有数据，使用默认示例
-            if (topExistLotList.Count == 0)
-            {
-                topExistLotList = new List<StockInRow>()
-                {
-                    new StockInRow{ ItemCode = "部品A-1010", LotNo = "LOT20260620", Qty = 50 },
-                    new StockInRow{ ItemCode = "部品A-1010", LotNo = "LOT20260615", Qty = 30 }
-                };
-            }
+            // ✅ 明細登録エリア：品目が未選択の場合は空（＝表示なし）
+            var detailInputArea = BuildDetailInputArea();
 
-            // ✅ 修改：从实际数据构建已注册批次列表
-            var registeredLotList = _allBottomData
-                .GroupBy(x => x.LotNo)
-                .Select(g => new StockInRow
-                {
-                    LotNo = g.Key,
-                    Qty = g.Sum(x => x.Qty)
-                })
-                .Take(5)
-                .ToList();
-
-            if (registeredLotList.Count == 0)
-            {
-                registeredLotList = new List<StockInRow>()
-                {
-                    new StockInRow{ LotNo = "LOT20260708", Qty = 80 },
-                    new StockInRow{ LotNo = "LOT20260709", Qty = 40 }
-                };
-            }
-
-            // 从 _detailInfo 获取显示信息
-            string displayPoNo = _detailInfo?.PoNo ?? "PO-2026-0114";
-            string displaySupplier = _detailInfo?.SupplierName ?? "東亜電子部品(株)";
-            string displayPlanDate = _detailInfo?.ArrivalPlanDate ?? "2026-07-08";
-
-            pageHeaderInfo = BuildStockInHeader(displayPoNo, displaySupplier, displayPlanDate, topExistLotList);
-            var detailInputArea = BuildDetailInputArea(registeredLotList);
-            CreatePaginationControls();
-
-            // 初始化加载第一页数据
-            var firstPageData = _allBottomData.Take(pageSize).ToList();
-            var bottomTable = BuildBottomRegisteredTable(firstPageData, _allBottomData.Count);
+            // ✅ 底部：全品目分の未保存明細一覧
+            _bottomPendingTableHost = new ContentView { Content = BuildBottomPendingTable() };
 
             var saveBtn = new Button
             {
@@ -384,13 +271,11 @@ namespace EvangPL.Views.InputDetail
             };
             saveBtn.Clicked += OnSaveButtonClicked;
 
-            // 滚动容器存入全局字段，供分页刷新使用
             _scrollContainer = new VerticalStackLayout { Spacing = 6, Padding = new Thickness(10) };
-            _scrollContainer.Children.Add(pageHeaderInfo);
-            _scrollContainer.Children.Add(detailInputArea);
-            _scrollContainer.Children.Add(paginationLayout);
-            _scrollContainer.Children.Add(bottomTable);
-            _scrollContainer.Children.Add(saveBtn);
+            _scrollContainer.Children.Add(pageHeaderInfo);          // [0]
+            _scrollContainer.Children.Add(detailInputArea);         // [1]
+            _scrollContainer.Children.Add(_bottomPendingTableHost); // [2]
+            _scrollContainer.Children.Add(saveBtn);                 // [3]
 
             var scrollView = new ScrollView
             {
@@ -401,15 +286,12 @@ namespace EvangPL.Views.InputDetail
             mainGrid.Add(scrollView, 0, 0);
             Content = mainGrid;
 
-            // 初始化分页按钮状态
-            UpdatePaginationControls();
-
             System.Diagnostics.Debug.WriteLine("BuildCompleteUI: UI構築完了");
         }
 
-        // ==================== 以下方法保持不变 ====================
+        // ==================== ヘッダー（仕入先/入荷予定日 + PO明細選択テーブル） ====================
 
-        private Border BuildStockInHeader(string poNumber, string supplier, string planDate, List<StockInRow> topLotRows)
+        private Border BuildHeader()
         {
             var innerGrid = new Grid
             {
@@ -427,8 +309,18 @@ namespace EvangPL.Views.InputDetail
                 Padding = new Thickness(5, 5, 5, 8),
                 BackgroundColor = Color.FromArgb("#edeff3")
             };
-            innerGrid.Add(new Label { Text = "仕入先", FontSize = 12, TextColor = Colors.Gray });
+
+            // ✅ 新增：返品入庫(RtnAuth)の場合は「仕入先」ではなく「顧客」ラベルを表示する。
+            //    InboundType に「返品」が含まれるかどうかで判定（他の入庫区分は従来どおり「仕入先」）。
+            bool isReturnReceipt = _detailInfo?.InboundType != null && _detailInfo.InboundType.IndexOf("返品") >= 0;
+            string partnerLabelText = isReturnReceipt ? "顧客" : "仕入先";
+
+            innerGrid.Add(new Label { Text = partnerLabelText, FontSize = 12, TextColor = Colors.Gray });
             innerGrid.Add(new Label { Text = "入荷予定日", FontSize = 12, TextColor = Colors.Gray }, 1, 0);
+
+            string supplier = _detailInfo?.SupplierName ?? "";
+            string planDate = _detailInfo?.ArrivalPlanDate ?? "";
+
             var vendorBorder = new Border
             {
                 Stroke = Color.FromArgb("#cdd2dc"),
@@ -454,19 +346,11 @@ namespace EvangPL.Views.InputDetail
             dateBorder.Content = dateLabel;
             innerGrid.Add(dateBorder, 1, 1);
 
-            var topTable = BuildSimpleTable(
-                new List<string> { "アイテム", "入庫済みロット", "数量" },
-                topLotRows.ConvertAll(r => new List<string> { r.ItemCode, r.LotNo, r.Qty.ToString() }),
-                new List<GridLength>
-                {
-                    new GridLength(2, GridUnitType.Star),
-                    new GridLength(2, GridUnitType.Star),
-                    new GridLength(1, GridUnitType.Star)
-                }
-            );
-            Grid.SetRow(topTable, 2);
-            Grid.SetColumnSpan(topTable, 2);
-            innerGrid.Add(topTable);
+            // ✅ 修正：「入庫済みロット」実績表 → タップで選択できる「未受領PO明細」テーブルに変更
+            var poLineTable = BuildPoLineSelectionTable();
+            Grid.SetRow(poLineTable, 2);
+            Grid.SetColumnSpan(poLineTable, 2);
+            innerGrid.Add(poLineTable);
 
             var headerBorder = new Border
             {
@@ -481,8 +365,193 @@ namespace EvangPL.Views.InputDetail
             return headerBorder;
         }
 
-        private Border BuildDetailInputArea(List<StockInRow> regLots)
+        // ✅ 新增：「未受領PO明細」テーブル（品目 / 残数量 / 発注数量）。
+        //    行をタップすると OnPoLineRowSelected が呼ばれ、その品目向けの明細登録エリアが開く。
+        //    選択中の行は背景色をハイライトする。
+        private Border BuildPoLineSelectionTable()
         {
+            var headers = new List<string> { "品目", "残数量", "発注数量" };
+            var columnWidths = new List<GridLength>
+            {
+                new GridLength(2, GridUnitType.Star),
+                new GridLength(1, GridUnitType.Star),
+                new GridLength(1, GridUnitType.Star)
+            };
+
+            var tableGrid = new Grid();
+            foreach (var width in columnWidths)
+                tableGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = width });
+
+            tableGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            for (int c = 0; c < headers.Count; c++)
+            {
+                tableGrid.Add(new Label
+                {
+                    Text = headers[c],
+                    FontSize = 12,
+                    FontAttributes = FontAttributes.Bold,
+                    BackgroundColor = Color.FromArgb("#dbe2ec"),
+                    Padding = new Thickness(2)
+                }, c, 0);
+            }
+
+            for (int r = 0; r < _poLines.Count; r++)
+            {
+                int separatorRowIndex = tableGrid.RowDefinitions.Count;
+                tableGrid.RowDefinitions.Add(new RowDefinition { Height = 1 });
+                var separator = new BoxView { Color = Color.FromArgb("#e0e3e8"), HeightRequest = 1 };
+                tableGrid.Add(separator, 0, separatorRowIndex);
+                Grid.SetColumnSpan(separator, headers.Count);
+
+                int dataRowIndex = tableGrid.RowDefinitions.Count;
+                tableGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+                var line = _poLines[r];
+                bool isSelected = _selectedPoLine != null && _selectedPoLine.itemId == line.itemId;
+                var rowBg = isSelected ? SelectedRowColor : Colors.White;
+
+                var itemLabel = new Label { Text = line.itemCode, FontSize = 11, Padding = new Thickness(4), BackgroundColor = rowBg };
+                var remainLabel = new Label { Text = line.remainingQty.ToString(), FontSize = 11, Padding = new Thickness(4), BackgroundColor = rowBg };
+                var orderedLabel = new Label { Text = line.orderedQty.ToString(), FontSize = 11, Padding = new Thickness(4), BackgroundColor = rowBg };
+
+                tableGrid.Add(itemLabel, 0, dataRowIndex);
+                tableGrid.Add(remainLabel, 1, dataRowIndex);
+                tableGrid.Add(orderedLabel, 2, dataRowIndex);
+
+                // ✅ 行全体をタップ可能にする（3つのLabelそれぞれにジェスチャーを付与）
+                var capturedLine = line; // クロージャ用
+                var tapGesture = new TapGestureRecognizer();
+                tapGesture.Tapped += (s, e) => OnPoLineRowSelected(capturedLine);
+                itemLabel.GestureRecognizers.Add(tapGesture);
+                remainLabel.GestureRecognizers.Add(new TapGestureRecognizer { Command = new Command(() => OnPoLineRowSelected(capturedLine)) });
+                orderedLabel.GestureRecognizers.Add(new TapGestureRecognizer { Command = new Command(() => OnPoLineRowSelected(capturedLine)) });
+            }
+
+            var tableBorder = new Border
+            {
+                Stroke = Color.FromArgb("#cdd2dc"),
+                StrokeThickness = 1,
+                StrokeShape = new RoundRectangle { },
+                Background = Colors.White
+            };
+            tableBorder.Content = tableGrid;
+            return tableBorder;
+        }
+
+        // ✅ 新增：PO明細テーブルの行がタップされた時。選択品目を切り替えて、
+        //    ヘッダー（選択ハイライト反映）と明細登録エリアの両方を再構築して差し替える。
+        private void OnPoLineRowSelected(PoLineItem line)
+        {
+            _selectedPoLine = line;
+            RefreshHeaderAndDetailArea();
+        }
+
+        // ✅ 新增：ヘッダーと明細登録エリアを再構築し、_scrollContainer の該当インデックスに差し替える
+        private void RefreshHeaderAndDetailArea()
+        {
+            var newHeader = BuildHeader();
+            var newDetailInputArea = BuildDetailInputArea();
+
+            if (_scrollContainer != null && _scrollContainer.Children.Count > 1)
+            {
+                _scrollContainer.Children[0] = newHeader;
+                _scrollContainer.Children[1] = newDetailInputArea;
+            }
+            pageHeaderInfo = newHeader;
+        }
+
+        // ✅ MauiIcons.Fluent フォントに依存しない「条码アイコン」を自前で描画するヘルパー
+        private Border BuildBarcodeIcon()
+        {
+            var barsLayout = new HorizontalStackLayout
+            {
+                Spacing = 2,
+                HorizontalOptions = LayoutOptions.Center,
+                VerticalOptions = LayoutOptions.Center
+            };
+
+            double[] barWidths = { 2, 4, 2, 6, 2, 4, 2 };
+            foreach (var w in barWidths)
+            {
+                barsLayout.Children.Add(new BoxView
+                {
+                    Color = Color.FromArgb("#1e3a5f"),
+                    WidthRequest = w,
+                    HeightRequest = 22,
+                    VerticalOptions = LayoutOptions.Center
+                });
+            }
+
+            return new Border
+            {
+                Stroke = Color.FromArgb("#cdd2dc"),
+                StrokeThickness = 1,
+                StrokeShape = new RoundRectangle { CornerRadius = 6 },
+                BackgroundColor = Colors.White,
+                Padding = new Thickness(8, 6),
+                WidthRequest = 50,
+                HeightRequest = 45,
+                HorizontalOptions = LayoutOptions.End,
+                Content = barsLayout
+            };
+        }
+
+        // ✅ Picker / Entry を統一スタイルの Border で包むヘルパー
+        private Border WrapInputControl(View control, bool showDropdownArrow = false)
+        {
+            View content = control;
+
+            if (showDropdownArrow)
+            {
+                var innerGrid = new Grid
+                {
+                    ColumnDefinitions =
+                    {
+                        new ColumnDefinition { Width = GridLength.Star },
+                        new ColumnDefinition { Width = GridLength.Auto }
+                    }
+                };
+                innerGrid.Add(control, 0, 0);
+
+                var arrowLabel = new Label
+                {
+                    Text = "▼",
+                    FontSize = 12,
+                    TextColor = Color.FromArgb("#6b727c"),
+                    VerticalOptions = LayoutOptions.Center,
+                    Margin = new Thickness(6, 0, 2, 0),
+                    InputTransparent = true
+                };
+                innerGrid.Add(arrowLabel, 1, 0);
+
+                content = innerGrid;
+            }
+
+            return new Border
+            {
+                Stroke = InputBorderColor,
+                StrokeThickness = 1,
+                StrokeShape = new RoundRectangle { CornerRadius = InputCornerRadius },
+                BackgroundColor = InputBackgroundColor,
+                Padding = new Thickness(8, 0),
+                Content = content
+            };
+        }
+
+        // ==================== 明細登録エリア ====================
+
+        // ✅ 修正：戻り値を View に変更。
+        //    品目が未選択（_selectedPoLine == null）の場合は、明細登録エリアと登録済みロット表を
+        //    まとめて非表示（IsVisible=false の空 ContentView、レイアウト上も場所を取らない）にする。
+        private View BuildDetailInputArea()
+        {
+            if (_selectedPoLine == null)
+            {
+                return new ContentView { IsVisible = false };
+            }
+
+            var currentItem = _selectedPoLine;
+
             var border = new Border
             {
                 Stroke = Color.FromArgb("#b4cee8"),
@@ -502,22 +571,20 @@ namespace EvangPL.Views.InputDetail
             locRow.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             layout.Children.Add(new Label { Text = "入庫先ロケーション (スキャン可)", FontSize = 12, TextColor = Colors.Gray });
 
-            var locPicker = new Picker
+            var locationNames = _locationList
+                .Select(l => l.Name)
+                .Where(n => !string.IsNullOrEmpty(n))
+                .ToList();
+
+            _locationPicker = new Picker
             {
                 Title = "選択",
-                SelectedIndex = 0,
-                BackgroundColor = Colors.White,
-                ItemsSource = new List<string> { "WH1-A-03" }
+                SelectedIndex = locationNames.Count > 0 ? 0 : -1,
+                BackgroundColor = Colors.Transparent,
+                ItemsSource = locationNames
             };
-            locRow.Add(locPicker, 0, 1);
-            MauiIcon barcodeIcon1 = new MauiIcon
-            {
-                Icon = FluentIcons.BarcodeScanner20,
-                IconSize = 40,
-                IconColor = Color.FromRgba("#1e3a5f"),
-                HorizontalOptions = LayoutOptions.End
-            };
-            locRow.Add(barcodeIcon1, 1, 1);
+            locRow.Add(WrapInputControl(_locationPicker, showDropdownArrow: true), 0, 1);
+            locRow.Add(BuildBarcodeIcon(), 1, 1);
             layout.Children.Add(locRow);
 
             layout.Children.Add(new Label { Text = "ロット / シリアル (スキャン可)", FontSize = 12, TextColor = Colors.Gray });
@@ -527,39 +594,24 @@ namespace EvangPL.Views.InputDetail
                 ColumnDefinitions = { new ColumnDefinition { Width = GridLength.Star }, new ColumnDefinition { Width = 50 } }
             };
             lotRow.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            var lotEntry = new Entry { Text = "LOT20260708", BackgroundColor = Colors.White, };
-            lotRow.Add(lotEntry, 0, 1);
-            MauiIcon barcodeIcon2 = new MauiIcon
-            {
-                Icon = FluentIcons.BarcodeScanner20,
-                IconSize = 40,
-                IconColor = Color.FromRgba("#1e3a5f"),
-                HorizontalOptions = LayoutOptions.End
-            };
-            lotRow.Add(barcodeIcon2, 1, 1);
+            _lotEntry = new Entry { Placeholder = "ロット/シリアルをスキャンまたは入力", BackgroundColor = Colors.Transparent };
+            lotRow.Add(WrapInputControl(_lotEntry), 0, 1);
+            lotRow.Add(BuildBarcodeIcon(), 1, 1);
             layout.Children.Add(lotRow);
 
             var qtyRow = new Grid
             {
                 ColumnDefinitions = { new ColumnDefinition { Width = GridLength.Star }, new ColumnDefinition { Width = 60 } }
             };
-            var qtyEntry = new Entry { Text = "120", Keyboard = Keyboard.Numeric, BackgroundColor = Colors.White, };
-            qtyRow.Add(qtyEntry, 0, 0);
+            _qtyEntry = new Entry { Placeholder = "数量を入力", Keyboard = Keyboard.Numeric, BackgroundColor = Colors.Transparent };
+            qtyRow.Add(WrapInputControl(_qtyEntry), 0, 0);
             qtyRow.Add(new Label { Text = "個", VerticalOptions = LayoutOptions.Center, HorizontalTextAlignment = TextAlignment.Center }, 1, 0);
             layout.Children.Add(new Label { Text = "入庫数量", FontSize = 12, TextColor = Colors.Gray });
             layout.Children.Add(qtyRow);
 
-            var innerTable = BuildSimpleTable(
-                new List<string> { "登録済みロット", "数量", "" },
-                regLots.ConvertAll(r => new List<string> { r.LotNo, $"{r.Qty}個", "❌" }),
-                new List<GridLength>
-                {
-                    new GridLength(3, GridUnitType.Star),
-                    new GridLength(2, GridUnitType.Star),
-                    new GridLength(1, GridUnitType.Star)
-                }
-            );
-            layout.Children.Add(innerTable);
+            // ✅ 選択中品目に絞った、未保存分のプレビュー表（ロット/数量のみ、品目列なし）
+            _pendingLotTableHost = new ContentView { Content = BuildEditableLotTableForCurrentItem() };
+            layout.Children.Add(_pendingLotTableHost);
 
             var addLotBtn = new Button
             {
@@ -570,41 +622,281 @@ namespace EvangPL.Views.InputDetail
                 BorderWidth = 3,
                 FontAttributes = FontAttributes.Bold
             };
+            addLotBtn.Clicked += OnAddLotButtonClicked;
             layout.Children.Add(addLotBtn);
 
             border.Content = layout;
             return border;
         }
 
+        // ✅ 「+ロットを追加」押下時。入力欄の値を検証し、選択中の品目に紐づけて _pendingLots に積む
+        private async void OnAddLotButtonClicked(object? sender, EventArgs e)
+        {
+            var currentItem = _selectedPoLine;
+            if (currentItem == null)
+            {
+                await DisplayAlert("エラー", "対象のアイテムがありません。上の一覧から品目を選択してください。", "OK");
+                return;
+            }
+
+            var selectedLocationName = _locationPicker?.SelectedItem as string;
+            var lotNo = _lotEntry?.Text?.Trim();
+            var qtyText = _qtyEntry?.Text?.Trim();
+
+            if (string.IsNullOrEmpty(selectedLocationName))
+            {
+                await DisplayAlert("エラー", "入庫先ロケーションを選択してください。", "OK");
+                return;
+            }
+            if (string.IsNullOrEmpty(lotNo))
+            {
+                await DisplayAlert("エラー", "ロット/シリアルを入力またはスキャンしてください。", "OK");
+                return;
+            }
+            if (!int.TryParse(qtyText, out int qty) || qty <= 0)
+            {
+                await DisplayAlert("エラー", "入庫数量を正しく入力してください。", "OK");
+                return;
+            }
+            if (qty > currentItem.remainingQty)
+            {
+                await DisplayAlert("エラー", $"入庫数量が残数量（{currentItem.remainingQty}個）を超えています。", "OK");
+                return;
+            }
+
+            var matchedLocation = _locationList.FirstOrDefault(l => l.Name == selectedLocationName);
+
+            _pendingLots.Add(new PendingLotItem
+            {
+                ItemId = currentItem.itemId,
+                ItemCode = currentItem.itemCode,
+                LocationId = matchedLocation?.Id ?? "",
+                LocationName = selectedLocationName,
+                LotNo = lotNo,
+                Qty = qty
+            });
+
+            if (_lotEntry != null) _lotEntry.Text = string.Empty;
+            if (_qtyEntry != null) _qtyEntry.Text = string.Empty;
+
+            RefreshPendingLotTable();
+            RefreshBottomPendingTable();
+        }
+
+        // ✅ 明細登録エリア内の小プレビュー表（選択中の品目のみ）を再構築して差し替える
+        private void RefreshPendingLotTable()
+        {
+            if (_pendingLotTableHost != null)
+            {
+                _pendingLotTableHost.Content = BuildEditableLotTableForCurrentItem();
+            }
+        }
+
+        // ✅ 底部の全品目一覧表を再構築して差し替える
+        private void RefreshBottomPendingTable()
+        {
+            if (_bottomPendingTableHost != null)
+            {
+                _bottomPendingTableHost.Content = BuildBottomPendingTable();
+            }
+        }
+
+        // ✅ ❌タップで該当行を _pendingLots から削除
+        private void OnDeletePendingLot(PendingLotItem item)
+        {
+            _pendingLots.Remove(item);
+            RefreshPendingLotTable();
+            RefreshBottomPendingTable();
+        }
+
+        // ✅ 選択中品目に絞った未保存プレビュー表（品目列なし：ロット/数量/❌）
+        private Border BuildEditableLotTableForCurrentItem()
+        {
+            var currentItem = _selectedPoLine;
+            var itemsForCurrent = currentItem == null
+                ? new List<PendingLotItem>()
+                : _pendingLots.Where(p => p.ItemId == currentItem.itemId).ToList();
+
+            return BuildEditableLotTableInternal(itemsForCurrent, showItemColumn: false);
+        }
+
+        // ✅ 修正：_pendingLots が0件（＝初期表示、まだ何も登録していない状態）の場合は
+        //    「登録済み明細(0件)」ごと非表示にする（見出しだけ出るのを防ぐ）
+        private View BuildBottomPendingTable()
+        {
+            if (_pendingLots.Count == 0)
+            {
+                return new ContentView { IsVisible = false };
+            }
+
+            var container = new VerticalStackLayout { Spacing = 4 };
+            container.Children.Add(new Label
+            {
+                Text = $"登録済み明細({_pendingLots.Count}件)",
+                FontSize = 14,
+                FontAttributes = FontAttributes.Bold
+            });
+            container.Children.Add(BuildEditableLotTableInternal(_pendingLots, showItemColumn: true));
+            return container;
+        }
+
+        // ✅ _pendingLots から「削除ボタン付き」の一覧テーブルを作る共通実装
+        //    showItemColumn=false: ロット/数量/❌（明細登録エリア内の選択中品目プレビュー用）
+        //    showItemColumn=true : 品目/ロット/数量/❌（底部の全品目一覧用）
+        private Border BuildEditableLotTableInternal(List<PendingLotItem> items, bool showItemColumn)
+        {
+            List<string> headers;
+            List<GridLength> columnWidths;
+            if (showItemColumn)
+            {
+                headers = new List<string> { "品目", "ロット", "数量", "" };
+                columnWidths = new List<GridLength>
+                {
+                    new GridLength(3, GridUnitType.Star),
+                    new GridLength(3, GridUnitType.Star),
+                    new GridLength(1, GridUnitType.Star),
+                    new GridLength(1, GridUnitType.Star)
+                };
+            }
+            else
+            {
+                headers = new List<string> { "登録済みロット", "数量", "" };
+                columnWidths = new List<GridLength>
+                {
+                    new GridLength(3, GridUnitType.Star),
+                    new GridLength(2, GridUnitType.Star),
+                    new GridLength(1, GridUnitType.Star)
+                };
+            }
+
+            var tableGrid = new Grid();
+            foreach (var width in columnWidths)
+                tableGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = width });
+
+            tableGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            for (int c = 0; c < headers.Count; c++)
+            {
+                tableGrid.Add(new Label
+                {
+                    Text = headers[c],
+                    FontSize = 12,
+                    FontAttributes = FontAttributes.Bold,
+                    BackgroundColor = Color.FromArgb("#dbe2ec"),
+                    Padding = new Thickness(2)
+                }, c, 0);
+            }
+
+            for (int r = 0; r < items.Count; r++)
+            {
+                int separatorRowIndex = tableGrid.RowDefinitions.Count;
+                tableGrid.RowDefinitions.Add(new RowDefinition { Height = 1 });
+                var separator = new BoxView { Color = Color.FromArgb("#e0e3e8"), HeightRequest = 1 };
+                tableGrid.Add(separator, 0, separatorRowIndex);
+                Grid.SetColumnSpan(separator, headers.Count);
+
+                int dataRowIndex = tableGrid.RowDefinitions.Count;
+                tableGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+                var item = items[r];
+                int col = 0;
+                if (showItemColumn)
+                {
+                    tableGrid.Add(new Label { Text = item.ItemCode, FontSize = 11, Padding = new Thickness(4) }, col++, dataRowIndex);
+                }
+                tableGrid.Add(new Label { Text = item.LotNo, FontSize = 11, Padding = new Thickness(4) }, col++, dataRowIndex);
+                tableGrid.Add(new Label { Text = $"{item.Qty}個", FontSize = 11, Padding = new Thickness(4) }, col++, dataRowIndex);
+
+                var deleteLabel = new Label
+                {
+                    Text = "❌",
+                    FontSize = 11,
+                    Padding = new Thickness(4),
+                    HorizontalOptions = LayoutOptions.Center
+                };
+                var capturedItem = item; // ✅ クロージャ用（実体参照なのでインデックスずれの心配がない）
+                var tapGesture = new TapGestureRecognizer();
+                tapGesture.Tapped += (s, e) => OnDeletePendingLot(capturedItem);
+                deleteLabel.GestureRecognizers.Add(tapGesture);
+                tableGrid.Add(deleteLabel, col, dataRowIndex);
+            }
+
+            var tableBorder = new Border
+            {
+                Stroke = Color.FromArgb("#cdd2dc"),
+                StrokeThickness = 1,
+                StrokeShape = new RoundRectangle { },
+                Background = Colors.White
+            };
+            tableBorder.Content = tableGrid;
+            return tableBorder;
+        }
+
+        // ✅ 入力中の _pendingLots（全品目分）をまとめてRESTletへ送る。ActionType="SAVE" を明示
         private async void OnSaveButtonClicked(object sender, EventArgs e)
         {
             try
             {
                 if (string.IsNullOrEmpty(_orderId))
                 {
-                    await DisplayAlert("エラー", "注文IDが指定されていません。", "OK");
+                    await MainThread.InvokeOnMainThreadAsync(() =>
+                        DisplayAlert("エラー", "注文IDが指定されていません。", "OK"));
                     return;
                 }
 
+                if (_pendingLots.Count == 0)
+                {
+                    await MainThread.InvokeOnMainThreadAsync(() =>
+                        DisplayAlert("エラー", "登録する明細がありません。「+ロットを追加」で入力してください。", "OK"));
+                    return;
+                }
+
+                var lotsToSave = _pendingLots.Select(p => new LotSaveItem
+                {
+                    ItemId = p.ItemId,
+                    ItemCode = p.ItemCode,
+                    LotNumber = p.LotNo,
+                    Quantity = p.Qty,
+                    LocationId = p.LocationId
+                }).ToList();
+
                 var saveParam = new StockInSaveParam
                 {
-                    OrderId = _orderId
+                    OrderId = _orderId,
+                    ActionType = ACTION_SAVE,
+                    // ✅ 明細ごとにロケーションを持たせているので、ヘッダー代表値としては先頭行を入れておく
+                    Location = lotsToSave.FirstOrDefault()?.LocationId,
+                    Lots = lotsToSave,
+                    // ✅ 画面遷移時に受け取った「入庫区分」をそのままRESTletへ渡す（画面上には表示しない）
+                    InboundType = _detailInfo?.InboundType
                 };
 
                 var request = new RequestData<StockInSaveParam, EvangJsonModel>(RESTLET_SAVE_STOCKIN);
                 request.Info = saveParam;
 
-                var saveResult = await this.Post<StockInSaveParam, EvangJsonModel, EvangJsonModel, EvangJsonModel>(request);
+                ResponseData<EvangJsonModel, EvangJsonModel>? saveResult = null;
+                try
+                {
+                    saveResult = await this.Post<StockInSaveParam, EvangJsonModel, EvangJsonModel, EvangJsonModel>(request);
+                }
+                finally
+                {
+                    // ⚠️ TODO: ここでローディング遮罩(オーバーレイ)を確実に閉じる。
+                    // EvangContentVM / Post 内部で ShowLoading() が呼ばれているなら、
+                    // 対応する HideLoading() をここで必ず呼ぶこと（例外・エラー時も含めて）。
+                    // 例: HideLoading();  もしくは  await HideLoadingAsync();
+                }
 
                 if (saveResult == null)
                 {
-                    await DisplayAlert("エラー", "サーバーからの応答がありません。", "OK");
+                    await MainThread.InvokeOnMainThreadAsync(() =>
+                        DisplayAlert("エラー", "サーバーからの応答がありません。", "OK"));
                     return;
                 }
 
                 if (!saveResult.Success)
                 {
-                    await DisplayAlert("エラー", saveResult.ErrorMessage ?? "入庫保存に失敗しました。", "OK");
+                    await MainThread.InvokeOnMainThreadAsync(() =>
+                        DisplayAlert("エラー", saveResult.ErrorMessage ?? "入庫保存に失敗しました。", "OK"));
                     return;
                 }
 
@@ -625,356 +917,114 @@ namespace EvangPL.Views.InputDetail
                     }
                 }
 
-                await DisplayAlert("成功", $"入庫保存が完了しました。\n入库单号: {receiptNumber}", "OK");
-                await Navigation.PopAsync();
+                await MainThread.InvokeOnMainThreadAsync(() =>
+                    DisplayAlert("成功", $"入庫保存が完了しました。\n入庫伝票番号: {receiptNumber}", "OK"));
+
+                // ✅ 保存成功後：入力中リストをクリアし、選択状態もリセットしてから
+                //    サーバーの最新明細/実績を再検索してUIを更新（＝再び未選択の空白状態から始まる）
+                _pendingLots.Clear();
+                _selectedPoLine = null;
+                await LoadDataFromApi();
+                await BuildCompleteUI();
             }
             catch (Exception ex)
             {
-                await DisplayAlert("エラー", $"保存処理中にエラーが発生しました: {ex.Message}", "OK");
-            }
-        }
+                // ⚠️ TODO: 例外時もローディング遮罩を確実に閉じる（上のfinallyで既にカバーされていれば不要）
+                // HideLoading();
 
-        private HorizontalStackLayout BuildPager()
-        {
-            var pager = new HorizontalStackLayout { Spacing = 10, Margin = new Thickness(0, 8) };
-            var prevBtn = new Button { Text = "◀ 前明細", IsEnabled = false, BackgroundColor = Colors.LightGray };
-            pager.Children.Add(prevBtn);
-            var nextBtn = new Button { Text = "次明細 ▶", BackgroundColor = Color.FromArgb("#245a96"), TextColor = Colors.White };
-            pager.Children.Add(nextBtn);
-            return pager;
-        }
-
-        private void CreatePaginationControls()
-        {
-            paginationLayout = new Grid
-            {
-                IsVisible = true,
-                RowDefinitions =
-                {
-                    new RowDefinition { Height = GridLength.Auto },
-                    new RowDefinition { Height = GridLength.Auto },
-                },
-                ColumnDefinitions =
-                {
-                    new ColumnDefinition { Width = GridLength.Star }
-                },
-                HorizontalOptions = LayoutOptions.Center,
-                VerticalOptions = LayoutOptions.Center,
-                Margin = new Thickness(0, 5),
-                RowSpacing = 3
-            };
-            var buttonRow = new HorizontalStackLayout
-            {
-                HorizontalOptions = LayoutOptions.Center,
-                VerticalOptions = LayoutOptions.Center,
-                Spacing = 25
-            };
-
-            prevButton = new Button
-            {
-                Text = "◀ 前明細",
-                FontSize = 12,
-                BackgroundColor = Color.FromArgb("#245a96"),
-                TextColor = Colors.White,
-                FontAttributes = FontAttributes.Bold,
-                BorderColor = Color.FromArgb("#245a96"),
-                BorderWidth = 2,
-                CornerRadius = 5,
-                WidthRequest = 100,
-                HeightRequest = 45,
-                MinimumWidthRequest = 60,
-                MinimumHeightRequest = 30,
-                IsEnabled = false,
-                HorizontalOptions = LayoutOptions.Center,
-                Padding = new Thickness(2),
-            };
-            prevButton.Clicked += OnPrevButtonClicked;
-
-            pageLabel = new Label
-            {
-                Text = "1 / 1",
-                FontSize = 12,
-                TextColor = Colors.Black,
-                VerticalOptions = LayoutOptions.End,
-                HorizontalTextAlignment = TextAlignment.Center,
-                Margin = new Thickness(0, 5, 0, 5),
-                Padding = new Thickness(0, 5, 0, 0),
-            };
-
-            nextButton = new Button
-            {
-                Text = "次明細 ▶",
-                FontSize = 12,
-                BackgroundColor = Color.FromArgb("#245a96"),
-                TextColor = Colors.White,
-                FontAttributes = FontAttributes.Bold,
-                BorderColor = Color.FromArgb("#245a96"),
-                BorderWidth = 2,
-                CornerRadius = 5,
-                WidthRequest = 100,
-                HeightRequest = 45,
-                MinimumWidthRequest = 60,
-                MinimumHeightRequest = 30,
-                IsEnabled = false,
-                HorizontalOptions = LayoutOptions.Center,
-                Padding = new Thickness(2),
-            };
-            nextButton.Clicked += OnNextButtonClicked;
-
-            buttonRow.Children.Add(prevButton);
-            buttonRow.Children.Add(pageLabel);
-            buttonRow.Children.Add(nextButton);
-
-            Grid.SetRow(buttonRow, 0);
-            paginationLayout.Children.Add(buttonRow);
-        }
-
-        private VerticalStackLayout BuildBottomRegisteredTable(List<StockInRow> rows, int totalCount)
-        {
-            var container = new VerticalStackLayout { Spacing = 4 };
-            container.Children.Add(new Label
-            {
-                Text = $"登録済み明細({totalCount}件)",
-                FontSize = 14,
-                FontAttributes = FontAttributes.Bold
-            });
-            var table = BuildSimpleTable(
-                new List<string> { "品目", "ロット", "数量", "" },
-                rows.ConvertAll(r => new List<string> { r.ItemCode, r.LotNo, $"{r.Qty}個", "❌" }),
-                new List<GridLength>
-                {
-                    new GridLength(3, GridUnitType.Star),
-                    new GridLength(3, GridUnitType.Star),
-                    new GridLength(1, GridUnitType.Star),
-                    new GridLength(1, GridUnitType.Star)
-                }
-            );
-            container.Children.Add(table);
-            return container;
-        }
-
-        private Border BuildSimpleTable(List<string> headers, List<List<string>> rowDatas, List<GridLength>? columnWidths = null)
-        {
-            Grid tableGrid = new Grid();
-
-            if (columnWidths != null && columnWidths.Count == headers.Count)
-            {
-                foreach (var width in columnWidths)
-                    tableGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = width });
-            }
-            else
-            {
-                foreach (var _ in headers)
-                    tableGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Star });
-            }
-
-            tableGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            for (int c = 0; c < headers.Count; c++)
-            {
-                tableGrid.Add(new Label
-                {
-                    Text = headers[c],
-                    FontSize = 12,
-                    FontAttributes = FontAttributes.Bold,
-                    BackgroundColor = Color.FromArgb("#dbe2ec"),
-                    Padding = new Thickness(2)
-                }, c, 0);
-            }
-
-            for (int r = 0; r < rowDatas.Count; r++)
-            {
-                int separatorRowIndex = tableGrid.RowDefinitions.Count;
-                tableGrid.RowDefinitions.Add(new RowDefinition { Height = 1 });
-                var separator = new BoxView
-                {
-                    Color = Color.FromArgb("#e0e3e8"),
-                    HeightRequest = 1
-                };
-                tableGrid.Add(separator, 0, separatorRowIndex);
-                Grid.SetColumnSpan(separator, headers.Count);
-
-                int dataRowIndex = tableGrid.RowDefinitions.Count;
-                tableGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-                var rowData = rowDatas[r];
-                for (int c = 0; c < rowData.Count; c++)
-                {
-                    tableGrid.Add(new Label
-                    {
-                        Text = rowData[c],
-                        FontSize = 11,
-                        Padding = new Thickness(4)
-                    }, c, dataRowIndex);
-                }
-            }
-
-            var tableBorder = new Border
-            {
-                Stroke = Color.FromArgb("#cdd2dc"),
-                StrokeThickness = 1,
-                StrokeShape = new RoundRectangle { },
-                Background = Colors.White
-            };
-            tableBorder.Content = tableGrid;
-
-            return tableBorder;
-        }
-
-        #region 分页逻辑
-        private void OnPrevButtonClicked(object sender, EventArgs e)
-        {
-            if (currentPage > 0)
-            {
-                LoadPage(currentPage - 1);
-            }
-        }
-
-        private void OnNextButtonClicked(object sender, EventArgs e)
-        {
-            if (currentPage < totalPages - 1)
-            {
-                LoadPage(currentPage + 1);
-            }
-        }
-
-        private void LoadPage(int pageIndex)
-        {
-            if (_allBottomData == null || pageIndex < 0 || pageIndex >= totalPages)
-                return;
-
-            currentPage = pageIndex;
-            var pageData = _allBottomData.Skip(pageIndex * pageSize).Take(pageSize).ToList();
-            var newBottomTable = BuildBottomRegisteredTable(pageData, _allBottomData.Count);
-
-            if (_scrollContainer != null && _scrollContainer.Children.Count > 3)
-            {
-                _scrollContainer.Children[3] = newBottomTable;
-            }
-
-            UpdatePaginationControls();
-        }
-
-        private void UpdatePaginationControls()
-        {
-            if (paginationLayout == null || pageLabel == null ||
-                prevButton == null || nextButton == null)
-                return;
-
-            pageLabel.Text = $"{currentPage + 1} / {totalPages}";
-
-            prevButton.IsEnabled = currentPage > 0;
-            nextButton.IsEnabled = currentPage < totalPages - 1;
-
-            prevButton.BackgroundColor = prevButton.IsEnabled ? Color.FromArgb("#245a96") : Colors.LightGray;
-            nextButton.BackgroundColor = nextButton.IsEnabled ? Color.FromArgb("#245a96") : Colors.LightGray;
-            prevButton.TextColor = prevButton.IsEnabled ? Colors.White : Colors.DarkGray;
-            nextButton.TextColor = nextButton.IsEnabled ? Colors.White : Colors.DarkGray;
-            prevButton.BorderColor = prevButton.IsEnabled ? Color.FromArgb("#245a96") : Colors.DarkGray;
-            nextButton.BorderColor = nextButton.IsEnabled ? Color.FromArgb("#245a96") : Colors.DarkGray;
-        }
-        #endregion
-
-        private void ShowPagination()
-        {
-            if (paginationLayout != null)
-            {
-                paginationLayout.IsVisible = true;
-            }
-        }
-
-        private void HidePagination()
-        {
-            if (paginationLayout != null)
-            {
-                paginationLayout.IsVisible = false;
+                await MainThread.InvokeOnMainThreadAsync(() =>
+                    DisplayAlert("エラー", $"保存処理中にエラーが発生しました: {ex.Message}", "OK"));
             }
         }
 
         // ==================== 数据模型 ====================
 
-        public class StockInRow
+        // ✅ 入力中（未保存）の1行分の明細（どの品目向けかを保持する）
+        public class PendingLotItem
         {
+            public string ItemId { get; set; } = "";
             public string ItemCode { get; set; } = "";
+            public string LocationId { get; set; } = "";
+            public string LocationName { get; set; } = "";
             public string LotNo { get; set; } = "";
             public int Qty { get; set; }
         }
 
-        // ✅ 新增：入库明细请求参数
+        // 入库明细请求参数（検索）
         public class StockInDetailParam : EvangJsonModel
         {
             public string? OrderId { get; set; }
+            public string ActionType { get; set; } = "SEARCH";
+            // ✅ 新增：入库区分（発注入庫(PO Item Receipt) / 返品入庫(Return Receipt) / 振替入庫(Transfer Receipt)）。
+            //    前画面（InboundSearch等）から受け取った値をそのままRESTletへ渡す。
+            //    これが無いと RESTlet 側は常にデフォルト（発注入庫）として検索してしまい、
+            //    振替入庫・返品入庫のPO明細が正しく検索できない。
+            public string? InboundType { get; set; }
         }
 
-        // ✅ 新增：入库保存请求参数（原在底部，移到此处统一管理）
+        // 入库保存请求参数
         public class StockInSaveParam : EvangJsonModel
         {
             public string? OrderId { get; set; }
+            public string ActionType { get; set; } = "SAVE";
+            public string? Location { get; set; }
+            public List<LotSaveItem>? Lots { get; set; }
+            // ✅ 新增：入库区分（発注入庫(PO Item Receipt) / 返品入庫(Return Receipt) / 振替入庫(Transfer Receipt)）
+            //    画面上には表示しないが、前画面から受け取った値をそのままRESTletへ渡し、
+            //    RESTlet側での受領処理の分岐に使用する。
+            public string? InboundType { get; set; }
         }
 
-        // ✅ 新增：明细项（从API返回）
-        public class DetailItem
+        // ✅ ItemId（NetSuite内部ID）を持つ。RESTlet側の突合はItemCode(テキスト)ではなく
+        //    ItemId(内部ID)で行うため、これが無いと複数品目のPOでロットが誤った行に設定される。
+        public class LotSaveItem
         {
-            public string? po_id { get; set; }
-            public string? entityName { get; set; }
-            public string? scheduledDate { get; set; }
-            public string? tranid { get; set; }
-            public string? itemName { get; set; }
-            public int? quantityshiprecv { get; set; }
-            public string? house_name { get; set; }
-            public string? id { get; set; }
-            public string? itemid { get; set; }
-            public string? fullname { get; set; }
-            public string? standard { get; set; }
-            public string? type { get; set; }
-            public string? lotnum { get; set; }
+            public string? ItemId { get; set; }
+            public string? ItemCode { get; set; }
+            public string? LotNumber { get; set; }
+            public int Quantity { get; set; }
+            public string? LocationId { get; set; }
         }
 
-        // ✅ 修改：ReceiptInfo 移到此处统一管理（原在底部）
+        // ✅ PO自身の未入庫明細行（RESTletの PO_LINES から取得。ヘッダー上部の選択テーブルの対象）
+        //    プロパティ名はRESTletが返すJSONのキー名と完全に一致させている（大文字/小文字を含む）
+        public class PoLineItem
+        {
+            public string po_id { get; set; } = "";
+            public string entityName { get; set; } = "";
+            public string scheduledDate { get; set; } = "";
+            public string tranid { get; set; } = "";
+            public string lineId { get; set; } = "";
+            public string itemId { get; set; } = "";
+            public string itemCode { get; set; } = "";
+            public string itemName { get; set; } = "";
+            public int orderedQty { get; set; }
+            public int receivedQty { get; set; }
+            public int remainingQty { get; set; }
+        }
+
+        // ✅ 実際に入庫済みの実績（RESTletの RECEIPT_HISTORY から取得。現状は表示に使用していないが、
+        //    RESTletからのデータ取得自体は継続している）
+        public class ReceiptHistoryRow
+        {
+            public string itemId { get; set; } = "";
+            public string itemCode { get; set; } = "";
+            public string lotnum { get; set; } = "";
+            public int qty { get; set; }
+        }
+
+        // 入庫先ロケーション（GetStockInDetail RESTlet の LOCATION_LIST から取得）
+        public class LocationItem
+        {
+            public string Id { get; set; } = "";
+            public string Name { get; set; } = "";
+        }
+
         public class ReceiptInfo
         {
             public string? receiptNumber { get; set; }
             public string? ReceiptId { get; set; }
             public string? Status { get; set; }
-        }
-
-        private string GetJsonStringValue(JsonElement jsonElement, string propertyName)
-        {
-            try
-            {
-                if (jsonElement.TryGetProperty(propertyName, out JsonElement propertyValue))
-                {
-                    return propertyValue.GetString() ?? string.Empty;
-                }
-                return string.Empty;
-            }
-            catch
-            {
-                return string.Empty;
-            }
-        }
-
-        private int GetJsonIntValue(JsonElement jsonElement, string propertyName)
-        {
-            try
-            {
-                if (jsonElement.TryGetProperty(propertyName, out JsonElement propertyValue))
-                {
-                    if (propertyValue.ValueKind == JsonValueKind.Number)
-                    {
-                        return propertyValue.GetInt32();
-                    }
-                    else if (propertyValue.ValueKind == JsonValueKind.String)
-                    {
-                        string strValue = propertyValue.GetString() ?? "0";
-                        int.TryParse(strValue, out int intValue);
-                        return intValue;
-                    }
-                }
-                return 0;
-            }
-            catch
-            {
-                return 0;
-            }
         }
     }
 }
