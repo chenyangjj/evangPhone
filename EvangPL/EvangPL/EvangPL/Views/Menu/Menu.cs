@@ -329,6 +329,7 @@ public class Menu : EvangContentVM
         LocalMemory.restlets.Add("GetItemrecept", "https://9323639-sb1.restlets.api.netsuite.com/app/site/hosting/restlet.nl?script=2063&deploy=1");
         LocalMemory.restlets.Add("Getitemfulfill", "https://9323639-sb1.restlets.api.netsuite.com/app/site/hosting/restlet.nl?script=2065&deploy=1");
         LocalMemory.restlets.Add("GetInventdetail", "https://9323639-sb1.restlets.api.netsuite.com/app/site/hosting/restlet.nl?script=2066&deploy=1");
+        LocalMemory.restlets.Add("GetAdjust", "https://9323639-sb1.restlets.api.netsuite.com/app/site/hosting/restlet.nl?script=2067&deploy=1");
         LocalMemory.restlets.Add("GetStockInDetail", "https://9323639-sb1.restlets.api.netsuite.com/app/site/hosting/restlet.nl?script=2061&deploy=1");
         LocalMemory.restlets.Add("SaveStockIn", "https://9323639-sb1.restlets.api.netsuite.com/app/site/hosting/restlet.nl?script=2061&deploy=1");
         LocalMemory.restlets.Add("GetOrderList", "https://9323639-sb1.restlets.api.netsuite.com/app/site/hosting/restlet.nl?script=2056&deploy=1");
