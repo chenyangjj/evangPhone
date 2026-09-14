@@ -231,7 +231,7 @@ namespace EvangPL.Views.StockAdjust
 
                 try
                 {
-                    await Task.Delay(400, token);   // 400ms 防抖
+                    await Task.Delay(1000, token);   // 400ms 防抖
                     if (token.IsCancellationRequested) return;
 
                     _currentPage = 1;
