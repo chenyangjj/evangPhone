@@ -8,7 +8,7 @@ using Microsoft.Maui.Controls;
 using Microsoft.Maui.Controls.Shapes;
 using System.Text.Json;
 using System.Linq;
-// ✅ 直接引用命名空间，不需要 using static
+// ✅ 名前空間を直接参照（using staticは不要）
 using EvangPL.Views.InboundSearch;
 
 namespace EvangPL.Views.StockIn
@@ -17,7 +17,7 @@ namespace EvangPL.Views.StockIn
     {
         public static SearchCondition? PassedCondition { get; set; }
 
-        // UI控件缓存
+        // UIコントロールキャッシュ
         private Grid? mainGrid;
         private Grid? paginationGrid;
         private Label? pageInfoLabel;
@@ -25,22 +25,22 @@ namespace EvangPL.Views.StockIn
         private Button? nextPageBtn;
         private StackLayout? listContainer;
 
-        // 分页参数
+        // ページネーションパラメータ
         private int _currentPage = 1;
         private int _totalPage = 1;
         private const int PageSize = 4;
 
-        // ✅ 存储从检索页面传来的数据
+        // ✅ 検索画面から渡されたデータを格納
         private List<OrderInfo>? _searchResultData;
         private string? _keyword;
         private string? _inboundType;
         private string? _status;
         private DateTime? _scheduledDate;
 
-        // ✅ 标记是否已加载数据（防止重复加载）
+        // ✅ データ読み込み済みフラグ（重複読み込み防止）
         private bool _isDataLoaded = false;
 
-        // 查询条件实体
+        // 検索条件エンティティ
         private StockInPageInfo SearchCondition;
 
         public StockIn() : base("strStockInSearch")
@@ -50,15 +50,15 @@ namespace EvangPL.Views.StockIn
             BuildUI();
         }
 
-        
+
 
         protected override void OnAppearing()
         {
             base.OnAppearing();
-            // ✅ 在 OnAppearing 中读取静态属性
+            // ✅ OnAppearingで静的プロパティから読み取る
             if (!_isDataLoaded)
             {
-                // 从静态属性读取传入的数据
+                // 静的プロパティから渡されたデータを読み取る
                 if (PassedCondition != null)
                 {
                     _searchResultData = PassedCondition.SearchResult;
@@ -67,7 +67,7 @@ namespace EvangPL.Views.StockIn
                     _status = PassedCondition.Status;
                     _scheduledDate = PassedCondition.ScheduledDate;
 
-                    // 使用完后清空
+                    // 使用後にクリア
                     PassedCondition = null;
                 }
 
@@ -76,7 +76,7 @@ namespace EvangPL.Views.StockIn
             }
         }
 
-        #region 页面布局构建
+        #region 画面レイアウト構築
         private void BuildUI()
         {
             mainGrid = new Grid
@@ -167,7 +167,7 @@ namespace EvangPL.Views.StockIn
         }
         #endregion
 
-        #region 搜索分页逻辑
+        #region 検索・ページネーションロジック
         private void CollectSearchCondition()
         {
             SearchCondition.PageIndex = _currentPage;
@@ -175,7 +175,7 @@ namespace EvangPL.Views.StockIn
         }
 
         /// <summary>
-        /// 加载入库数据
+        /// 入庫データを読み込む
         /// </summary>
         private async Task LoadStockInData()
         {
@@ -184,30 +184,27 @@ namespace EvangPL.Views.StockIn
                 CollectSearchCondition();
                 List<StockInItem> dataList = new List<StockInItem>();
 
-                // ✅ 优先使用从检索页面传来的真实数据
+                // ✅ 検索画面から渡された実データを優先して使用
                 if (_searchResultData != null && _searchResultData.Count > 0)
                 {
-                    // 将 OrderInfo 转换为 StockInItem
-                    foreach (var order in _searchResultData)
+                    // ✅ RESTlet側で伝票(orderId)ごとにGROUP BY集計済み。
+                    //    各OrderInfoが1枚の伝票に相当し（itemCount/totalQuantityはSQL層で算出済み）、
+                    //    C#側での再グルーピングは不要。
+                    dataList = _searchResultData.Select(order => new StockInItem
                     {
-                        var item = new StockInItem
-                        {
-                            OrderId = order.orderId ?? "",
-                            OrderNo = order.orderNumber ?? order.orderId ?? "",
-                            Status = order.status ?? "未入库",
-                            SupplierName = order.supplierName ?? "",
-                            ScheduleDate = order.scheduledDate?.ToString("yyyy-MM-dd") ?? "",
-                            // 以下字段从 OrderInfo 映射，如果 OrderInfo 没有这些字段，需要设置默认值
-                            ItemCount = 1,  // 如果 API 返回了明细数量，使用实际值
-                            TotalQty = (int)(order.totalQuantity ?? 0),
-                            InboundType = order.inboundType,
-                            ItemCode = order.itemCode,
-                            ItemName = order.itemName
-                        };
-                        dataList.Add(item);
-                    }
+                        OrderId = order.orderId ?? "",
+                        OrderNo = order.orderNumber ?? order.orderId ?? "",
+                        Status = order.status ?? "未入庫",
+                        SupplierName = order.supplierName ?? "",
+                        ScheduleDate = order.scheduledDate?.ToString("yyyy-MM-dd") ?? "",
+                        ItemCount = (int)(order.itemCount ?? 0),       // ✅ RESTletの集計値を直接使用
+                        TotalQty = (int)(order.totalQuantity ?? 0),    // ✅ RESTletの集計値を直接使用
+                        InboundType = order.inboundType,
+                        ItemCode = order.itemCode,
+                        ItemName = order.itemName
+                    }).ToList();
 
-                    // 分页计算
+                    // ページネーション計算
                     int totalRecordCount = dataList.Count;
                     _totalPage = (int)Math.Ceiling((double)totalRecordCount / PageSize);
 
@@ -222,7 +219,7 @@ namespace EvangPL.Views.StockIn
                 }
                 else
                 {
-                    // ✅ 如果没有真实数据，使用假数据（用于从菜单直接进入）
+                    // ✅ 実データがない場合はモックデータを使用（メニューから直接遷移した場合など）
                     dataList = GetMockData();
                 }
 
@@ -237,7 +234,7 @@ namespace EvangPL.Views.StockIn
         }
 
         /// <summary>
-        /// 获取假数据（用于从菜单直接进入）
+        /// モックデータを取得（メニューから直接遷移した場合用）
         /// </summary>
         private List<StockInItem> GetMockData()
         {
@@ -245,26 +242,29 @@ namespace EvangPL.Views.StockIn
             {
                 new StockInItem
                 {
+                    OrderId = "MOCK-0114",
                     OrderNo = "PO-2026-0114",
-                    Status = "未入库",
-                    SupplierName = "",
+                    Status = "未入庫",
+                    SupplierName = "東菱電子部品(株)",
                     ScheduleDate = "2026-07-08",
                     ItemCount = 5,
                     TotalQty = 320
                 },
                 new StockInItem
                 {
+                    OrderId = "MOCK-0115",
                     OrderNo = "PO-2026-0115",
-                    Status = "一部入库",
-                    SupplierName = "",
+                    Status = "一部入庫",
+                    SupplierName = "関東マテリアル(株)",
                     ScheduleDate = "2026-07-09",
                     ItemCount = 3,
                     TotalQty = 150
                 },
                 new StockInItem
                 {
+                    OrderId = "MOCK-0032",
                     OrderNo = "RMA-0032",
-                    Status = "未处理",
+                    Status = "未処理",
                     SupplierName = "大和精密工業(株)",
                     ScheduleDate = "",
                     ItemCount = 2,
@@ -272,16 +272,17 @@ namespace EvangPL.Views.StockIn
                 },
                 new StockInItem
                 {
+                    OrderId = "MOCK-0116",
                     OrderNo = "PO-2026-0116",
-                    Status = "未入库",
-                    SupplierName = "",
+                    Status = "未入庫",
+                    SupplierName = "北陸金属工業(株)",
                     ScheduleDate = "2026-07-10",
                     ItemCount = 2,
                     TotalQty = 80
                 }
             };
 
-            // 分页计算
+            // ページネーション計算
             int totalRecordCount = allData.Count;
             _totalPage = (int)Math.Ceiling((double)totalRecordCount / PageSize);
 
@@ -318,7 +319,7 @@ namespace EvangPL.Views.StockIn
         {
             if (_currentPage <= 1) return;
             _currentPage--;
-            _isDataLoaded = false;  // 允许重新加载
+            _isDataLoaded = false;  // 再読み込みを許可
             await LoadStockInData();
         }
 
@@ -326,12 +327,12 @@ namespace EvangPL.Views.StockIn
         {
             if (_currentPage >= _totalPage) return;
             _currentPage++;
-            _isDataLoaded = false;  // 允许重新加载
+            _isDataLoaded = false;  // 再読み込みを許可
             await LoadStockInData();
         }
         #endregion
 
-        #region 单据卡片渲染
+        #region 伝票カード描画
         private void RenderCardList(List<StockInItem> dataList)
         {
             if (listContainer == null) return;
@@ -396,57 +397,45 @@ namespace EvangPL.Views.StockIn
             Grid.SetColumn(statusTag, 1);
             cardGrid.Children.Add(statusTag);
 
-            // 入荷予定日（RMA单据显示顾客信息）
-            if (!string.IsNullOrEmpty(item.SupplierName))
-            {
-                var lblSupplier = new Label
-                {
-                    Text = $"顧客: {item.SupplierName}",
-                    FontSize = 12,
-                    TextColor = Colors.Gray
-                };
-                Grid.SetRow(lblSupplier, 1);
-                Grid.SetColumnSpan(lblSupplier, 2);
-                cardGrid.Children.Add(lblSupplier);
+            // ✅ 第1行：仕入先（RMA/POによる分岐判断は廃止し、統一表示）
+            bool isReturnReceipt = item.InboundType != null && item.InboundType.IndexOf("返品") >= 0;
+            string partnerLabelText = isReturnReceipt ? "顧客" : "仕入先";
 
-                var lblRmaReason = new Label
-                {
-                    Text = "返品理由: 納出荷",
-                    FontSize = 12,
-                    TextColor = Colors.Gray
-                };
-                Grid.SetRow(lblRmaReason, 2);
-                Grid.SetColumnSpan(lblRmaReason, 2);
-                cardGrid.Children.Add(lblRmaReason);
-            }
-            else
+            var lblSupplier = new Label
             {
-                var lblDate = new Label
-                {
-                    Text = $"入荷予定日: {item.ScheduleDate}",
-                    FontSize = 12,
-                    TextColor = Colors.Gray
-                };
-                Grid.SetRow(lblDate, 1);
-                Grid.SetColumnSpan(lblDate, 2);
-                cardGrid.Children.Add(lblDate);
-            }
+                Text = $"{partnerLabelText}: {item.SupplierName}",
+                FontSize = 12,
+                TextColor = Colors.Gray
+            };
+            Grid.SetRow(lblSupplier, 1);
+            Grid.SetColumnSpan(lblSupplier, 2);
+            cardGrid.Children.Add(lblSupplier);
 
-            // 品目数 / 数量
-            int rowIndex = !string.IsNullOrEmpty(item.SupplierName) ? 3 : 2;
+            // ✅ 第2行：入荷予定日（検索で取得した実データ。「返品理由:納出荷」のハードコードは廃止）
+            var lblDate = new Label
+            {
+                Text = $"入荷予定日: {item.ScheduleDate}",
+                FontSize = 12,
+                TextColor = Colors.Gray
+            };
+            Grid.SetRow(lblDate, 2);
+            Grid.SetColumnSpan(lblDate, 2);
+            cardGrid.Children.Add(lblDate);
+
+            // 品目数 / 数量（集計後の実統計値）
             var lblSummary = new Label
             {
                 Text = $"品目数: {item.ItemCount} / 数量: {item.TotalQty}",
                 FontSize = 12,
                 TextColor = Colors.Gray
             };
-            Grid.SetRow(lblSummary, rowIndex);
+            Grid.SetRow(lblSummary, 3);
             Grid.SetColumnSpan(lblSummary, 2);
             cardGrid.Children.Add(lblSummary);
 
             cardFrame.Content = cardGrid;
 
-            // ✅ 点击卡片跳转详情，传递完整数据
+            // ✅ カードタップで詳細画面へ遷移、完全なデータを渡す
             var tap = new TapGestureRecognizer();
             tap.Tapped += async (s, e) =>
             {
@@ -454,7 +443,7 @@ namespace EvangPL.Views.StockIn
                 {
                     var detailInfo = new InputDetailInfo
                     {
-                        OrderId = item.OrderId,                      // ✅ 新增：传递单据ID
+                        OrderId = item.OrderId,                      // ✅ 新規追加：伝票IDを渡す
                         PoNo = item.OrderNo,
                         SupplierName = item.SupplierName,
                         ArrivalPlanDate = item.ScheduleDate,
@@ -484,13 +473,13 @@ namespace EvangPL.Views.StockIn
             Color bgColor = Colors.Gray;
             switch (statusText)
             {
-                case "未入库":
+                case "未入庫":
                     bgColor = Color.FromArgb("#E68922");
                     break;
-                case "一部入库":
+                case "一部入庫":
                     bgColor = Color.FromArgb("#255499");
                     break;
-                case "未处理":
+                case "未処理":
                     bgColor = Color.FromArgb("#808080");
                     break;
             }
@@ -566,7 +555,7 @@ namespace EvangPL.Views.StockIn
         public string ScheduleDate { get; set; } = "";
         public int ItemCount { get; set; }
         public int TotalQty { get; set; }
-        // ✅ 新增字段，用于传递更多信息到详情页
+        // ✅ 新規追加フィールド：詳細画面への情報受け渡し用
         public string? InboundType { get; set; }
         public string? ItemCode { get; set; }
         public string? ItemName { get; set; }
