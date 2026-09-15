@@ -386,10 +386,10 @@ namespace EvangPL.Views.StockAdjust
                         await DisplayAlert("エーラ", "対象期間FROMは対象期間TOより大きくすることはできません。", "OK");
                         return;
                     }
-                    if (string.IsNullOrWhiteSpace(keyword))
-                    {
-                        return;
-                    }
+                    //if (string.IsNullOrWhiteSpace(keyword))
+                    //{
+                    //    return;
+                    //}
                     var searchParam = SearchCondition;
                     var request = new RequestData<StockAdjustPageInfo, EvangJsonModel>("GetAdjust");
                     request.Info = searchParam;
@@ -655,6 +655,8 @@ namespace EvangPL.Views.StockAdjust
     /// </summary>
     public class StockAdjustItem
     {
+        public int Id { get; set; }
+        public int LineNo { get; set; }
         public string AdjustNo { get; set; } = "";
         public string ItemCode { get; set; } = "";
         public string AdjustReason { get; set; } = "";
