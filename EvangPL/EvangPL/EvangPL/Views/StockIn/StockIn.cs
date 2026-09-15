@@ -8,7 +8,6 @@ using Microsoft.Maui.Controls;
 using Microsoft.Maui.Controls.Shapes;
 using System.Text.Json;
 using System.Linq;
-// ✅ 名前空間を直接参照（using staticは不要）
 using EvangPL.Views.InboundSearch;
 
 namespace EvangPL.Views.StockIn
@@ -353,13 +352,20 @@ namespace EvangPL.Views.StockIn
 
         private Frame CreateCardFrame(StockInItem item)
         {
+            // ✅ 新增：受領可能な品目が無い伝票（ItemCount<=0）かどうかを判定。
+            //    この場合はカード自体をタップ不可にし、詳細画面へは遷移させない。
+            bool isReceivable = item.ItemCount > 0;
+
             var cardFrame = new Frame
             {
-                BackgroundColor = Colors.White,
+                // ✅ 受領不可の場合は背景をやや灰色にして「押せない」ことを視覚的に示す
+                BackgroundColor = isReceivable ? Colors.White : Color.FromArgb("#f2f2f2"),
                 CornerRadius = 8,
                 Padding = new Thickness(12),
                 Margin = new Thickness(0, 0, 0, 8),
-                HasShadow = false
+                HasShadow = false,
+                // ✅ 受領不可の場合は全体を薄く表示（disabled 感を出す）
+                Opacity = isReceivable ? 1.0 : 0.55
             };
 
             var cardGrid = new Grid
@@ -423,11 +429,14 @@ namespace EvangPL.Views.StockIn
             cardGrid.Children.Add(lblDate);
 
             // 品目数 / 数量（集計後の実統計値）
+            // ✅ 受領不可（ItemCount<=0）の場合は、件数表示の代わりに注意メッセージを赤字で表示する
             var lblSummary = new Label
             {
-                Text = $"品目数: {item.ItemCount} / 数量: {item.TotalQty}",
+                Text = isReceivable
+                    ? $"品目数: {item.ItemCount} / 数量: {item.TotalQty}"
+                    : "受領可能な品目がありません",
                 FontSize = 12,
-                TextColor = Colors.Gray
+                TextColor = isReceivable ? Colors.Gray : Color.FromArgb("#c0392b")
             };
             Grid.SetRow(lblSummary, 3);
             Grid.SetColumnSpan(lblSummary, 2);
@@ -435,37 +444,108 @@ namespace EvangPL.Views.StockIn
 
             cardFrame.Content = cardGrid;
 
-            // ✅ カードタップで詳細画面へ遷移、完全なデータを渡す
-            var tap = new TapGestureRecognizer();
-            tap.Tapped += async (s, e) =>
+            // ✅ 受領可能な品目がある場合のみ、タップジェスチャーを付与する。
+            //    isReceivable=false の場合はジェスチャー自体を付けないため、
+            //    カードをタップしても何も起こらず、詳細画面へは遷移しない。
+            if (isReceivable)
             {
-                try
+                var tap = new TapGestureRecognizer();
+                tap.Tapped += async (s, e) =>
                 {
-                    var detailInfo = new InputDetailInfo
-                    {
-                        OrderId = item.OrderId,                      // ✅ 新規追加：伝票IDを渡す
-                        PoNo = item.OrderNo,
-                        SupplierName = item.SupplierName,
-                        ArrivalPlanDate = item.ScheduleDate,
-                        ItemCount = item.ItemCount,
-                        TotalQty = item.TotalQty,
-                        Status = item.Status,
-                        InboundType = item.InboundType,
-                        ItemCode = item.ItemCode,
-                        ItemName = item.ItemName
-                    };
+                    // ✅ 二重タップ防止：判定中は一旦ジェスチャーを外す
+                    cardFrame.GestureRecognizers.Clear();
 
-                    var detailPage = new EvangPL.Views.InputDetail.InputDetail(detailInfo);
-                    await Navigation.PushAsync(detailPage);
-                }
-                catch (Exception ex)
-                {
-                    await DisplayAlert("エラー", $"画面遷移に失敗しました: {ex.Message}", "OK");
-                }
-            };
-            cardFrame.GestureRecognizers.Add(tap);
+                    try
+                    {
+                        // ✅ 新增：一覧の ItemCount（検索結果の集計値）は >0 でも、
+                        //    実際に詳細画面用のRESTlet（GetStockInDetail）を叩くと
+                        //    PO_LINES が0件で返ってくるケースがある（データの整合性ズレ等）。
+                        //    詳細画面へ遷移する前にここで実データの有無を確認し、
+                        //    無ければ遷移させず、メッセージのみ表示する（カードの見た目は変更しない）。
+                        bool hasItems = await CheckHasReceivableItems(item.OrderId, item.InboundType);
+
+                        if (!hasItems)
+                        {
+                            await DisplayAlert("お知らせ", "対象の入庫明細（品目）が見つかりませんでした。", "OK");
+
+                            // ✅ 灰色化はせず、メッセージのみ表示。再タップできるようジェスチャーを戻す。
+                            cardFrame.GestureRecognizers.Add(tap);
+                            return;
+                        }
+
+                        var detailInfo = new InputDetailInfo
+                        {
+                            OrderId = item.OrderId,                      // ✅ 新規追加：伝票IDを渡す
+                            PoNo = item.OrderNo,
+                            SupplierName = item.SupplierName,
+                            ArrivalPlanDate = item.ScheduleDate,
+                            ItemCount = item.ItemCount,
+                            TotalQty = item.TotalQty,
+                            Status = item.Status,
+                            InboundType = item.InboundType,
+                            ItemCode = item.ItemCode,
+                            ItemName = item.ItemName
+                        };
+
+                        var detailPage = new EvangPL.Views.InputDetail.InputDetail(detailInfo);
+                        await Navigation.PushAsync(detailPage);
+
+                        // ✅ 詳細画面から戻ってきた場合に備えて、正常だったのでジェスチャーを再度付与しておく
+                        cardFrame.GestureRecognizers.Add(tap);
+                    }
+                    catch (Exception ex)
+                    {
+                        // ✅ 予期せぬエラー時もタップを再度可能にしておく（一時的な通信エラー等の可能性があるため）
+                        cardFrame.GestureRecognizers.Add(tap);
+                        await DisplayAlert("エラー", $"画面遷移に失敗しました: {ex.Message}", "OK");
+                    }
+                };
+                cardFrame.GestureRecognizers.Add(tap);
+            }
 
             return cardFrame;
+        }
+
+        // ✅ 新增：詳細画面用RESTlet（GetStockInDetail）を叩いて、対象伝票に
+        //    実際に受領可能な品目（PO_LINES）が存在するかどうかを確認する。
+        //    一覧のItemCount（検索結果の集計値）だけでは実データとズレる可能性があるための保険。
+        private async Task<bool> CheckHasReceivableItems(string? orderId, string? inboundType)
+        {
+            if (string.IsNullOrEmpty(orderId))
+                return false;
+
+            try
+            {
+                var request = new RequestData<EvangPL.Views.InputDetail.InputDetail.StockInDetailParam, EvangJsonModel>("GetStockInDetail");
+                request.Info = new EvangPL.Views.InputDetail.InputDetail.StockInDetailParam
+                {
+                    OrderId = orderId,
+                    ActionType = "SEARCH",
+                    InboundType = inboundType
+                };
+
+                var result = await this.Post<EvangPL.Views.InputDetail.InputDetail.StockInDetailParam, EvangJsonModel, EvangJsonModel, EvangJsonModel>(request);
+
+                if (result == null || !result.Success || result.SubData == null)
+                    return false;
+
+                foreach (var subData in result.SubData)
+                {
+                    if (subData.SubName == "PO_LINES")
+                    {
+                        var lines = BaseUtils.JsonToClass<List<EvangPL.Views.InputDetail.InputDetail.PoLineItem>>(subData.SubJson!);
+                        return lines != null && lines.Count > 0;
+                    }
+                }
+
+                return false;
+            }
+            catch (Exception ex)
+            {
+                // ✅ 通信エラー等が発生した場合も「受領不可」として扱い、詳細画面へは進ませない
+                System.Diagnostics.Debug.WriteLine($"CheckHasReceivableItems Error: {ex.Message}");
+                return false;
+            }
         }
 
         private View CreateStatusTag(string statusText)
