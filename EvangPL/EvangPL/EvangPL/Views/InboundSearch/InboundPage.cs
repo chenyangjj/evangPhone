@@ -159,7 +159,6 @@ namespace EvangPL.Views.InboundSearch
             // [修正] PickerをBorderで包んで角丸・下線なしにする
             inboundTypePicker = new Picker
             {
-                Title = "発注入庫(PO Item Receipt)",
                 BackgroundColor = Colors.Transparent, // 背景を透明に
                 TextColor = Colors.Black,
                 HeightRequest = 40,
@@ -169,17 +168,11 @@ namespace EvangPL.Views.InboundSearch
             inboundTypePicker.Items.Add("発注入庫(PO Item Receipt)");
             inboundTypePicker.Items.Add("返品入庫(Return Receipt)");
             inboundTypePicker.Items.Add("振替入庫(Transfer Receipt)");
-            inboundTypePicker.SelectedIndexChanged += (sender, e) =>
-            {
-                if (inboundTypePicker.SelectedIndex >= 0)
-                {
-                    inboundTypePicker.Title = inboundTypePicker.SelectedItem?.ToString();
-                }
-                else
-                {
-                    inboundTypePicker.Title = "入庫区分を選択";
-                }
-            };
+            // ✅ 修正：Title を「見せかけの選択済みテキスト」として使うのをやめる。
+            //    SelectedIndex = 0 を設定することで、リストの先頭項目自体を
+            //    最初から本当に選択済みの状態にする（Picker は選択中の項目を自動的に表示するため、
+            //    Title を別途書き換える必要は無い）。
+            inboundTypePicker.SelectedIndex = 0;
 
             var inboundTypeBorder = CreateInputBorder(inboundTypePicker);
             filterLayout.Children.Add(inboundTypeBorder);
@@ -213,7 +206,6 @@ namespace EvangPL.Views.InboundSearch
             // [修正] PickerをBorderで包む
             statusPicker = new Picker
             {
-                Title = "未入庫",
                 BackgroundColor = Colors.Transparent, // 背景を透明に
                 TextColor = Colors.Black,
                 HeightRequest = 40,
@@ -222,17 +214,12 @@ namespace EvangPL.Views.InboundSearch
             };
             statusPicker.Items.Add("未入庫");
             statusPicker.Items.Add("一部入庫");
-            statusPicker.SelectedIndexChanged += (sender, e) =>
-            {
-                if (statusPicker.SelectedIndex >= 0)
-                {
-                    statusPicker.Title = statusPicker.SelectedItem?.ToString();
-                }
-                else
-                {
-                    statusPicker.Title = "ステータスを選択";
-                }
-            };
+            // ✅ 修正：inboundTypePicker と同様、Title を占位（プレースホルダー）として
+            //    使うのをやめる。SelectedIndex = 0 でリスト先頭の「未入庫」を最初から
+            //    本当に選択済みの状態にする。
+            //    （以前は Title = "未入庫" のみで、実際は SelectedIndex=-1 のまま検索が実行され、
+            //    実行ログで {"InboundType":null,"Status":null,...} が送信されていたのが原因）
+            statusPicker.SelectedIndex = 0;
 
             var statusBorder = CreateInputBorder(statusPicker);
             statusLayout.Children.Add(statusBorder);
