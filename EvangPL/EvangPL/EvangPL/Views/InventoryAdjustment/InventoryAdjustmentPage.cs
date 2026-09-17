@@ -1,17 +1,39 @@
-﻿using EvangPL.Components;
+﻿using Android.AdServices.Common;
+using EvangPL.Components;
 using EvangPL.Utils;
+using EvangPL.Views.StockAdjust;
 using EvangSol.Mobibrary.DataFeed;
 using EvangSol.Mobibrary.EvangModel;
 using EvangSol.Mobibrary.EvangViewModel;
 using EvangSol.Mobibrary.Utilities.Common;
 using Microsoft.Maui.Controls.Shapes;
+using System.Linq;
 using System.Text.Json;
-using EvangPL.Views.StockAdjust;
+using System.Text.Json.Serialization;
 
 namespace EvangPL.Views.InventoryAdjustment
 {
     public class InventoryAdjustment : EvangContentVM
     {
+        // ==========================================
+        // RESTlet 名（Menu.cs の LocalMemory.restlets に登録済みのキー）
+        // 後端は1つの POST エントリで、Info.Kbn で検索/保存を切替
+        // ==========================================
+        private const string RESTLET_STOCK_ADJUST = "SaveAdjust";
+
+        private const string KBN_GETDATA = "getdata";
+        private const string KBN_SAVE = "savedata";
+
+        /// <summary>新規モードで位置未選択時に使うデフォルト LocationId</summary>
+        private const string DEFAULT_LOCATION_ID = "1";
+
+        // ==========================================
+        // 調整理由の固定候補（後端 API が無いため）
+        // ==========================================
+        private const string REASON_BREAKAGE = "破損";
+        private const string REASON_STOCK_DIFF = "棚卸差異";
+        private const string REASON_OTHER = "その他";
+
         // ==========================================
         // Android原生の下線を消去するためのHandler登録
         // ==========================================
@@ -38,6 +60,7 @@ namespace EvangPL.Views.InventoryAdjustment
         private Entry? itemEntry;
         private Border? scanButtonBorder;
         private Picker? locationPicker;
+        private Border? _locBorder;
         private Entry? currentStockEntry;
         private Entry? differenceEntry;
         private Border? _diffBorder;
@@ -56,19 +79,19 @@ namespace EvangPL.Views.InventoryAdjustment
         private ContentView? _bottomPendingTableHost;
 
         // ==========================================
-        // ★ 品目検索まわり
+        // 検索まわり
         // ==========================================
-        /// <summary>現在選択中の品目マスタ（検索APIから取得した詳細データ）</summary>
-        private ItemMaster? _currentItem;
+        private List<ItemMaster>? _currentItems;
 
-        /// <summary>入力デバウンス／連続検索の競合防止用</summary>
         private CancellationTokenSource? _itemSearchCts;
 
-        /// <summary>編集モードの初期ロード時など、TextChanged による自動検索を抑止するフラグ</summary>
         private bool _suppressItemSearch;
 
-        /// <summary>入力が落ち着くまで待つ時間(ms)</summary>
+        private bool _suppressLocationChanged;
+
         private const int ItemSearchDebounceMs = 300;
+
+        private List<LocationItem> _locationList = new List<LocationItem>();
 
         private Grid? mainGrid;
         private int _currentStockValue = 0;
@@ -76,13 +99,13 @@ namespace EvangPL.Views.InventoryAdjustment
         private readonly StockAdjustItem? _editItem;
         private bool IsEditMode => _editItem != null;
 
-        private static readonly Color InputBorderColor = Color.FromArgb("#cdd2dc");
-
-        // ★ 差異入力の有効/無効時の色
         private static readonly Color DiffEnabledBg = Colors.White;
         private static readonly Color DiffDisabledBg = Color.FromArgb("#e0e0e0");
         private static readonly Color DiffEnabledFg = Colors.Black;
         private static readonly Color DiffDisabledFg = Colors.Gray;
+
+        private static readonly Color DisabledBg = Color.FromArgb("#e0e0e0");
+        private static readonly Color DisabledFg = Colors.Gray;
 
         public InventoryAdjustment() : this(null)
         {
@@ -98,23 +121,16 @@ namespace EvangPL.Views.InventoryAdjustment
 
             BuildUI();
 
-            // ★ 画面初期化（編集時はここで品目詳細を一度検索する）
             _ = InitializeAsync();
         }
 
-        /// <summary>
-        /// 画面初期化処理。
-        /// 編集モードの場合は _editItem.ItemCode で一度だけ品目詳細を検索する。
-        /// 新規モードの場合は何も検索しない（品目入力時に検索される）。
-        /// </summary>
+        // ==========================================
+        // 画面初期化
+        // ==========================================
         private async Task InitializeAsync()
         {
             try
             {
-                // ロケーション候補の初期化（必要ならAPI化）
-                await InitializeLocationsAsync();
-
-                // 編集モード：既存データをロード
                 if (IsEditMode)
                 {
                     await LoadEditDataAsync();
@@ -126,23 +142,9 @@ namespace EvangPL.Views.InventoryAdjustment
             }
         }
 
-        private async Task InitializeLocationsAsync()
-        {
-            if (locationPicker == null) return;
-
-            // TODO: ロケーション候補をAPIから取得する場合はここを差し替える
-            // 現在は固定値
-            locationPicker.Items.Clear();
-            locationPicker.Items.Add("WH1-A-05");
-            locationPicker.Items.Add("WH1-A-06");
-            locationPicker.Items.Add("WH2-B-01");
-
-            if (locationPicker.Items.Count > 0)
-                locationPicker.SelectedIndex = 0;
-
-            await Task.CompletedTask;
-        }
-
+        // ==========================================
+        // UI 構築
+        // ==========================================
         private void BuildUI()
         {
             mainGrid = new Grid
@@ -190,9 +192,24 @@ namespace EvangPL.Views.InventoryAdjustment
             var itemBorder = CreateInputBorder(itemEntry, Colors.White);
 
             scanButtonBorder = BuildBarcodeIcon();
-            var tapGesture = new TapGestureRecognizer();
-            tapGesture.Tapped += OnScanClicked;
-            scanButtonBorder.GestureRecognizers.Add(tapGesture);
+
+            if (IsEditMode)
+            {
+                itemEntry.IsReadOnly = true;
+                itemEntry.TextColor = DisabledFg;
+                itemBorder.BackgroundColor = DisabledBg;
+
+                scanButtonBorder.BackgroundColor = DisabledBg;
+                scanButtonBorder.Opacity = 0.5;
+
+                itemLabel.Text = "品目";
+            }
+            else
+            {
+                var tapGesture = new TapGestureRecognizer();
+                tapGesture.Tapped += OnScanClicked;
+                scanButtonBorder.GestureRecognizers.Add(tapGesture);
+            }
 
             itemRow.Add(itemBorder, 0, 0);
             itemRow.Add(scanButtonBorder, 1, 0);
@@ -226,8 +243,15 @@ namespace EvangPL.Views.InventoryAdjustment
             };
             locationPicker.SelectedIndexChanged += async (s, e) => await OnLocationChanged(s, e);
 
-            var locBorder = CreateInputBorder(locationPicker, Colors.White);
-            locLayout.Children.Add(locBorder);
+            _locBorder = CreateInputBorder(locationPicker, Colors.White);
+            locLayout.Children.Add(_locBorder);
+
+            if (IsEditMode)
+            {
+                locationPicker.IsEnabled = false;
+                locationPicker.TextColor = DisabledFg;
+                _locBorder.BackgroundColor = DisabledBg;
+            }
 
             var stockLayout = new VerticalStackLayout { Spacing = 2 };
             stockLayout.Children.Add(new Label { Text = "現在庫数", FontSize = 11, TextColor = Colors.Gray });
@@ -314,9 +338,10 @@ namespace EvangPL.Views.InventoryAdjustment
                 FontSize = 13,
                 Margin = new Thickness(10, 0)
             };
-            reasonPicker.Items.Add("破損");
-            reasonPicker.Items.Add("棚卸差異");
-            reasonPicker.Items.Add("その他");
+
+            reasonPicker.Items.Add(REASON_BREAKAGE);
+            reasonPicker.Items.Add(REASON_STOCK_DIFF);
+            reasonPicker.Items.Add(REASON_OTHER);
 
             reasonPicker.SelectedIndexChanged += (s, e) =>
             {
@@ -332,7 +357,7 @@ namespace EvangPL.Views.InventoryAdjustment
             formContainer.Children.Add(reasonBorder);
 
             // ==========================================
-            // ★ ロット関連セクション
+            // ロット関連セクション
             // ==========================================
             _lotSectionContainer = new VerticalStackLayout
             {
@@ -412,7 +437,7 @@ namespace EvangPL.Views.InventoryAdjustment
             }, 1, 0);
             _lotSectionContainer.Children.Add(qtyRow);
 
-            _pendingLotTableHost = new ContentView { Content = BuildEditableLotTableForPending() };
+            _pendingLotTableHost = new ContentView { IsVisible = false };
             _lotSectionContainer.Children.Add(_pendingLotTableHost);
 
             var addLotBtn = new Button
@@ -430,8 +455,7 @@ namespace EvangPL.Views.InventoryAdjustment
 
             _bottomPendingTableHost = new ContentView
             {
-                IsVisible = false,
-                Content = BuildBottomPendingTable()
+                IsVisible = false
             };
             _lotSectionContainer.Children.Add(_bottomPendingTableHost);
 
@@ -470,23 +494,18 @@ namespace EvangPL.Views.InventoryAdjustment
         }
 
         // ==========================================
-        // ★ 品目入力変化時（Entry 版）
-        //    デバウンスして品目詳細APIを呼び出す
+        // 品目入力変化時（デバウンス + 検索）
         // ==========================================
         private async void OnItemTextChanged(object? sender, TextChangedEventArgs e)
         {
+            if (IsEditMode) return;
             if (_suppressItemSearch) return;
 
             await SearchItemByKeywordAsync(e.NewTextValue);
         }
 
-        /// <summary>
-        /// 入力キーワードで品目詳細を検索し、結果をUIへ反映する。
-        /// 連続入力時は古いリクエストをキャンセルする。
-        /// </summary>
         private async Task SearchItemByKeywordAsync(string? keyword)
         {
-            // 直前の検索をキャンセル
             _itemSearchCts?.Cancel();
             _itemSearchCts?.Dispose();
             var cts = new CancellationTokenSource();
@@ -494,7 +513,6 @@ namespace EvangPL.Views.InventoryAdjustment
 
             var text = keyword?.Trim();
 
-            // 空入力 → 選択解除
             if (string.IsNullOrEmpty(text))
             {
                 ApplyItemDetail(null);
@@ -503,118 +521,434 @@ namespace EvangPL.Views.InventoryAdjustment
 
             try
             {
-                // デバウンス（入力が落ち着くまで待つ）
                 await Task.Delay(ItemSearchDebounceMs, cts.Token);
 
-                // 現在選択中のロケーションを取得
-                string? location = locationPicker?.SelectedItem?.ToString();
+                string? id = _editItem != null && _editItem.Id > 0 ? _editItem.Id.ToString() : null;
+                string? lineNo = _editItem != null && _editItem.LineNo > 0 ? _editItem.LineNo.ToString() : null;
 
-                // ★ 品目詳細検索API呼び出し（品目コード + ロケーション）
-                var detail = await SearchItemMasterAsync(text, location, cts.Token);
+                string? locId = GetCurrentLocationId();
+
+                int? diffQty = _editItem?.DiffQty ?? 0;
+
+                System.Diagnostics.Debug.WriteLine(
+                    $"[InventoryAdjustment] SearchItemByKeyword locId={locId ?? "null"}, diffQty={diffQty}, keyword={text}");
+
+                var items = await SearchItemMasterAsync(id, lineNo, text, locId, diffQty, "", cts.Token);
 
                 if (cts.IsCancellationRequested) return;
-
-                ApplyItemDetail(detail);
+                ApplyItemDetail(items);
             }
             catch (OperationCanceledException)
             {
-                // 後続の入力に追い越された場合は何もしない
             }
             catch (Exception ex)
             {
                 if (cts.IsCancellationRequested) return;
-
                 System.Diagnostics.Debug.WriteLine($"[InventoryAdjustment] 品目検索エラー: {ex}");
                 ApplyItemDetail(null);
             }
         }
 
-        /// <summary>
-        /// 検索結果（または null）を画面へ反映する。
-        /// </summary>
-        private void ApplyItemDetail(ItemMaster? item)
+        // ==========================================
+        // ★★★ 品目詳細検索 API ★★★
+        // 後端 RESTlet: Info.Kbn = "getdata"
+        //   戻り SubData:
+        //     [0] SubName='PH_LOCATION' → ロケーション一覧
+        //     [1] SubName='PH_DATA' → 品目データ（GetDatas の結果・配列）
+        // ==========================================
+        protected virtual async Task<List<ItemMaster>?> SearchItemMasterAsync(
+            string? id,
+            string? lineNo,
+            string itemCode,
+            string? locationId,
+            int? diffQty,
+            string? memo,
+            CancellationToken ct = default)
         {
-            _currentItem = item;
-
-            // IsLotItem に応じて Lot セクション表示/非表示
-            if (_lotSectionContainer != null)
+            try
             {
-                _lotSectionContainer.IsVisible = item?.IsLotItem ?? false;
+                var request = new RequestData<StockAdjustSearchParam, EvangJsonModel>(RESTLET_STOCK_ADJUST);
+                request.Info = new StockAdjustSearchParam
+                {
+                    Kbn = KBN_GETDATA,
+                    Id = id,
+                    LineNo = lineNo,
+                    Keyword = itemCode,
+                    LocationId = locationId,
+                    DiffQty = diffQty,
+                    Memo = memo
+                };
+
+                ResponseData<EvangJsonModel, EvangJsonModel>? result = null;
+                try
+                {
+                    result = await this.Post<StockAdjustSearchParam, EvangJsonModel, EvangJsonModel, EvangJsonModel>(request);
+                }
+                finally
+                {
+                    // TODO: HideLoading();
+                }
+
+                if (result == null)
+                {
+                    System.Diagnostics.Debug.WriteLine("[InventoryAdjustment] サーバー応答なし");
+                    return null;
+                }
+
+                if (!result.Success)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[InventoryAdjustment] APIエラー: {result.ErrorMessage}");
+                    return null;
+                }
+
+                if (result.SubData == null || result.SubData.Count == 0)
+                    return null;
+
+                List<ItemMaster>? items = null;
+
+                foreach (var sub in result.SubData)
+                {
+                    if (sub.SubName == "PH_LOCATION")
+                    {
+                        var locations = BaseUtils.JsonToClass<List<LocationItem>>(sub.SubJson!);
+                        if (locations != null && locations.Count > 0)
+                        {
+                            bool needFillPicker = _locationList.Count == 0
+                                                  || locationPicker == null
+                                                  || locationPicker.Items.Count == 0;
+
+                            _locationList = locations;
+
+                            if (needFillPicker)
+                            {
+                                MainThread.BeginInvokeOnMainThread(() =>
+                                {
+                                    FillLocationPickerWithSuppress();
+                                });
+                            }
+                        }
+                    }
+                    else if (sub.SubName == "PH_DATA")
+                    {
+                        // 品目データ → 配列をそのまま受け取る（マージしない）
+                        items = BaseUtils.JsonToClass<List<ItemMaster>>(sub.SubJson!);
+
+                        // ★ 修正：items が空でも必ずクリア（旧データの残留を防ぐ）
+                        _pendingLots.Clear();
+
+                        if (items != null && items.Count > 0)
+                        {
+                            var itemCodeNow = itemEntry?.Text?.Trim() ?? string.Empty;
+                            foreach (var it in items)
+                            {
+                                if (string.IsNullOrWhiteSpace(it.LotNo))
+                                    continue;
+                                _pendingLots.Add(new PendingLotItem
+                                {
+                                    ItemCode = itemCodeNow,
+                                    LotNo    = it.LotNo,
+                                    Qty      = it.LotQuantity,
+                                    IsNew    = false
+                                });
+                            }
+                        }
+
+                        MainThread.BeginInvokeOnMainThread(() =>
+                        {
+                            RefreshPendingLotTable();
+                            RefreshBottomPendingTable();
+                            RecalculateDifference();
+                        });
+                    }
+                }
+
+                if (items == null || items.Count == 0)
+                    return null;
+
+                System.Diagnostics.Debug.WriteLine(
+                    $"[InventoryAdjustment] 品目詳細取得成功: {itemCode} / 行数={items.Count}");
+
+                return items;
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[InventoryAdjustment] SearchItemMasterAsync 例外: {ex.Message}");
+                return null;
+            }
+        }
+
+        // ==========================================
+        // 検索結果を画面へ反映
+        // ==========================================
+        private void ApplyItemDetail(List<ItemMaster>? items)
+        {
+            _currentItems = items;
+
+            var first = items?.FirstOrDefault();
+            bool isLotItem = first?.IsLotItem ?? false;
+
+            ApplyReasonFromMemo(first?.Memo);
+
+            int stock = 0;
+            if (first != null)
+            {
+                int.TryParse(first.HandQuantity?.ToString(), out stock);
             }
 
-            // 非ロット品 or 未一致なら未保存ロットをクリア
-            if (item == null || !item.IsLotItem)
+            if (_lotSectionContainer != null)
+            {
+                _lotSectionContainer.IsVisible = isLotItem;
+            }
+
+            if (items == null || items.Count == 0 || !isLotItem)
             {
                 _pendingLots.Clear();
                 RefreshPendingLotTable();
                 RefreshBottomPendingTable();
             }
-
-            // 詳細データに現在庫が含まれていれば反映
-            if (item?.CurrentStock is int stock && stock >= 0)
-            {
-                _currentStockValue = stock;
-                if (currentStockEntry != null)
-                    currentStockEntry.Text = stock.ToString();
-            }
             else
             {
-                _currentStockValue = 0;
-                if (currentStockEntry != null)
-                    currentStockEntry.Text = "0";
+                RefreshPendingLotTable();
+                RefreshBottomPendingTable();
             }
+
+            _currentStockValue = stock;
+            if (currentStockEntry != null)
+                currentStockEntry.Text = stock.ToString();
 
             RecalculateDifference();
         }
 
         // ==========================================
-        // ★★★ 品目詳細検索 API（ここを実APIに差し替える） ★★★
+        // Memo → 調整理由 Picker 反映
         // ==========================================
-        /// <summary>
-        /// 品目コード／品目名の一部から品目詳細を検索する。
-        /// ロケーションを指定すると、そのロケーションの在庫数も返す想定。
-        /// <para>
-        /// 【実装メモ】<br/>
-        /// 現在は未実装（常に null = 該当なし）を返しています。<br/>
-        /// 実際のAPI／DBアクセスに置き換えてください。<br/>
-        /// 例：<br/>
-        /// <code>
-        /// var res = await _itemApi.SearchAsync(keyword, location, ct);
-        /// if (res == null) return null;
-        /// return new ItemMaster
-        /// {
-        ///     ItemCode     = res.ItemCode,
-        ///     ItemName     = res.ItemName,
-        ///     IsLotItem    = res.IsLotItem,
-        ///     CurrentStock = res.CurrentStock,
-        /// };
-        /// </code>
-        /// </para>
-        /// </summary>
-        /// <param name="itemCode">入力された品目コード／品目名（部分一致想定）</param>
-        /// <param name="location">現在選択中のロケーション（null の場合あり）</param>
-        /// <param name="ct">キャンセルトークン</param>
-        /// <returns>該当する品目詳細。該当なしの場合は null。</returns>
-        protected virtual async Task<ItemMaster?> SearchItemMasterAsync(
-            string itemCode,
-            string? location,
-            CancellationToken ct = default)
+        private void ApplyReasonFromMemo(string? memo)
         {
-            // TODO: ★ここに実API呼び出しを実装する★
-            // 例：
-            // var result = await _itemApi.SearchAsync(itemCode, location, ct);
-            // return new ItemMaster
-            // {
-            //     ItemCode = result.ItemCode,
-            //     ItemName = result.ItemName,
-            //     IsLotItem = result.IsLotItem,
-            //     CurrentStock = result.CurrentStock,
-            // };
+            if (reasonPicker == null) return;
 
-            await Task.CompletedTask;
-            return null;
+            var trimmed = memo?.Trim() ?? string.Empty;
+
+            if (string.IsNullOrEmpty(trimmed))
+            {
+                reasonPicker.SelectedItem = null;
+                reasonPicker.SelectedIndex = -1;
+                reasonPicker.Title = "調整理由を選択";
+                return;
+            }
+
+            string target;
+            if (trimmed == REASON_BREAKAGE || trimmed == REASON_STOCK_DIFF)
+            {
+                target = trimmed;
+            }
+            else
+            {
+                target = REASON_OTHER;
+            }
+
+            if (!reasonPicker.Items.Contains(target))
+                reasonPicker.Items.Add(target);
+
+            reasonPicker.SelectedItem = target;
+            reasonPicker.Title = target;
         }
 
+        // ==========================================
+        // ロケーション名 → LocationId 逆引き
+        // ==========================================
+        private string? GetCurrentLocationId()
+        {
+            var selectedName = locationPicker?.SelectedItem?.ToString();
+
+            if (string.IsNullOrEmpty(selectedName))
+            {
+                if (!IsEditMode)
+                    return DEFAULT_LOCATION_ID;
+
+                return null;
+            }
+
+            var matched = _locationList.FirstOrDefault(l => l.Name == selectedName);
+            return matched?.Id.ToString();
+        }
+
+        // ==========================================
+        // ロケーション Picker を埋める（抑制付き）
+        // ==========================================
+        private void FillLocationPickerWithSuppress()
+        {
+            if (locationPicker == null) return;
+            if (_locationList.Count == 0) return;
+
+            _suppressLocationChanged = true;
+
+            try
+            {
+                locationPicker.Items.Clear();
+                foreach (var loc in _locationList)
+                {
+                    if (!string.IsNullOrEmpty(loc.Name))
+                        locationPicker.Items.Add(loc.Name);
+                }
+
+                if (locationPicker.Items.Count == 0)
+                {
+                    locationPicker.SelectedIndex = -1;
+                    return;
+                }
+
+                if (IsEditMode && _editItem != null && _editItem.LocationId > 0)
+                {
+                    string targetId = _editItem.LocationId.ToString();
+                    bool found = false;
+
+                    for (int i = 0; i < _locationList.Count; i++)
+                    {
+                        if (_locationList[i].Id.ToString() == targetId)
+                        {
+                            locationPicker.SelectedIndex = i;
+                            found = true;
+                            break;
+                        }
+                    }
+
+                    if (!found)
+                        locationPicker.SelectedIndex = 0;
+                }
+                else
+                {
+                    bool found = false;
+                    for (int i = 0; i < _locationList.Count; i++)
+                    {
+                        if (_locationList[i].Id.ToString() == DEFAULT_LOCATION_ID)
+                        {
+                            locationPicker.SelectedIndex = i;
+                            found = true;
+                            break;
+                        }
+                    }
+
+                    if (!found)
+                        locationPicker.SelectedIndex = 0;
+                }
+
+                if (locationPicker.SelectedIndex >= 0)
+                    locationPicker.Title = locationPicker.SelectedItem?.ToString();
+            }
+            finally
+            {
+                _suppressLocationChanged = false;
+            }
+        }
+
+        // ==========================================
+        // 編集モード：初期データロード（4項目検索）
+        // ==========================================
+        private async Task LoadEditDataAsync()
+        {
+            if (_editItem == null) return;
+
+            if (itemEntry != null && !string.IsNullOrWhiteSpace(_editItem.ItemCode))
+            {
+                _suppressItemSearch = true;
+                itemEntry.Text = _editItem.ItemCode;
+                _suppressItemSearch = false;
+
+                List<ItemMaster>? detail = null;
+                try
+                {
+                    string? id = _editItem.Id > 0 ? _editItem.Id.ToString() : null;
+                    string? lineNo = _editItem.LineNo > 0 ? _editItem.LineNo.ToString() : null;
+                    string? locId = _editItem.LocationId > 0 ? _editItem.LocationId.ToString() : null;
+
+                    detail = await SearchItemMasterAsync(id, lineNo, _editItem.ItemCode, locId, _editItem.DiffQty, "");
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[InventoryAdjustment] 編集データ読込エラー: {ex}");
+                }
+
+                ApplyItemDetail(detail);
+            }
+
+            if (differenceEntry != null && !(_currentItems?.FirstOrDefault()?.IsLotItem ?? false))
+            {
+                differenceEntry.Text = _editItem.DiffQty.ToString();
+            }
+
+            if (currentStockEntry != null)
+                currentStockEntry.Text = _currentStockValue.ToString();
+
+            if (adjustedStockEntry != null)
+                adjustedStockEntry.Text = CalculateAdjustedStock().ToString();
+
+            RecalculateDifference();
+
+            if (!string.IsNullOrWhiteSpace(_editItem.AdjustNo))
+            {
+                Title = $"棚卸調整 - 編集 ({_editItem.AdjustNo})";
+            }
+        }
+
+        // ==========================================
+        // ロケーション切替時：新しい LocationId で再検索
+        // ==========================================
+        private async Task OnLocationChanged(object sender, EventArgs e)
+        {
+            if (locationPicker == null) return;
+
+            if (_suppressLocationChanged) return;
+
+            if (IsEditMode) return;
+
+            if (locationPicker.SelectedIndex >= 0)
+                locationPicker.Title = locationPicker.SelectedItem?.ToString();
+            else
+                locationPicker.Title = "ロケーションを選択";
+
+            if (locationPicker.SelectedIndex < 0)
+            {
+                await Task.CompletedTask;
+                return;
+            }
+
+            var currentItemCode = itemEntry?.Text?.Trim();
+            if (!string.IsNullOrEmpty(currentItemCode))
+            {
+                try
+                {
+                    string? id = _editItem != null && _editItem.Id > 0 ? _editItem.Id.ToString() : null;
+                    string? lineNo = _editItem != null && _editItem.LineNo > 0 ? _editItem.LineNo.ToString() : null;
+                    string? newLocId = GetCurrentLocationId();
+
+                    int? diffQty = _editItem?.DiffQty ?? 0;
+
+                    System.Diagnostics.Debug.WriteLine(
+                        $"[InventoryAdjustment] OnLocationChanged newLocId={newLocId ?? "null"}, itemCode={currentItemCode}");
+
+                    var detail = await SearchItemMasterAsync(id, lineNo, currentItemCode, newLocId, diffQty, "");
+
+                    ApplyItemDetail(detail);
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[InventoryAdjustment] ロケーション変更時の再検索エラー: {ex}");
+                }
+            }
+
+            if (adjustedStockEntry != null)
+                adjustedStockEntry.Text = CalculateAdjustedStock().ToString();
+
+            await Task.CompletedTask;
+        }
+
+        // ==========================================
+        // UI ヘルパー
+        // ==========================================
         private Border CreateInputBorder(View content, Color backgroundColor)
         {
             return new Border
@@ -677,20 +1011,15 @@ namespace EvangPL.Views.InventoryAdjustment
             return _currentStockValue + diff;
         }
 
-        // ==========================================
-        // ★ 差異を自動計算
-        // ==========================================
         private void RecalculateDifference()
         {
             if (differenceEntry == null) return;
 
-            bool isLotItem = _currentItem?.IsLotItem ?? false;
+            bool isLotItem = _currentItems?.FirstOrDefault()?.IsLotItem ?? false;
 
             if (isLotItem)
             {
-                int sum = _pendingLots
-                    .Where(p => p.ItemCode == _currentItem!.ItemCode)
-                    .Sum(p => p.Qty);
+                int sum = _pendingLots.Sum(p => p.Qty ?? 0);
 
                 if (int.TryParse(_qtyEntry?.Text?.Trim(), out int pendingQty) && pendingQty > 0)
                 {
@@ -735,129 +1064,129 @@ namespace EvangPL.Views.InventoryAdjustment
             }
         }
 
-        private async Task OnLocationChanged(object sender, EventArgs e)
-        {
-            if (locationPicker == null) return;
-
-            if (locationPicker.SelectedIndex >= 0)
-                locationPicker.Title = locationPicker.SelectedItem?.ToString();
-            else
-                locationPicker.Title = "ロケーションを選択";
-
-            if (locationPicker.SelectedIndex < 0)
-            {
-                await Task.CompletedTask;
-                return;
-            }
-
-            // 品目が既に選択されている場合、ロケーション変更で再検索して在庫を更新
-            if (_currentItem != null && !string.IsNullOrEmpty(_currentItem.ItemCode))
-            {
-                var location = locationPicker.SelectedItem?.ToString();
-                try
-                {
-                    var detail = await SearchItemMasterAsync(_currentItem.ItemCode, location);
-                    if (detail != null)
-                    {
-                        ApplyItemDetail(detail);
-                    }
-                }
-                catch (Exception ex)
-                {
-                    System.Diagnostics.Debug.WriteLine($"[InventoryAdjustment] ロケーション変更時の再検索エラー: {ex}");
-                }
-            }
-
-            if (adjustedStockEntry != null)
-                adjustedStockEntry.Text = CalculateAdjustedStock().ToString();
-
-            await Task.CompletedTask;
-        }
-
-        // ==========================================
-        // ★ 編集モード：初期データロード
-        //    品目は API から詳細を取得する
-        // ==========================================
-        private async Task LoadEditDataAsync()
-        {
-            if (_editItem == null) return;
-
-            // 品目：Entry にテキストをセット → API で詳細検索
-            if (itemEntry != null && !string.IsNullOrWhiteSpace(_editItem.ItemCode))
-            {
-                _suppressItemSearch = true;
-                itemEntry.Text = _editItem.ItemCode;
-                _suppressItemSearch = false;
-
-                ItemMaster? detail = null;
-                try
-                {
-                    string? location = locationPicker?.SelectedItem?.ToString();
-                    detail = await SearchItemMasterAsync(_editItem.ItemCode, location);
-                }
-                catch (Exception ex)
-                {
-                    System.Diagnostics.Debug.WriteLine($"[InventoryAdjustment] 編集データ読込エラー: {ex}");
-                }
-
-                ApplyItemDetail(detail);
-            }
-
-            // 差異・理由を編集データで上書き（ロット品の場合、差異はロットから再計算されるため注意）
-            if (differenceEntry != null && !(_currentItem?.IsLotItem ?? false))
-            {
-                differenceEntry.Text = _editItem.DiffQty.ToString();
-            }
-
-            if (reasonPicker != null && !string.IsNullOrWhiteSpace(_editItem.AdjustReason))
-            {
-                if (!reasonPicker.Items.Contains(_editItem.AdjustReason))
-                    reasonPicker.Items.Add(_editItem.AdjustReason);
-
-                reasonPicker.SelectedItem = _editItem.AdjustReason;
-                reasonPicker.Title = _editItem.AdjustReason;
-            }
-
-            if (currentStockEntry != null)
-                currentStockEntry.Text = _currentStockValue.ToString();
-
-            if (adjustedStockEntry != null)
-                adjustedStockEntry.Text = CalculateAdjustedStock().ToString();
-
-            RecalculateDifference();
-        }
-
         private async void OnScanClicked(object sender, EventArgs e)
         {
-            await DisplayAlert("スキャン", "バーコードスキャナーを起動します (実装待ち)", "OK");
+            if (IsEditMode) return;
 
-            // TODO: スキャン結果を itemEntry.Text にセットすると
-            //       TextChanged → SearchItemByKeywordAsync が自動で走ります。
-            // 例：
-            // var scanned = await _scanner.ScanAsync();
-            // if (!string.IsNullOrWhiteSpace(scanned)) itemEntry!.Text = scanned;
+            await DisplayAlert("スキャン", "バーコードスキャナーを起動します (実装待ち)", "OK");
         }
 
+        // ==========================================
+        // 登録／更新（本実装）
+        // ==========================================
         private async Task OnRegisterClicked(object sender, EventArgs e)
         {
-            if (_currentItem == null)
+            if (_currentItems == null || _currentItems.Count == 0)
             {
                 await DisplayAlert("エラー", "品目を入力してください。", "OK");
                 return;
             }
 
-            string message = IsEditMode
-                ? "在庫調整を更新しました (ダミー)"
-                : "在庫調整を登録しました (ダミー)";
+            var first = _currentItems.FirstOrDefault();
+            bool isLotItem = first?.IsLotItem ?? false;
 
-            await DisplayAlert("完了", message, "OK");
+            int diffQty = 0;
+
+            if (isLotItem)
+            {
+                if (_pendingLots.Count == 0)
+                {
+                    await DisplayAlert("エラー", "ロットを1件以上追加してください。", "OK");
+                    return;
+                }
+                diffQty = _pendingLots.Sum(p => p.Qty ?? 0);
+            }
+            else
+            {
+                if (!int.TryParse(differenceEntry?.Text?.Trim(), out diffQty))
+                {
+                    await DisplayAlert("エラー", "差異を正しく入力してください。", "OK");
+                    return;
+                }
+                if (diffQty == 0)
+                {
+                    await DisplayAlert("エラー", "差異が0のため保存できません。", "OK");
+                    return;
+                }
+            }
+
+            var reason = reasonPicker?.SelectedItem?.ToString();
+            if (string.IsNullOrWhiteSpace(reason))
+            {
+                await DisplayAlert("エラー", "調整理由を選択してください。", "OK");
+                return;
+            }
+
+            var request = new RequestData<StockAdjustSaveParam, EvangJsonModel>(RESTLET_STOCK_ADJUST);
+
+            request.Info = new StockAdjustSaveParam
+            {
+                id         = _editItem != null && _editItem.Id > 0 ? _editItem.Id : null,
+                Kbn        = KBN_SAVE,
+                LineNo     = _editItem != null && _editItem.LineNo > 0 ? _editItem.LineNo.ToString() : null,
+                Keyword    = itemEntry?.Text?.Trim(),
+                LocationId = GetCurrentLocationId(),
+                DiffQty    = diffQty,
+                Memo       = reason,
+                Lots       = isLotItem
+                    ? _pendingLots.Select(p => new LotSaveItem
+                    {
+                        LotNo = p.LotNo,
+                        Qty   = p.Qty ?? 0
+                    }).ToList()
+                    : null
+            };
+
+            if (registerButton != null) registerButton.IsEnabled = false;
+
+            try
+            {
+                var successNo = "";
+                var result = await this.Post<StockAdjustSaveParam, EvangJsonModel, EvangJsonModel, EvangJsonModel>(request);
+
+                if (result == null || !result.Success)
+                {
+                    var err = result?.ErrorMessage ?? "サーバー応答なし";
+                    System.Diagnostics.Debug.WriteLine($"[InventoryAdjustment] 保存失敗: {err}");
+                    await DisplayAlert("エラー", $"保存に失敗しました。\n{err}", "OK");
+                    return;
+                }
+                foreach (var item in result.SubData)
+                {
+                    switch (item.SubName)
+                    {
+                        case "PH_TRANID":
+                            if (item == null || item.SubJson == null)
+                                return;
+                            successNo = item.SubJson;
+                            break;
+                    }
+                }
+                
+                await DisplayAlert("完了",
+                    IsEditMode ? $"\n{successNo}在庫調整を更新しました。" : $"\n{successNo}在庫調整を登録しました。",
+                    "OK");
+                // ★ 保存成功後、一覧画面へ戻る
+                await Navigation.PopAsync();
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[InventoryAdjustment] 保存例外: {ex}");
+                await DisplayAlert("エラー", "保存中にエラーが発生しました。", "OK");
+            }
+            finally
+            {
+                if (registerButton != null) registerButton.IsEnabled = true;
+            }
         }
 
         // ==================== 「+ロットを追加」 ====================
         private async void OnAddLotButtonClicked(object? sender, EventArgs e)
         {
-            var matchedItem = _currentItem;
-            if (matchedItem == null || !matchedItem.IsLotItem)
+            bool isLotItem = _currentItems?.FirstOrDefault()?.IsLotItem ?? false;
+            var itemCode = itemEntry?.Text?.Trim() ?? "";
+
+            if (!isLotItem || string.IsNullOrEmpty(itemCode))
             {
                 await DisplayAlert("エラー", "ロット対象の品目を入力してください。", "OK");
                 return;
@@ -879,9 +1208,10 @@ namespace EvangPL.Views.InventoryAdjustment
 
             _pendingLots.Add(new PendingLotItem
             {
-                ItemCode = matchedItem.ItemCode,
-                LotNo = lotNo,
-                Qty = qty
+                ItemCode = itemCode,
+                LotNo    = lotNo,
+                Qty      = qty,
+                IsNew    = true
             });
 
             if (_lotEntry != null) _lotEntry.Text = string.Empty;
@@ -907,9 +1237,17 @@ namespace EvangPL.Views.InventoryAdjustment
 
         private void RefreshPendingLotTable()
         {
-            if (_pendingLotTableHost != null)
+            if (_pendingLotTableHost == null) return;
+
+            if (_pendingLots.Count == 0)
+            {
+                _pendingLotTableHost.IsVisible = false;
+                _pendingLotTableHost.Content = null;
+            }
+            else
             {
                 _pendingLotTableHost.Content = BuildEditableLotTableForPending();
+                _pendingLotTableHost.IsVisible = true;
             }
         }
 
@@ -917,14 +1255,17 @@ namespace EvangPL.Views.InventoryAdjustment
         {
             if (_bottomPendingTableHost == null) return;
 
-            if (_pendingLots.Count == 0)
+            bool hasNew = _pendingLots.Any(p => p.IsNew);
+
+            if (!hasNew)
             {
                 _bottomPendingTableHost.IsVisible = false;
+                _bottomPendingTableHost.Content = null;
             }
             else
             {
-                _bottomPendingTableHost.IsVisible = true;
                 _bottomPendingTableHost.Content = BuildBottomPendingTable();
+                _bottomPendingTableHost.IsVisible = true;
             }
         }
 
@@ -1018,7 +1359,9 @@ namespace EvangPL.Views.InventoryAdjustment
 
         private View BuildBottomPendingTable()
         {
-            if (_pendingLots.Count == 0)
+            var newLots = _pendingLots.Where(p => p.IsNew).ToList();
+
+            if (newLots.Count == 0)
             {
                 return new ContentView { IsVisible = false };
             }
@@ -1026,32 +1369,83 @@ namespace EvangPL.Views.InventoryAdjustment
             var container = new VerticalStackLayout { Spacing = 4 };
             container.Children.Add(new Label
             {
-                Text = $"登録済み明細({_pendingLots.Count}件)",
+                Text = $"登録済み明細({newLots.Count}件)",
                 FontSize = 14,
                 FontAttributes = FontAttributes.Bold
             });
-            container.Children.Add(BuildEditableLotTableInternal(_pendingLots, showItemColumn: true));
+            container.Children.Add(BuildEditableLotTableInternal(newLots, showItemColumn: true));
             return container;
         }
 
         #endregion
 
         // ==========================================
-        // データモデル
+        // データモデル（後端 JSON に完全一致）
         // ==========================================
         public class ItemMaster
         {
-            public string ItemCode { get; set; } = "";
-            public string ItemName { get; set; } = "";
+            [JsonPropertyName("HandQuantity")]
+            public int? HandQuantity { get; set; }
+
+            [JsonPropertyName("IsLotItem")]
             public bool IsLotItem { get; set; }
-            public int? CurrentStock { get; set; }
+
+            [JsonPropertyName("LotNo")]
+            public string LotNo { get; set; } = "";
+
+            [JsonPropertyName("LotQuantity")]
+            public int? LotQuantity { get; set; }
+
+            [JsonPropertyName("Memo")]
+            public string? Memo { get; set; }
         }
 
         public class PendingLotItem
         {
             public string ItemCode { get; set; } = "";
             public string LotNo { get; set; } = "";
+            public int? Qty { get; set; }
+
+            public bool IsNew { get; set; } = false;
+        }
+
+        public class StockAdjustSearchParam : EvangJsonModel
+        {
+            public string Kbn { get; set; } = "getdata";
+            public string? Id { get; set; }
+            public string? LineNo { get; set; }
+            public string? Keyword { get; set; }
+            public string? LocationId { get; set; }
+            public int? DiffQty { get; set; }
+            public string? Memo { get; set; }
+        }
+
+        public class StockAdjustSaveParam : EvangJsonModel
+        {
+            [JsonPropertyName("Id")]
+            public int? id { get; set; }
+            public string Kbn { get; set; } = "savedata";
+            public string? LineNo { get; set; }
+            public string? Keyword { get; set; }
+            public string? LocationId { get; set; }
+            public int? DiffQty { get; set; }
+            public string? Memo { get; set; }
+            public List<LotSaveItem>? Lots { get; set; }
+        }
+
+        public class LotSaveItem
+        {
+            public string LotNo { get; set; } = "";
             public int Qty { get; set; }
+        }
+
+        public class LocationItem
+        {
+            [JsonPropertyName("id")]
+            public int Id { get; set; }
+
+            [JsonPropertyName("name")]
+            public string Name { get; set; } = "";
         }
     }
 }
