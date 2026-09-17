@@ -74,6 +74,20 @@ namespace EvangPL.Views.InventoryTransfer
         private SearchParam SearchCondition;
         private List<LocationData> localist;
 
+        public static bool NeedRefreshAfterSave = false;
+
+        protected override void OnAppearing()
+        {
+            base.OnAppearing();
+
+            if (NeedRefreshAfterSave)
+            {
+                NeedRefreshAfterSave = false;
+
+                _ = GetMockData("data");
+            }
+        }
+
         public InventoryTransfer() : base("strInventoryTransfer", null)
         {
             SearchCondition = new SearchParam();
