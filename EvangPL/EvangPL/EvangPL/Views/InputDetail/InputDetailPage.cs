@@ -832,6 +832,7 @@ namespace EvangPL.Views.InputDetail
         }
 
         // ✅ 入力中の _pendingLots（全品目分）をまとめてRESTletへ送る。ActionType="SAVE" を明示
+        // ✅ 入力中の _pendingLots（全品目分）をまとめてRESTletへ送る。ActionType="SAVE" を明示
         private async void OnSaveButtonClicked(object sender, EventArgs e)
         {
             try
@@ -919,6 +920,11 @@ namespace EvangPL.Views.InputDetail
 
                 await MainThread.InvokeOnMainThreadAsync(() =>
                     DisplayAlert("成功", $"入庫保存が完了しました。\n入庫伝票番号: {receiptNumber}", "OK"));
+
+                // ✅ [追加] 一覧画面（StockIn）に「この伝票の受領処理が完了した」ことを伝えておく。
+                //    一覧画面へ戻った際に再度このカードをタップしても、
+                //    「対象の入庫明細が見つかりません」という誤解を招くAlertが表示されないようにするため。
+                EvangPL.Views.StockIn.StockIn.MarkOrderAsCompleted(_orderId);
 
                 // ✅ 保存成功後：入力中リストをクリアし、選択状態もリセットしてから
                 //    サーバーの最新明細/実績を再検索してUIを更新（＝再び未選択の空白状態から始まる）
