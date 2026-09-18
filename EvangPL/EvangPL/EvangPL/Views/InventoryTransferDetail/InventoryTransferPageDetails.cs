@@ -1,20 +1,21 @@
 ﻿//using Android.Webkit;
+using EvangPL.Components;
+using EvangPL.Utils;
+using EvangPL.Views.InventoryTransfer;
 using EvangSol.Mobibrary.DataFeed;
 using EvangSol.Mobibrary.EvangModel;
 using EvangSol.Mobibrary.EvangViewModel;
 using EvangSol.Mobibrary.Utilities.Common;
-using EvangPL.Components;
-using EvangPL.Utils;
 using MauiIcons.Core;
 using MauiIcons.Fluent;
 using Microsoft.Maui;
+using Microsoft.Maui.Controls;
 using Microsoft.Maui.Controls.Shapes;
 using Microsoft.Maui.Graphics.Text;
 using System.Collections.Generic;
 using System.Text.Json;
 using static System.Net.Mime.MediaTypeNames;
 using InventoryTransferInfo = EvangPL.Utils.InventoryTransferInfo;
-using EvangPL.Views.InventoryTransfer;
 
 namespace EvangPL.Views.InventoryTransferPageDetails
 {
@@ -27,6 +28,9 @@ namespace EvangPL.Views.InventoryTransferPageDetails
         private InventoryTransferPageDetails paramInfoToNext;
 
         private VerticalStackLayout? _scrollContainer;
+        private CancellationTokenSource? _itemSearchCts;
+        private const int ItemSearchDebounceMs = 300;
+        private readonly TransferRecord? _editItem;
 
         // ★ 入力中（未保存）のロットリスト
         private readonly List<PendingLotItem> _pendingLots = new List<PendingLotItem>();
@@ -54,8 +58,16 @@ namespace EvangPL.Views.InventoryTransferPageDetails
         private static readonly Color InputBackgroundColor = Colors.White;
         private const int InputCornerRadius = 6;
 
+        private string? _currentItemCode;
+        private bool _currentItemIsLot;
+
         private readonly TransferRecord? _editRecord;
         private bool IsEditMode => _editRecord != null;
+        private CancellationTokenSource? _keywordCts;
+        private List<LocationData> localist;
+        private Picker? fromPicker;
+        private Picker? toPicker;
+        private bool islotflag;
 
 
         public InventoryTransferPageDetails() : this(null)
@@ -68,8 +80,9 @@ namespace EvangPL.Views.InventoryTransferPageDetails
             BuildUI();
         }
 
-        private void BuildUI()
+        private async void BuildUI()
         {
+            await GetLocaData("locadata");
             var mainGrid = new Grid
             {
                 RowDefinitions = { new RowDefinition { Height = GridLength.Star } },
@@ -166,38 +179,85 @@ namespace EvangPL.Views.InventoryTransferPageDetails
                 RowDefinitions = { new RowDefinition(), new RowDefinition() },
                 ColumnDefinitions = { new ColumnDefinition(), new ColumnDefinition() }
             };
-            innerGrid.Add(new Label { Text = "移動元ロケーション", FontSize = 12, TextColor = Colors.Gray });
-            innerGrid.Add(new Label { Text = "移動先ロケーション", FontSize = 12, TextColor = Colors.Gray }, 1, 0);
+            innerGrid.Add(new Label { Text = "移動元ロケーション", FontSize = 12 });
+            innerGrid.Add(new Label { Text = "移動先ロケーション", FontSize = 12 }, 1, 0);
 
-            var fromItems = new List<string> { "WH1-A-03", "WH2-A-01" };
-            if (!string.IsNullOrEmpty(_editRecord?.Source) && !fromItems.Contains(_editRecord!.Source))
-                fromItems.Add(_editRecord.Source);
+            //var fromItems = new List<string> { "WH1-A-03", "WH2-A-01" };
+            //var fromItems = new List<string>();
+            //if (!IsEditMode)
+            //{
+            //    for (int i = 0; i < localist.Count; i++)
+            //    {
+            //        fromItems.Add(localist[i].name);
+            //    }
+            //}
+            //if (!string.IsNullOrEmpty(_editRecord?.Source) && !fromItems.Contains(_editRecord!.Source))
+            //    fromItems.Add(_editRecord.Source);
 
-            var fromPicker = new Picker
+            fromPicker = new Picker
             {
                 Title = "選択",
                 SelectedIndex = -1,
                 BackgroundColor = Colors.White,
-                ItemsSource = fromItems
+                ItemsSource = localist,
+                ItemDisplayBinding = new Binding("name")
             };
+            if (IsEditMode && _editRecord != null && localist != null)
+            {
+                var sourceLoc = localist.FirstOrDefault(x => x.id == _editRecord.SourceId);
+                if (sourceLoc == null && _editRecord.SourceId != null)
+                {
+                    sourceLoc = new LocationData { id = _editRecord.SourceId, name = $"ID: {_editRecord.SourceId}" };
+                    localist.Add(sourceLoc);
+                }
+                fromPicker.SelectedItem = sourceLoc;
+            }
+            var fromBorder = WrapInputControl(fromPicker);
             if (IsEditMode)
-                fromPicker.SelectedItem = _editRecord?.Source;
-            innerGrid.Add(WrapInputControl(fromPicker), 0, 1);
+            {
+                fromPicker.InputTransparent = true;
+                fromBorder.BackgroundColor = Color.FromArgb("#e0e0e0");
+            }
+            innerGrid.Add(fromBorder, 0, 1);
 
-            var toItems = new List<string> { "WH2-C-01", "WH1-C-04" };
-            if (!string.IsNullOrEmpty(_editRecord?.Dest) && !toItems.Contains(_editRecord!.Dest))
-                toItems.Add(_editRecord.Dest);
+            //var toItems = new List<string> { "WH2-C-01", "WH1-C-04" };
+            //if (!string.IsNullOrEmpty(_editRecord?.Dest) && !toItems.Contains(_editRecord!.Dest))
+            //    toItems.Add(_editRecord.Dest);
+            //var toItems = new List<string>();
+            //if (!IsEditMode)
+            //{
+            //    for (int i = 0; i < localist.Count; i++)
+            //    {
+            //        toItems.Add(localist[i].name);
+            //    }
+            //}
 
-            var toPicker = new Picker
+            toPicker = new Picker
             {
                 Title = "選択",
                 SelectedIndex = -1,
                 BackgroundColor = Colors.White,
-                ItemsSource = toItems
+                ItemsSource = localist,
+                ItemDisplayBinding = new Binding("name")
             };
+            if (IsEditMode && _editRecord != null && localist != null)
+            {
+                var sourceLoc = localist.FirstOrDefault(x => x.id == _editRecord.DestId);
+                if (sourceLoc == null && _editRecord.DestId != null)
+                {
+                    sourceLoc = new LocationData { id = _editRecord.DestId, name = $"ID: {_editRecord.DestId}" };
+                    localist.Add(sourceLoc);
+                }
+                toPicker.SelectedItem = sourceLoc;
+            }
+            var toBorder = WrapInputControl(toPicker);
+
             if (IsEditMode)
-                toPicker.SelectedItem = _editRecord?.Dest;
-            innerGrid.Add(WrapInputControl(toPicker), 1, 1);
+            {
+                toPicker.InputTransparent = true;
+                toBorder.BackgroundColor = Color.FromArgb("#e0e0e0");
+            }
+            innerGrid.Add(toBorder, 1, 1);
             layout.Children.Add(innerGrid);
 
             // ==================================================
@@ -210,33 +270,33 @@ namespace EvangPL.Views.InventoryTransferPageDetails
             };
 
             // --- 入庫先ロケーション ---
-            _lotSectionContainer.Children.Add(new Label
-            {
-                Text = "入庫先ロケーション (スキャン可)",
-                FontSize = 12,
-                TextColor = Colors.Gray
-            });
+            //_lotSectionContainer.Children.Add(new Label
+            //{
+            //    Text = "入庫先ロケーション (スキャン可)",
+            //    FontSize = 12,
+            //    TextColor = Colors.Gray
+            //});
 
-            var locRow = new Grid
-            {
-                ColumnDefinitions =
-                {
-                    new ColumnDefinition { Width = GridLength.Star },
-                    new ColumnDefinition { Width = 50 }
-                },
-                ColumnSpacing = 10
-            };
-            var locationItems = new List<string> { "WH1-A-03", "WH2-C-01" };
-            _locationPicker = new Picker
-            {
-                Title = "選択",
-                SelectedIndex = -1,
-                BackgroundColor = Colors.White,
-                ItemsSource = locationItems
-            };
-            locRow.Add(WrapInputControl(_locationPicker), 0, 0);
-            locRow.Add(BuildBarcodeIcon(), 1, 0);
-            _lotSectionContainer.Children.Add(locRow);
+            //var locRow = new Grid
+            //{
+            //    ColumnDefinitions =
+            //    {
+            //        new ColumnDefinition { Width = GridLength.Star },
+            //        new ColumnDefinition { Width = 50 }
+            //    },
+            //    ColumnSpacing = 10
+            //};
+            //var locationItems = new List<string> { "WH1-A-03", "WH2-C-01" };
+            //_locationPicker = new Picker
+            //{
+            //    Title = "選択",
+            //    SelectedIndex = -1,
+            //    BackgroundColor = Colors.White,
+            //    ItemsSource = locationItems
+            //};
+            //locRow.Add(WrapInputControl(_locationPicker), 0, 0);
+            //locRow.Add(BuildBarcodeIcon(), 1, 0);
+            //_lotSectionContainer.Children.Add(locRow);
 
             // --- ロット / シリアル ---
             _lotSectionContainer.Children.Add(new Label
@@ -277,7 +337,7 @@ namespace EvangPL.Views.InventoryTransferPageDetails
                 },
                 ColumnSpacing = 10
             };
-            _qtyEntry = new Entry { Placeholder = "数量を入力", Keyboard = Keyboard.Numeric, BackgroundColor = Colors.Transparent };
+            _qtyEntry = new Entry { Placeholder = "数量を入力", Keyboard = Microsoft.Maui.Keyboard.Numeric, BackgroundColor = Colors.Transparent };
             qtyRow.Add(WrapInputControl(_qtyEntry), 0, 0);
             qtyRow.Add(new Label { Text = "個", VerticalOptions = LayoutOptions.Center, HorizontalTextAlignment = TextAlignment.Center }, 1, 0);
             _lotSectionContainer.Children.Add(qtyRow);
@@ -310,9 +370,60 @@ namespace EvangPL.Views.InventoryTransferPageDetails
         {
             try
             {
-                // 必要であればここで保存処理（API 呼び出しなど）を実装
-                // 今回はダミーでメッセージを表示してから一覧画面へ戻る
-                await DisplayAlert("完了", "在庫振替を保存しました (ダミー)", "OK");
+                var selectedLocation = fromPicker.SelectedItem as LocationData;
+                if (selectedLocation == null)
+                {
+                    System.Diagnostics.Debug.WriteLine("移動元ロケーションを選択してください。");
+                    return;
+                }
+                int? fromlocationId = selectedLocation.id;
+                var selectedLocationto = toPicker.SelectedItem as LocationData;
+                if (selectedLocationto == null)
+                {
+                    System.Diagnostics.Debug.WriteLine("移動先ロケーションを選択してください。");
+                    return;
+                }
+                int? tolocationId = selectedLocationto.id;
+                var request = new RequestData<StockTransferSearchParam, EvangJsonModel>("SaveTransfer");
+                request.Info = new StockTransferSearchParam
+                {
+                    Id         = _editRecord != null && _editRecord.InId > 0 ? _editRecord.InId : 0,
+                    Kbn        = "savedata",
+                    Keyword    = _itemEntry?.Text?.Trim() ?? string.Empty,
+                    FromLocationId = fromlocationId,
+                    ToLocationId    = tolocationId,
+                    Lots       = islotflag
+                   ? _pendingLots.Select(p => new PendingLotItem
+                   {
+                       ItemCode = p.ItemCode,
+                       LotNo = p.LotNo,
+                       Qty   = p.Qty 
+                   }).ToList()
+                   : null
+                };
+
+                var successNo = "";
+                var result = await this.Post<StockTransferSearchParam, EvangJsonModel, EvangJsonModel, EvangJsonModel>(request);
+                if (result == null || !result.Success)
+                {
+                    var err = result?.ErrorMessage ?? "サーバー応答なし";
+                    System.Diagnostics.Debug.WriteLine($"[InventoryAdjustment] 保存失敗: {err}");
+                    await DisplayAlert("エラー", $"保存に失敗しました。\n{err}", "OK");
+                    return;
+                }
+                foreach (var item in result.SubData)
+                {
+                    switch (item.SubName)
+                    {
+                        case "PH_TRANID":
+                            if (item == null || item.SubJson == null)
+                                return;
+                            successNo = item.SubJson;
+                            break;
+                    }
+                }
+                await DisplayAlert("完了", $"在庫振替\n{successNo}を保存しました (ダミー)", "OK");
+                EvangPL.Views.InventoryTransfer.InventoryTransfer.NeedRefreshAfterSave = true;
 
                 // ★ 一覧画面へ戻る（Push 元へ Pop）
                 await Navigation.PopAsync();
@@ -324,18 +435,120 @@ namespace EvangPL.Views.InventoryTransferPageDetails
         }
 
         // ==================== 品目入力変化時（Entry 版） ====================
-        private void OnItemTextChanged(object? sender, TextChangedEventArgs e)
+        private async void OnItemTextChanged(object? sender, TextChangedEventArgs e)
         {
-            var matched = GetMatchedItemMaster();
+            _keywordCts?.Cancel();
+            _keywordCts = new CancellationTokenSource();
+            var token = _keywordCts.Token;
+
+            try
+            {
+                await Task.Delay(1000, token);   // 1000ms
+                if (token.IsCancellationRequested) return;
+                await SearchItemByKeywordAsync(e.NewTextValue);
+            }
+            catch (TaskCanceledException)
+            {
+            }
+            //if (IsEditMode) return;
+            // if (_suppressItemSearch) return;
+        }
+
+        private async Task SearchItemByKeywordAsync(string? keyword)
+        {
+            _itemSearchCts?.Cancel();
+            _itemSearchCts?.Dispose();
+            var cts = new CancellationTokenSource();
+            _itemSearchCts = cts;
+
+            var text = keyword?.Trim();
+
+            if (string.IsNullOrEmpty(text))
+            {
+                ApplyItemDetail(false);
+                return;
+            }
+
+            try
+            {
+                //await Task.Delay(ItemSearchDebounceMs, cts.Token);
+
+                //string? id = _editItem != null && _editItem.Id > 0 ? _editItem.Id.ToString() : null;
+                //string? lineNo = _editItem != null && _editItem.LineNo > 0 ? _editItem.LineNo.ToString() : null;
+
+                //string? locId = GetCurrentLocationId();
+
+                //int? diffQty = _editItem?.DiffQty ?? 0;
+
+                //System.Diagnostics.Debug.WriteLine(
+                //    $"[InventoryAdjustment] SearchItemByKeyword locId={locId ?? "null"}, diffQty={diffQty}, keyword={text}");
+
+                //var items = await SearchItemMasterAsync(id, lineNo, text, locId, diffQty, "", cts.Token);
+
+                //if (cts.IsCancellationRequested) return;
+                islotflag = false;
+                var searchParam = new StockTransferSearchParam();
+                searchParam.Kbn = "islot";
+                searchParam.Keyword = text;
+                var request = new RequestData<StockTransferSearchParam, EvangJsonModel>("SaveTransfer");
+                request.Info = searchParam;
+                var result = await this.Post<StockTransferSearchParam, EvangJsonModel, EvangJsonModel, EvangJsonModel>(request);
+                if (result == null || !result.Success)
+                {
+                    var err = result?.ErrorMessage ?? "サーバー応答なし";
+                    System.Diagnostics.Debug.WriteLine($"[InventoryAdjustment] 保存失敗: {err}");
+                    await DisplayAlert("エラー", $"保存に失敗しました。\n{err}", "OK");
+                    return;
+                }
+                foreach (var item in result.SubData)
+                {
+                    switch (item.SubName)
+                    {
+                        case "PH_ISLOT":
+                            if (item == null || item.SubJson == null)
+                                return;
+                            var successNo = item.SubJson;
+                            if (successNo == "1")
+                            {
+                                islotflag = true;
+                            }
+                            break;
+                    }
+                }
+                ApplyItemDetail(islotflag);
+            }
+            catch (OperationCanceledException)
+            {
+            }
+            catch (Exception ex)
+            {
+                if (cts.IsCancellationRequested) return;
+                System.Diagnostics.Debug.WriteLine($"[InventoryAdjustment] 品目検索エラー: {ex}");
+                ApplyItemDetail(false);
+            }
+        }
+
+        // ==========================================
+        // 検索結果を画面へ反映
+        // ==========================================
+        private void ApplyItemDetail(bool isLotItem)
+        {
+            _currentItemCode = _itemEntry?.Text?.Trim();
+            _currentItemIsLot = isLotItem;
 
             if (_lotSectionContainer != null)
             {
-                _lotSectionContainer.IsVisible = matched?.IsLotItem ?? false;
+                _lotSectionContainer.IsVisible = isLotItem;
             }
 
-            if (matched == null || !matched.IsLotItem)
+            if (!isLotItem)
             {
                 _pendingLots.Clear();
+                RefreshPendingLotTable();
+                RefreshBottomPendingTable();
+            }
+            else
+            {
                 RefreshPendingLotTable();
                 RefreshBottomPendingTable();
             }
@@ -355,22 +568,15 @@ namespace EvangPL.Views.InventoryTransferPageDetails
         // ==================== 「+ロットを追加」押下時 ====================
         private async void OnAddLotButtonClicked(object? sender, EventArgs e)
         {
-            var matchedItem = GetMatchedItemMaster();
-            if (matchedItem == null || !matchedItem.IsLotItem)
+            if (!_currentItemIsLot || string.IsNullOrEmpty(_currentItemCode))
             {
                 await DisplayAlert("エラー", "ロット対象の品目を入力してください。", "OK");
                 return;
             }
 
-            var locationName = _locationPicker?.SelectedItem as string;
             var lotNo = _lotEntry?.Text?.Trim();
             var qtyText = _qtyEntry?.Text?.Trim();
 
-            if (string.IsNullOrEmpty(locationName))
-            {
-                await DisplayAlert("エラー", "入庫先ロケーションを選択してください。", "OK");
-                return;
-            }
             if (string.IsNullOrEmpty(lotNo))
             {
                 await DisplayAlert("エラー", "ロット/シリアルを入力またはスキャンしてください。", "OK");
@@ -384,7 +590,7 @@ namespace EvangPL.Views.InventoryTransferPageDetails
 
             _pendingLots.Add(new PendingLotItem
             {
-                ItemCode = matchedItem.ItemCode,
+                ItemCode = _currentItemCode,   
                 LotNo = lotNo,
                 Qty = qty
             });
@@ -591,6 +797,36 @@ namespace EvangPL.Views.InventoryTransferPageDetails
             };
         }
 
+        private async Task GetLocaData(string kbn)
+        {
+            try
+            {
+                var searchParam = new StockTransferSearchParam();
+                searchParam.Kbn = kbn;
+                var request = new RequestData<StockTransferSearchParam, EvangJsonModel>("SaveTransfer");
+                request.Info = searchParam;
+                var resultList = await this.Post<StockTransferSearchParam, EvangJsonModel, EvangJsonModel, EvangJsonModel>(request);
+                if (resultList == null || resultList.SubData == null)
+                    return;
+                foreach (var item in resultList.SubData)
+                {
+                    switch (item.SubName)
+                    {
+                        case "PH_LOCATION":
+                            if (item == null || item.SubJson == null)
+                                return;
+                            localist = BaseUtils.JsonToClass<List<LocationData>>(item.SubJson);
+                            break;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                localist = new List<LocationData>();
+                System.Diagnostics.Debug.WriteLine($"GetLocaData Error: {ex.Message}");
+            }
+        }
+
         // ==================== データモデル ====================
         public class PendingLotItem
         {
@@ -604,6 +840,22 @@ namespace EvangPL.Views.InventoryTransferPageDetails
         {
             public string ItemCode { get; set; } = "";
             public bool IsLotItem { get; set; }
+        }
+
+        public class StockTransferSearchParam : EvangJsonModel
+        {
+            public string Kbn { get; set; } = "";
+            public int Id { get; set; }
+            public string? Keyword { get; set; }
+            public int? FromLocationId { get; set; }
+            public int? ToLocationId { get; set; }
+            public List<PendingLotItem> Lots { get; set; }
+        }
+
+        public class LocationData : EvangJsonModel
+        {
+            public int? id { get; set; }
+            public string? name { get; set; }
         }
     }
 }

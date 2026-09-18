@@ -3,6 +3,8 @@ using EvangSol.Mobibrary.EvangModel;
 using EvangSol.Mobibrary.EvangViewModel;
 using EvangSol.Mobibrary.Utilities.Common;
 using Microsoft.Maui.Controls.Shapes;
+using Microsoft.Maui.Devices.Sensors;
+using System;
 
 namespace EvangPL.Views.InventoryTransfer
 {
@@ -68,24 +70,39 @@ namespace EvangPL.Views.InventoryTransfer
         private int pageSize = 4; // 設計図のスクリーンサイズに合わせて調整
         private int totalPages = 0;
 
+        private CancellationTokenSource? _keywordCts;
+        private SearchParam SearchCondition;
+        private List<LocationData> localist;
+
+        public static bool NeedRefreshAfterSave = false;
+
+        protected override void OnAppearing()
+        {
+            base.OnAppearing();
+
+            if (NeedRefreshAfterSave)
+            {
+                NeedRefreshAfterSave = false;
+
+                _ = GetMockData("data");
+            }
+        }
+
         public InventoryTransfer() : base("strInventoryTransfer", null)
         {
+            SearchCondition = new SearchParam();
             Title = "在庫振替 - 一覧";
             BuildUI();
+            //_ = GetMockData("data");
 
-            Dispatcher.Dispatch(async () =>
-            {
-                await Task.Delay(100);
-                var mockData = GetMockData();
-                ShowData(mockData);
-            });
         }
 
         /// <summary>
         /// UI全体の構築
         /// </summary>
-        private void BuildUI()
+        private async void BuildUI()
         {
+            await GetLocaData("locadata");
             var mainGrid = new Grid
             {
                 RowDefinitions =
@@ -121,6 +138,8 @@ namespace EvangPL.Views.InventoryTransfer
                 BackgroundColor = Color.FromArgb("#eff1f5"),
                 Content = mainGrid
             };
+            await GetMockData("data");
+            //ShowData(allData);
         }
 
         /// <summary>
@@ -148,11 +167,12 @@ namespace EvangPL.Views.InventoryTransfer
             var srcLayout = new VerticalStackLayout { Spacing = 4 };
             srcLayout.Children.Add(new Label { Text = "移動元ロケーション", FontSize = 11, TextColor = Colors.Gray });
             sourceLocationPicker = new Picker { Title = "すべて", BackgroundColor = Colors.Transparent, HeightRequest = 35 };
-            sourceLocationPicker.Items.Add("すべて");
-            sourceLocationPicker.Items.Add("WH1");
-            sourceLocationPicker.Items.Add("WH2");
+            for (int i = 0; i < localist.Count; i++)
+            {
+                sourceLocationPicker.Items.Add(localist[i].name);
+            }
             sourceLocationPicker.SelectedIndex = 0;
-            sourceLocationPicker.SelectedIndexChanged += (sender, e) =>
+            sourceLocationPicker.SelectedIndexChanged += async (sender, e) =>
             {
                 if (sourceLocationPicker.SelectedIndex >= 0)
                 {
@@ -162,6 +182,17 @@ namespace EvangPL.Views.InventoryTransfer
                 {
                     sourceLocationPicker.Title = "移動元を選択";
                 }
+                if (sourceLocationPicker.SelectedIndex != -1)
+                {
+                    string selectedName = sourceLocationPicker.Items[sourceLocationPicker.SelectedIndex];
+                    var loc = localist.FirstOrDefault(l => l.name == selectedName);
+
+                    if (loc != null)
+                    {
+                        SearchCondition.SourceId = loc.id;
+                    }
+                }
+                await GetMockData("data");
             };
             srcLayout.Children.Add(CreateInputBorder(sourceLocationPicker));
             row1.Add(srcLayout, 0, 0);
@@ -170,11 +201,12 @@ namespace EvangPL.Views.InventoryTransfer
             var dstLayout = new VerticalStackLayout { Spacing = 4 };
             dstLayout.Children.Add(new Label { Text = "移動先ロケーション", FontSize = 11, TextColor = Colors.Gray });
             destLocationPicker = new Picker { Title = "すべて", BackgroundColor = Colors.Transparent, HeightRequest = 35 };
-            destLocationPicker.Items.Add("すべて");
-            destLocationPicker.Items.Add("WH1");
-            destLocationPicker.Items.Add("WH2");
+            for (int j = 0; j < localist.Count; j++)
+            {
+                destLocationPicker.Items.Add(localist[j].name);
+            }
             destLocationPicker.SelectedIndex = 0;
-            destLocationPicker.SelectedIndexChanged += (sender, e) =>
+            destLocationPicker.SelectedIndexChanged += async (sender, e) =>
             {
                 if (destLocationPicker.SelectedIndex >= 0)
                 {
@@ -184,6 +216,17 @@ namespace EvangPL.Views.InventoryTransfer
                 {
                     destLocationPicker.Title = "移動先を選択";
                 }
+                if (destLocationPicker.SelectedIndex != -1)
+                {
+                    string selectedName = destLocationPicker.Items[destLocationPicker.SelectedIndex];
+                    var loc = localist.FirstOrDefault(l => l.name == selectedName);
+
+                    if (loc != null)
+                    {
+                        SearchCondition.DestId = loc.id;
+                    }
+                }
+                await GetMockData("data");
             };
             dstLayout.Children.Add(CreateInputBorder(destLocationPicker));
             row1.Add(dstLayout, 1, 0);
@@ -254,6 +297,17 @@ namespace EvangPL.Views.InventoryTransfer
             dateLayout.Children.Add(dateRangeGrid);
             row2.Add(dateLayout, 0, 0);
 
+            // 日付変更時に SearchCondition.DateRange を更新
+            async Task UpdateDateRange()
+            {
+                SearchCondition.DateRangeFrom = startDatePicker.Date.ToString("yyyy/MM/dd");
+                SearchCondition.DateRangeTo = endDatePicker.Date.ToString("yyyy/MM/dd");
+                await GetMockData("data");
+            }
+            startDatePicker.DateSelected += (s, e) => UpdateDateRange();
+            endDatePicker.DateSelected += (s, e) => UpdateDateRange();
+            //UpdateDateRange(); // 初期値セット
+
             // 品目キーワード
             var kwLayout = new VerticalStackLayout { Spacing = 4 };
             kwLayout.Children.Add(new Label { Text = "品目キーワード", FontSize = 11, TextColor = Colors.Gray });
@@ -265,6 +319,23 @@ namespace EvangPL.Views.InventoryTransfer
                 TextColor = Colors.Black,
                 FontSize = 13,
                 PlaceholderColor = Colors.Gray
+            };
+            itemKeywordEntry.TextChanged += async (s, e) =>
+            {
+                SearchCondition.Keyword = e.NewTextValue;
+                _keywordCts?.Cancel();
+                _keywordCts = new CancellationTokenSource();
+                var token = _keywordCts.Token;
+
+                try
+                {
+                    await Task.Delay(1000, token);   // 1000ms
+                    if (token.IsCancellationRequested) return;
+                    await GetMockData("data");
+                }
+                catch (TaskCanceledException)
+                {
+                }
             };
             kwLayout.Children.Add(CreateInputBorder(itemKeywordEntry));
             row2.Add(kwLayout, 1, 0);
@@ -542,40 +613,130 @@ namespace EvangPL.Views.InventoryTransfer
         // モックデータ
         // ==========================================
 
-        private List<TransferRecord> GetMockData()
+        private async Task GetMockData(string kbn)
         {
-            return new List<TransferRecord>
+            try
             {
-                new TransferRecord("TR-0031", "WH1-A-03", "WH2-C-01", 3, "2026-07-06"),
-                new TransferRecord("TR-0032", "WH1-B-02", "WH2-A-05", 5, "2026-07-06"),
-                new TransferRecord("TR-0033", "WH2-A-01", "WH1-C-04", 2, "2026-07-07"),
-                new TransferRecord("TR-0034", "WH1-D-02", "WH2-B-03", 4, "2026-07-07"),
-                new TransferRecord("TR-0035", "WH1-A-01", "WH2-A-01", 1, "2026-07-08"),
-                new TransferRecord("TR-0036", "WH2-C-05", "WH1-B-02", 6, "2026-07-08"),
-                new TransferRecord("TR-0037", "WH1-E-01", "WH2-D-04", 2, "2026-07-09"),
-                new TransferRecord("TR-0038", "WH2-B-03", "WH1-A-05", 3, "2026-07-09")
-            };
+                if (string.IsNullOrEmpty(SearchCondition.DateRangeFrom))
+                {
+                    SearchCondition.DateRangeFrom = startDatePicker.Date.ToString("yyyy/MM/dd");
+                }
+                if (string.IsNullOrEmpty(SearchCondition.DateRangeTo))
+                {
+                    SearchCondition.DateRangeTo = endDatePicker.Date.ToString("yyyy/MM/dd");
+                }
+                if (string.Compare(SearchCondition.DateRangeFrom, SearchCondition.DateRangeTo) > 0)
+                {
+                    await DisplayAlert("エーラ", "対象期間FROMは対象期間TOより大きくすることはできません。", "OK");
+                    return;
+                }
+
+                var searchParam = SearchCondition;
+                searchParam.Kbn = kbn;
+                var request = new RequestData<SearchParam, EvangJsonModel>("GetTransfer");
+                request.Info = searchParam;
+                var resultList = await this.Post<SearchParam, EvangJsonModel, EvangJsonModel, EvangJsonModel>(request);
+                if (resultList == null || resultList.SubData == null)
+                    return;
+                foreach (var item in resultList.SubData)
+                {
+                    switch (item.SubName)
+                    {
+                        case "PH_LOCATION":
+                            if (item == null || item.SubJson == null)
+                                return;
+                            localist = BaseUtils.JsonToClass<List<LocationData>>(item.SubJson);
+                            break;
+                        case "PH_DATA":
+                            if (item == null || item.SubJson == null)
+                                return;
+                            allData = BaseUtils.JsonToClass<List<TransferRecord>>(item.SubJson);
+                            break;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                allData = new List<TransferRecord>();
+                System.Diagnostics.Debug.WriteLine($"GetMockData Error: {ex.Message}");
+            }
+            ShowData(allData);
         }
+
+        private async Task GetLocaData(string kbn)
+        {
+            try
+            {
+                var searchParam = SearchCondition;
+                searchParam.Kbn = kbn;
+                var request = new RequestData<SearchParam, EvangJsonModel>("GetTransfer");
+                request.Info = searchParam;
+                var resultList = await this.Post<SearchParam, EvangJsonModel, EvangJsonModel, EvangJsonModel>(request);
+                if (resultList == null || resultList.SubData == null)
+                    return;
+                foreach (var item in resultList.SubData)
+                {
+                    switch (item.SubName)
+                    {
+                        case "PH_LOCATION":
+                            if (item == null || item.SubJson == null)
+                                return;
+                            localist = BaseUtils.JsonToClass<List<LocationData>>(item.SubJson);
+                            break;
+                        case "PH_DATA":
+                            if (item == null || item.SubJson == null)
+                                return;
+                            allData = BaseUtils.JsonToClass<List<TransferRecord>>(item.SubJson);
+                            break;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                localist = new List<LocationData>();
+                System.Diagnostics.Debug.WriteLine($"GetLocaData Error: {ex.Message}");
+            }
+        }
+
+    }
+
+    public class SearchParam : EvangJsonModel
+    {
+        public string Kbn { get; set; } = "";
+        public int? SourceId { get; set; }
+        public int? DestId { get; set; }
+        public string DateRangeFrom { get; set; } = "";
+        public string DateRangeTo { get; set; } = "";
+        public string Keyword { get; set; } = "";
     }
 
     // ==========================================
     // データモデル
     // ==========================================
-    public class TransferRecord
+    public class TransferRecord : EvangJsonModel
     {
         public string Id { get; set; }
         public string Source { get; set; }
         public string Dest { get; set; }
         public int ItemCount { get; set; }
         public string RegisterDate { get; set; }
+        public int InId { get; set; }
+        public int SourceId { get; set; }
+        public int DestId { get; set; }
 
-        public TransferRecord(string id, string source, string dest, int itemCount, string registerDate)
-        {
-            Id = id;
-            Source = source;
-            Dest = dest;
-            ItemCount = itemCount;
-            RegisterDate = registerDate;
-        }
+        //public TransferRecord(string id, string source, string dest, int itemCount, string registerDate)
+        //{
+        //    Id = id;
+        //    Source = source;
+        //    Dest = dest;
+        //    ItemCount = itemCount;
+        //    RegisterDate = registerDate;
+        //}
+    }
+
+    public class LocationData : EvangJsonModel
+    {
+        public int? id { get; set; }
+        public string? name { get; set; }
     }
 }

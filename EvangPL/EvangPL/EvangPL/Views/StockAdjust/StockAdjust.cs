@@ -663,6 +663,7 @@ namespace EvangPL.Views.StockAdjust
         public int DiffQty { get; set; }
         public string RegisterDate { get; set; } = "";
         public int LocationId { get; set; }
+    
     }
     #endregion
 }
