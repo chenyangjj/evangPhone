@@ -16,6 +16,23 @@ namespace EvangPL.Views.StockIn
     {
         public static SearchCondition? PassedCondition { get; set; }
 
+        // ✅ [追加] 直近で受領処理が完了した伝票IDを記録しておく。
+        //    この伝票については「品目が見つからない」のは想定内（受領済みのため）なので、
+        //    タップ時にAlertを出さず、静かにカードを更新するために使う。
+        private static readonly HashSet<string> _recentlyCompletedOrderIds = new HashSet<string>();
+
+        /// <summary>
+        /// InputDetail（受領画面）側で保存が完了しPopAsyncする直前に呼び出してもらう。
+        /// これにより、一覧側で「品目が見つかりません」の誤解を招くAlertを出さずに済む。
+        /// </summary>
+        public static void MarkOrderAsCompleted(string? orderId)
+        {
+            if (!string.IsNullOrEmpty(orderId))
+            {
+                _recentlyCompletedOrderIds.Add(orderId);
+            }
+        }
+
         // UIコントロールキャッシュ
         private Grid? mainGrid;
         private Grid? paginationGrid;
@@ -457,6 +474,30 @@ namespace EvangPL.Views.StockIn
 
                     try
                     {
+                        // ✅ [追加] 直近でこの伝票の受領が完了済みとマークされているか確認。
+                        //    完了済みの場合、サーバー側で明細が0件になっているのは想定内の状態なので、
+                        //    Alertは出さず、静かにカードを「受領不可」表示へ更新するだけにする。
+                        bool isKnownCompleted = item.OrderId != null && _recentlyCompletedOrderIds.Contains(item.OrderId);
+
+                        if (isKnownCompleted)
+                        {
+                            await MainThread.InvokeOnMainThreadAsync(() =>
+                            {
+                                item.ItemCount = 0;
+                                item.Status = "入庫済み"; // ✅ 必要に応じて表示ステータスを調整
+
+                                var idx = listContainer!.Children.IndexOf(cardFrame);
+                                if (idx >= 0)
+                                {
+                                    // isReceivable=falseになるため、自動的にグレー表示・タップ不可のカードが生成される
+                                    var refreshedCard = CreateCardFrame(item);
+                                    listContainer.Children.RemoveAt(idx);
+                                    listContainer.Children.Insert(idx, refreshedCard);
+                                }
+                            });
+                            return; // ここで終了。Alertも詳細画面遷移も行わない
+                        }
+
                         // ✅ 新增：一覧の ItemCount（検索結果の集計値）は >0 でも、
                         //    実際に詳細画面用のRESTlet（GetStockInDetail）を叩くと
                         //    PO_LINES が0件で返ってくるケースがある（データの整合性ズレ等）。
@@ -534,7 +575,18 @@ namespace EvangPL.Views.StockIn
                     if (subData.SubName == "PO_LINES")
                     {
                         var lines = BaseUtils.JsonToClass<List<EvangPL.Views.InputDetail.InputDetail.PoLineItem>>(subData.SubJson!);
-                        return lines != null && lines.Count > 0;
+
+                        bool has = lines != null && lines.Count > 0;
+
+                        // ✅ [追加] 実データを確認できた結果、明細が「ある」ことが分かった場合は、
+                        //    以前の「完了済み」マークが残っていれば整合性のため解除しておく
+                        //    （例：分割入荷等で再び受領対象数量が発生したケースへの保険）
+                        if (has && orderId != null)
+                        {
+                            _recentlyCompletedOrderIds.Remove(orderId);
+                        }
+
+                        return has;
                     }
                 }
 
