@@ -9,6 +9,8 @@
         public int TotalQty { get; set; }                   // 总数量
         public string Status { get; set; } = "";            // 状态
 
+        public string OutboundType { get; set; } = "SO";
+
         public PickingDetailInfo() { }
 
         public PickingDetailInfo(string orderNo, string customerName, string scheduleDate, int itemCount, int totalQty, string status)
@@ -19,6 +21,11 @@
             ItemCount = itemCount;
             TotalQty = totalQty;
             Status = status;
+        }
+        public PickingDetailInfo(string orderNo, string customerName, string scheduleDate, int itemCount, int totalQty, string status, string outboundType)
+        : this(orderNo, customerName, scheduleDate, itemCount, totalQty, status)
+        {
+            OutboundType = outboundType;
         }
     }
 }
