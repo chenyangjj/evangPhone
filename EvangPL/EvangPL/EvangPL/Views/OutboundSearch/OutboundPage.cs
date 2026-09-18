@@ -8,6 +8,8 @@ using Microsoft.Maui.Controls.Shapes;
 using Microsoft.Maui.Platform;
 using System.Diagnostics.Metrics;
 using System.Text.Json;
+// [追加] 検索条件を次画面(StockOut)へ渡すために名前空間を参照
+using EvangPL.Views.StockOut;
 
 namespace EvangPL.Views.OutboundSearch
 {
@@ -50,6 +52,17 @@ namespace EvangPL.Views.OutboundSearch
         private Button? searchButton;           // 検索ボタン
         private Grid? filterFrame;
         private Grid? mainGrid;
+
+        // ==========================================
+        // [追加] Picker表示文言 → RESTletへ渡すコード値のマッピング
+        // 　　　　（NetSuite側の分岐キーとして使用。並び順はPickerのItems.Add順と一致させること）
+        // ==========================================
+        private static readonly string[] OutboundTypeCodes = { "SO", "RTV", "TR" };
+        // SO  = 受注出荷(SO Item Fulfillment)
+        // RTV = 仕入先返品出荷(Return to Vendor)
+        // TR  = 振替出荷(Transfer Shipment)
+
+        private static readonly string[] StatusCodes = { "未出荷", "一部出荷" };
 
         public OutboundSearch() : base("strOutboundSearch")
         {
@@ -118,16 +131,16 @@ namespace EvangPL.Views.OutboundSearch
             // [修正] PickerをBorderで包んで角丸・下線なしにする
             outboundTypePicker = new Picker
             {
-                Title = "受注出荷(SO Item Fulfillment)",
-                BackgroundColor = Colors.Transparent, // 背景を透明に
+                BackgroundColor = Colors.Transparent,
                 TextColor = Colors.Black,
                 HeightRequest = 40,
                 FontSize = 12,
-                Margin = new Thickness(10, 0) // 内側の余白
+                Margin = new Thickness(10, 0)
             };
             outboundTypePicker.Items.Add("受注出荷(SO Item Fulfillment)");
             outboundTypePicker.Items.Add("仕入先返品出荷(Return to Vendor)");
             outboundTypePicker.Items.Add("振替出荷(Transfer Shipment)");
+            outboundTypePicker.SelectedIndex = 0;
 
             // 選択時にタイトルを更新するロジック
             outboundTypePicker.SelectedIndexChanged += (sender, e) =>
@@ -174,8 +187,7 @@ namespace EvangPL.Views.OutboundSearch
             // [修正] PickerをBorderで包む
             statusPicker = new Picker
             {
-                Title = "未出荷",
-                BackgroundColor = Colors.Transparent, // 背景を透明に
+                BackgroundColor = Colors.Transparent,
                 TextColor = Colors.Black,
                 HeightRequest = 40,
                 FontSize = 12,
@@ -183,6 +195,7 @@ namespace EvangPL.Views.OutboundSearch
             };
             statusPicker.Items.Add("未出荷");
             statusPicker.Items.Add("一部出荷");
+            statusPicker.SelectedIndex = 0;
 
             // 選択時にタイトルを更新するロジック
             statusPicker.SelectedIndexChanged += (sender, e) =>
@@ -299,14 +312,30 @@ namespace EvangPL.Views.OutboundSearch
 
         #region OnbtnSearchClicked
         /// <summary>
-        /// TODO: 検索ロジック
+        /// 検索ロジック：画面上の検索条件を組み立てて、出荷処理-一覧(StockOut)画面へ渡す
         /// </summary>
         private async Task OnbtnSearchClicked(object sender, EventArgs e)
         {
-            //await Task.CompletedTask;
             string viewName = "StockOut";
             try
             {
+                // [追加] 画面上の入力値から検索条件オブジェクトを組み立てる
+                var condition = new StockOutPageInfo
+                {
+                    OutboundType = (outboundTypePicker?.SelectedIndex ?? 0) >= 0
+                        && (outboundTypePicker?.SelectedIndex ?? -1) < OutboundTypeCodes.Length
+                            ? OutboundTypeCodes[outboundTypePicker!.SelectedIndex]
+                            : OutboundTypeCodes[0],
+                    Status = (statusPicker?.SelectedIndex ?? -1) >= 0
+                        && (statusPicker?.SelectedIndex ?? -1) < StatusCodes.Length
+                            ? StatusCodes[statusPicker!.SelectedIndex]
+                            : "",
+                    TargetDate = datePicker?.Date.ToString("yyyy-MM-dd") ?? "",
+                    Customer = keywordEntry?.Text?.Trim() ?? "",
+                    Keyword = keywordEntry?.Text?.Trim() ?? "",
+                    PageIndex = 1
+                };
+
                 // 和菜单完全一致，用框架工厂，禁止手动 new StockIn()
                 var pageObj = ClassMapping.CreatePageInstance(viewName);
                 if (pageObj == null)
@@ -319,10 +348,11 @@ namespace EvangPL.Views.OutboundSearch
                 {
                     vm.IsFromMenu = true;
 
-                    // =========将来传递检索条件在这里，第二个参数传实体========
-                    // SearchCondition cond = new SearchCondition();
-                    // cond.Keyword = keywordEntry.Text;
-                    // await Navigation.PushAsync(vm, cond);
+                    // [追加] 検索条件をStockOut画面へ設定（設定後、内部で自動的に検索がかかる）
+                    if (vm is EvangPL.Views.StockOut.StockOut stockOutVm)
+                    {
+                        stockOutVm.SetSearchCondition(condition);
+                    }
 
                     await Navigation.PushAsync(vm);
                 }
