@@ -13,6 +13,7 @@ namespace EvangPL.Views.StockOut
     /// <summary>
     /// 出荷処理 - 検索結果画面 【文件名 StockOut.cs】
     /// UI样式参照截图：分页栏置顶、单据卡片、日文标签、状态色
+    /// RESTlet①（一覧検索専用）を呼び出し、出荷区分（受注/仕入先返品/振替）を横断した検索結果を表示する
     /// </summary>
     public class StockOut : EvangContentVM
     {
@@ -29,7 +30,10 @@ namespace EvangPL.Views.StockOut
         private int _totalPage = 1;
         private const int PageSize = 4; // 一页展示4条，和截图效果一致
 
-        // 查询条件实体
+        // [追加] 本番/開発切替：true にすると内蔵のモックデータで動作確認できる
+        private const bool UseMockData = false;
+
+        // 查询条件实体（画面5から渡される）
         private StockOutPageInfo SearchCondition;
 
         public StockOut() : base("strStockOutSearch")
@@ -37,6 +41,18 @@ namespace EvangPL.Views.StockOut
             SearchCondition = new StockOutPageInfo();
             Title = "出荷処理-検索結果";
             BuildUI();
+            // [変更] 検索条件は OutboundSearch から SetSearchCondition() 経由で渡される想定のため、
+            //         このコンストラクタ単体でのロードは行わない（単独デバッグ時は SetSearchCondition を呼ぶこと）
+        }
+
+        // ==========================================
+        // [追加] OutboundSearch（画面5）から検索条件を受け取るエントリポイント
+        // 　　　　設定と同時に検索を実行する
+        // ==========================================
+        public void SetSearchCondition(StockOutPageInfo condition)
+        {
+            SearchCondition = condition ?? new StockOutPageInfo();
+            _currentPage = SearchCondition.PageIndex > 0 ? SearchCondition.PageIndex : 1;
             _ = LoadStockOutData();
         }
 
@@ -144,87 +160,52 @@ namespace EvangPL.Views.StockOut
         }
 
         /// <summary>
-        /// 加载出荷データ（内置假数据和截图4条记录保持一致）
+        /// 出荷対象データを取得する。
+        /// RESTlet①（出荷処理-一覧検索専用）へ SearchCondition を渡し、
+        /// 受注出荷/仕入先返品出荷/振替出荷を横断した検索結果を受け取る。
         /// </summary>
         private async Task LoadStockOutData()
         {
             try
             {
                 CollectSearchCondition();
-                bool useMockData = true; // true=假数据调试，正式对接后端关闭
 
-                List<StockOutItem> dataList = new List<StockOutItem>();
+                List<StockOutItem> dataList;
 
-                if (useMockData)
+                if (UseMockData)
                 {
-                    // 假数据【完全匹配截图内4条样本】
-                    dataList.Add(new StockOutItem
-                    {
-                        OrderNo = "SO-2026-0987",
-                        Status = "未出荷",
-                        CustomerName = "山田工業(株)",
-                        ScheduleDate = "2026-07-08",
-                        ItemCount = 4,
-                        TotalQty = 210
-                    });
-                    dataList.Add(new StockOutItem
-                    {
-                        OrderNo = "SO-2026-0988",
-                        Status = "一部出荷",
-                        CustomerName = "中央物流サービス(株)",
-                        ScheduleDate = "2026-07-08",
-                        ItemCount = 2,
-                        TotalQty = 60
-                    });
-                    dataList.Add(new StockOutItem
-                    {
-                        OrderNo = "TR-0021",
-                        Status = "未出庫",
-                        CustomerName = "移動元:WH1 → 移動先:WH2",
-                        ScheduleDate = "2026-07-07",
-                        ItemCount = 6,
-                        TotalQty = 300
-                    });
-                    dataList.Add(new StockOutItem
-                    {
-                        OrderNo = "SO-2026-0989",
-                        Status = "一部出荷",
-                        CustomerName = "松本電機(株)",
-                        ScheduleDate = "2026-07-09",
-                        ItemCount = 3,
-                        TotalQty = 95
-                    });
-
-                    // 分页计算
-                    int totalRecordCount = dataList.Count;
-                    _totalPage = (int)Math.Ceiling((double)totalRecordCount / PageSize);
-
-                    if (_currentPage > _totalPage && _totalPage > 0)
-                        _currentPage = _totalPage;
-
-                    var pagedData = dataList
-                        .Skip((_currentPage - 1) * PageSize)
-                        .Take(PageSize)
-                        .ToList();
-                    dataList = pagedData;
+                    dataList = BuildMockData(out _totalPage);
                 }
                 else
                 {
-                    //====================后端接口区域（后续启用）====================
-                    /*
+                    //====================RESTlet①呼び出し====================
                     var request = new RequestData<StockOutPageInfo, EvangJsonModel>("GetStockOutList");
                     request.Info = SearchCondition;
-                    var apiResult = await Post<StockOutPageInfo, EvangJsonModel, StockOutItem, EvangJsonModel>(request);
-                    if (apiResult == null || apiResult.SubData[0]?.SubJson == null)
+                    var apiResult = await this.Post<StockOutPageInfo, EvangJsonModel, EvangJsonModel, EvangJsonModel>(request);
+
+                    if (apiResult == null || apiResult.SubData == null || apiResult.SubData.Count == 0
+                        || apiResult.SubData[0]?.SubJson == null)
                     {
                         ShowEmptyTip();
                         return;
                     }
+
                     string json = apiResult.SubData[0].SubJson;
-                    var jsonDoc = JsonDocument.Parse(json);
+                    using var jsonDoc = JsonDocument.Parse(json);
                     JsonElement rootEle = jsonDoc.RootElement;
+
+                    // RESTlet側でエラーが起きた場合、Errorプロパティを返す取り決め
+                    if (rootEle.TryGetProperty("Error", out JsonElement errEle) && errEle.ValueKind == JsonValueKind.String)
+                    {
+                        await DisplayAlert("エラー", errEle.GetString() ?? "検索に失敗しました", "OK");
+                        ShowErrorTip();
+                        return;
+                    }
+
                     _totalPage = GetJsonIntValue(rootEle, "TotalPage");
-                    dataList.Clear();
+                    if (_totalPage <= 0) _totalPage = 1;
+
+                    dataList = new List<StockOutItem>();
                     if (rootEle.TryGetProperty("List", out JsonElement listEle) && listEle.GetArrayLength() > 0)
                     {
                         foreach (JsonElement itemEle in listEle.EnumerateArray())
@@ -236,14 +217,16 @@ namespace EvangPL.Views.StockOut
                                 CustomerName = GetJsonStringValue(itemEle, "CustomerName"),
                                 ScheduleDate = GetJsonStringValue(itemEle, "ScheduleDate"),
                                 ItemCount = GetJsonIntValue(itemEle, "ItemCount"),
-                                TotalQty = GetJsonIntValue(itemEle, "TotalQty")
+                                TotalQty = GetJsonIntValue(itemEle, "TotalQty"),
+                                OutboundType = GetJsonStringValue(itemEle, "OutboundType")
                             };
                             dataList.Add(item);
                         }
                     }
-                    jsonDoc.Dispose();
-                    */
                 }
+
+                if (_currentPage > _totalPage && _totalPage > 0)
+                    _currentPage = _totalPage;
 
                 RefreshPageUI();
                 RenderCardList(dataList);
@@ -252,6 +235,29 @@ namespace EvangPL.Views.StockOut
             {
                 ShowErrorTip();
             }
+        }
+
+        /// <summary>
+        /// [開発用] UseMockData = true の時のみ使用する内蔵データ（截图4条样本と一致）
+        /// </summary>
+        private List<StockOutItem> BuildMockData(out int totalPage)
+        {
+            var dataList = new List<StockOutItem>
+            {
+                new StockOutItem { OrderNo = "SO-2026-0987", Status = "未出荷", CustomerName = "山田工業(株)", ScheduleDate = "2026-07-08", ItemCount = 4, TotalQty = 210, OutboundType = "SO" },
+                new StockOutItem { OrderNo = "SO-2026-0988", Status = "一部出荷", CustomerName = "中央物流サービス(株)", ScheduleDate = "2026-07-08", ItemCount = 2, TotalQty = 60, OutboundType = "SO" },
+                new StockOutItem { OrderNo = "TR-0021", Status = "未出庫", CustomerName = "移動元:WH1 → 移動先:WH2", ScheduleDate = "2026-07-07", ItemCount = 6, TotalQty = 300, OutboundType = "TR" },
+                new StockOutItem { OrderNo = "SO-2026-0989", Status = "一部出荷", CustomerName = "松本電機(株)", ScheduleDate = "2026-07-09", ItemCount = 3, TotalQty = 95, OutboundType = "SO" }
+            };
+
+            int totalRecordCount = dataList.Count;
+            totalPage = (int)Math.Ceiling((double)totalRecordCount / PageSize);
+            if (totalPage <= 0) totalPage = 1;
+
+            return dataList
+                .Skip((_currentPage - 1) * PageSize)
+                .Take(PageSize)
+                .ToList();
         }
 
         private void RefreshPageUI()
@@ -430,7 +436,9 @@ namespace EvangPL.Views.StockOut
                             ScheduleDate = item.ScheduleDate,
                             ItemCount = item.ItemCount,
                             TotalQty = item.TotalQty,
-                            Status = item.Status
+                            Status = item.Status,
+                            // [追加] 出荷区分を詳細画面へ引き継ぐ（PickingDetailInfoにOutboundTypeプロパティの追加が必要）
+                            OutboundType = item.OutboundType
                         };
 
                         // ✅ 创建详情页实例并传入数据
@@ -524,11 +532,13 @@ namespace EvangPL.Views.StockOut
     #region 出荷用Model
     public class StockOutPageInfo : EvangJsonModel
     {
+        // [追加] 出荷区分コード（"SO" / "RTV" / "TR"）。RESTlet①が分岐に使用する
+        public string OutboundType { get; set; } = "SO";
         public string Keyword { get; set; } = "";
         public string Status { get; set; } = "";
         public string TargetDate { get; set; } = "";
         public string Customer { get; set; } = "";
-        public int PageIndex { get; set; }
+        public int PageIndex { get; set; } = 1;
         public int PageSize { get; set; }
     }
 
@@ -546,6 +556,8 @@ namespace EvangPL.Views.StockOut
         public int ItemCount { get; set; }
         /// <summary>総数量</summary>
         public int TotalQty { get; set; }
+        /// <summary>[追加] 出荷区分コード（"SO" / "RTV" / "TR"）。詳細画面(RESTlet②)へ引き継ぐ</summary>
+        public string OutboundType { get; set; } = "SO";
     }
 
     public class StockOutApiWrap
