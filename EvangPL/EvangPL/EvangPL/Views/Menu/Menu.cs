@@ -336,5 +336,8 @@ public class Menu : EvangContentVM
         LocalMemory.restlets.Add("GetStockInDetail", "https://9323639-sb1.restlets.api.netsuite.com/app/site/hosting/restlet.nl?script=2061&deploy=1");
         LocalMemory.restlets.Add("SaveStockIn", "https://9323639-sb1.restlets.api.netsuite.com/app/site/hosting/restlet.nl?script=2061&deploy=1");
         LocalMemory.restlets.Add("GetOrderList", "https://9323639-sb1.restlets.api.netsuite.com/app/site/hosting/restlet.nl?script=2056&deploy=1");
+        
+        LocalMemory.restlets.Add("GetStockOutList", "https://9323639-sb1.restlets.api.netsuite.com/app/site/hosting/restlet.nl?script=2069&deploy=1");
+        LocalMemory.restlets.Add("GetPickingDetail", "https://9323639-sb1.restlets.api.netsuite.com/app/site/hosting/restlet.nl?script=2070&deploy=1");
     }
 }
