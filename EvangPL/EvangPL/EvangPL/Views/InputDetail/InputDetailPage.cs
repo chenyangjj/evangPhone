@@ -43,6 +43,23 @@ namespace EvangPL.Views.InputDetail
         //    ③入庫先ロケーション候補
         private List<LocationItem> _locationList = new List<LocationItem>();
 
+        // ✅ [追加] 会計プリファレンス「受領書での超過を許可」(Allow Overage in Receipts / OVERRECEIPTS)。
+        //    trueの場合、入庫数量が残数量(remainingQty)を超えていてもエラーにしない。
+        //    RESTletのSEARCH結果（SubData: "PREFERENCES"）から取得する。取得できない場合は安全側(false)。
+        private bool _allowOverReceipt = false;
+
+        // ✅ [追加] ロット/シリアル入力が必須となる品目タイプ（NetSuiteのitemtype値）。
+        //    ここに含まれない品目タイプ（非在庫品目、非在庫費用/値引き、通常在庫品目(数量のみ管理)、
+        //    アセンブリ等）を選択した場合は「ロット / シリアル」欄を編集不可にする。
+        //    ※ ロット管理アセンブリ/シリアル管理アセンブリを扱う場合は下記2件のコメントを外してください。
+        private static readonly HashSet<string> LotOrSerialItemTypes = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "LotNumberedInventoryItem",   // ロット管理在庫品目
+            "SerializedInventoryItem",    // シリアル管理在庫品目
+            // "LotNumberedAssemblyItem",    // ロット管理アセンブリ（必要な場合はコメント解除）
+            // "SerializedAssemblyItem",     // シリアル管理アセンブリ（必要な場合はコメント解除）
+        };
+
         // ✅ 修正：「前明細/次明細」のページングを廃止。
         //    代わりに、ヘッダー上部の「未受領PO明細」テーブルで行をタップして選択する方式に変更。
         //    選択されていない（null）間は、明細登録エリアと登録済みロット表は非表示（空白）にする。
@@ -65,6 +82,7 @@ namespace EvangPL.Views.InputDetail
         // ✅ 入力コントロール（Picker/Entry）の統一スタイル用定数
         private static readonly Color InputBorderColor = Color.FromArgb("#cdd2dc");
         private static readonly Color InputBackgroundColor = Colors.White;
+        private static readonly Color InputDisabledBackgroundColor = Color.FromArgb("#eceef1");
         private const int InputCornerRadius = 6;
 
         // ✅ 選択中の行をハイライトする背景色
@@ -108,7 +126,7 @@ namespace EvangPL.Views.InputDetail
             await BuildCompleteUI();
         }
 
-        // ✅ 从后端API加载数据（PO头信息 / PO未入库明细行 / 入库实绩 / ロケーション候補）
+        // ✅ 从后端API加载数据（PO头信息 / PO未入库明细行 / 入库实绩 / ロケーション候補 / 会計プリファレンス）
         private async Task LoadDataFromApi()
         {
             if (string.IsNullOrEmpty(_orderId))
@@ -184,7 +202,7 @@ namespace EvangPL.Views.InputDetail
                     }
                 }
 
-                System.Diagnostics.Debug.WriteLine($"LoadDataFromApi: データ読み込み成功 - 未入庫明細{_poLines.Count}件 / 入庫実績{_receiptHistory.Count}件 / ロケーション{_locationList.Count}件");
+                System.Diagnostics.Debug.WriteLine($"LoadDataFromApi: データ読み込み成功 - 未入庫明細{_poLines.Count}件 / 入庫実績{_receiptHistory.Count}件 / ロケーション{_locationList.Count}件 / 超過受領許可={_allowOverReceipt}");
             }
             catch (Exception ex)
             {
@@ -198,12 +216,13 @@ namespace EvangPL.Views.InputDetail
             }
         }
 
-        // ✅ PO_LINES / RECEIPT_HISTORY / LOCATION_LIST の3ブロックをそれぞれ独立してパースする
+        // ✅ PO_LINES / RECEIPT_HISTORY / LOCATION_LIST / PREFERENCES の4ブロックをそれぞれ独立してパースする
         private void ParseSearchResult(ResponseData<EvangJsonModel, EvangJsonModel> result)
         {
             _poLines.Clear();
             _receiptHistory.Clear();
             _locationList.Clear();
+            _allowOverReceipt = false; // ✅ [追加] 毎回リセット（取得できなければ安全側=false のまま）
 
             if (result.SubData == null || result.SubData.Count == 0)
                 return;
@@ -227,6 +246,14 @@ namespace EvangPL.Views.InputDetail
                         System.Diagnostics.Debug.WriteLine($"ParseSearchResult: LOCATION_LIST 受信JSON = {subData.SubJson}");
                         _locationList = BaseUtils.JsonToClass<List<LocationItem>>(subData.SubJson!) ?? new List<LocationItem>();
                         System.Diagnostics.Debug.WriteLine($"ParseSearchResult: LOCATION_LIST 解析成功 - {_locationList.Count}件");
+                    }
+                    // ✅ [追加] 会計プリファレンス「受領書での超過を許可」(OVERRECEIPTS)。
+                    //    RESTlet側で新たに追加してもらうSubData（詳細はRESTlet側の対応が必要）。
+                    else if (subData.SubName == "PREFERENCES")
+                    {
+                        var pref = BaseUtils.JsonToClass<PreferenceInfo>(subData.SubJson!);
+                        _allowOverReceipt = pref?.AllowOverReceipt ?? false;
+                        System.Diagnostics.Debug.WriteLine($"ParseSearchResult: PREFERENCES 解析成功 - AllowOverReceipt={_allowOverReceipt}");
                     }
                 }
                 catch (Exception ex)
@@ -497,7 +524,8 @@ namespace EvangPL.Views.InputDetail
         }
 
         // ✅ Picker / Entry を統一スタイルの Border で包むヘルパー
-        private Border WrapInputControl(View control, bool showDropdownArrow = false)
+        //    disabled=true の場合、枠と背景をグレーアウトして「編集不可」を視覚的に示す
+        private Border WrapInputControl(View control, bool showDropdownArrow = false, bool disabled = false)
         {
             View content = control;
 
@@ -532,13 +560,26 @@ namespace EvangPL.Views.InputDetail
                 Stroke = InputBorderColor,
                 StrokeThickness = 1,
                 StrokeShape = new RoundRectangle { CornerRadius = InputCornerRadius },
-                BackgroundColor = InputBackgroundColor,
+                BackgroundColor = disabled ? InputDisabledBackgroundColor : InputBackgroundColor,
                 Padding = new Thickness(8, 0),
-                Content = content
+                Content = content,
+                Opacity = disabled ? 0.7 : 1.0
             };
         }
 
         // ==================== 明細登録エリア ====================
+
+        // ✅ [追加] 選択中の品目がロット/シリアル入力必須かどうかを判定する
+        private static bool RequiresLotOrSerial(PoLineItem? item)
+        {
+            if (item == null || string.IsNullOrEmpty(item.itemType))
+            {
+                // itemType が取得できていない場合は、既存動作を壊さないよう「必須」扱いにしておく
+                // （RESTlet側でitemtypeを返すよう対応した後は、この分岐に入らなくなる想定）
+                return true;
+            }
+            return LotOrSerialItemTypes.Contains(item.itemType);
+        }
 
         // ✅ 修正：戻り値を View に変更。
         //    品目が未選択（_selectedPoLine == null）の場合は、明細登録エリアと登録済みロット表を
@@ -551,6 +592,11 @@ namespace EvangPL.Views.InputDetail
             }
 
             var currentItem = _selectedPoLine;
+            // ✅ [追加] この品目がロット/シリアル管理対象かどうか
+            bool requiresLot = RequiresLotOrSerial(currentItem);
+            // ✅ [追加] 発注入庫(PO Item Receipt)の場合のみ、PO明細行が持つロケーション/残数量を
+            //    ロケーション欄・数量欄に自動セットする（振替入庫/返品入庫では従来どおり空欄のまま）。
+            bool isPurchaseOrderReceipt = _detailInfo?.InboundType != null && _detailInfo.InboundType.IndexOf("発注") >= 0;
 
             var border = new Border
             {
@@ -576,34 +622,77 @@ namespace EvangPL.Views.InputDetail
                 .Where(n => !string.IsNullOrEmpty(n))
                 .ToList();
 
+            // ✅ [デバッグ用] ロケーション一覧が空の場合はここで気づけるようにログを残す
+            System.Diagnostics.Debug.WriteLine($"BuildDetailInputArea: locationNames件数={locationNames.Count}, isPurchaseOrderReceipt={isPurchaseOrderReceipt}, currentItem.locationName='{currentItem?.locationName}'");
+
+            // ✅ [修正] Picker の SelectedIndex を ItemsSource より先に設定すると、MAUIのPickerで
+            //    選択が反映されないケースがあるため、まず ItemsSource を設定してからオブジェクト生成後に
+            //    SelectedItem（文字列そのもの）で選択する方式に変更。SelectedIndexより確実。
             _locationPicker = new Picker
             {
                 Title = "選択",
-                SelectedIndex = locationNames.Count > 0 ? 0 : -1,
                 BackgroundColor = Colors.Transparent,
                 ItemsSource = locationNames
             };
+
+            // ✅ [変更] 発注入庫の場合、PO明細行が持つロケーション名と一致するものを初期選択にする。
+            //    見つからない場合（振替/返品入庫、またはPO側にロケーション未設定など）は
+            //    従来どおり先頭にフォールバックする（候補が1件も無い場合は未選択のまま）。
+            if (isPurchaseOrderReceipt && currentItem != null && !string.IsNullOrEmpty(currentItem.locationName)
+                && locationNames.Contains(currentItem.locationName))
+            {
+                _locationPicker.SelectedItem = currentItem.locationName;
+            }
+            else if (locationNames.Count > 0)
+            {
+                _locationPicker.SelectedIndex = 0;
+            }
             locRow.Add(WrapInputControl(_locationPicker, showDropdownArrow: true), 0, 1);
             locRow.Add(BuildBarcodeIcon(), 1, 1);
             layout.Children.Add(locRow);
 
-            layout.Children.Add(new Label { Text = "ロット / シリアル (スキャン可)", FontSize = 12, TextColor = Colors.Gray });
+            // ✅ [変更] ロット/シリアル欄のラベル：品目タイプに応じて注記を追加
+            layout.Children.Add(new Label
+            {
+                Text = requiresLot ? "ロット / シリアル (スキャン可)" : "ロット / シリアル",
+                FontSize = 12,
+                TextColor = requiresLot ? Colors.Gray : Color.FromArgb("#a3a9b3")
+            });
 
             var lotRow = new Grid
             {
                 ColumnDefinitions = { new ColumnDefinition { Width = GridLength.Star }, new ColumnDefinition { Width = 50 } }
             };
             lotRow.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            _lotEntry = new Entry { Placeholder = "ロット/シリアルをスキャンまたは入力", BackgroundColor = Colors.Transparent };
-            lotRow.Add(WrapInputControl(_lotEntry), 0, 1);
-            lotRow.Add(BuildBarcodeIcon(), 1, 1);
+
+            // ✅ [変更] requiresLot=false の場合は Entry / バーコードアイコンを両方とも編集不可にする
+            _lotEntry = new Entry
+            {
+                Placeholder = requiresLot ? "ロット/シリアルをスキャンまたは入力" : "入力不要（管理対象外の品目）",
+                BackgroundColor = Colors.Transparent,
+                IsEnabled = requiresLot
+            };
+            lotRow.Add(WrapInputControl(_lotEntry, disabled: !requiresLot), 0, 1);
+
+            var lotBarcodeIcon = BuildBarcodeIcon();
+            lotBarcodeIcon.IsEnabled = requiresLot;
+            lotBarcodeIcon.Opacity = requiresLot ? 1.0 : 0.5;
+            lotRow.Add(lotBarcodeIcon, 1, 1);
             layout.Children.Add(lotRow);
 
             var qtyRow = new Grid
             {
                 ColumnDefinitions = { new ColumnDefinition { Width = GridLength.Star }, new ColumnDefinition { Width = 60 } }
             };
-            _qtyEntry = new Entry { Placeholder = "数量を入力", Keyboard = Keyboard.Numeric, BackgroundColor = Colors.Transparent };
+            // ✅ [変更] 発注入庫の場合、PO明細行の残数量(remainingQty)を数量欄の初期値としてセットする。
+            //    ユーザーはそのまま使うことも、必要に応じて手動で変更することもできる。
+            _qtyEntry = new Entry
+            {
+                Placeholder = "数量を入力",
+                Keyboard = Keyboard.Numeric,
+                BackgroundColor = Colors.Transparent,
+                Text = (isPurchaseOrderReceipt && currentItem != null) ? currentItem.remainingQty.ToString() : ""
+            };
             qtyRow.Add(WrapInputControl(_qtyEntry), 0, 0);
             qtyRow.Add(new Label { Text = "個", VerticalOptions = LayoutOptions.Center, HorizontalTextAlignment = TextAlignment.Center }, 1, 0);
             layout.Children.Add(new Label { Text = "入庫数量", FontSize = 12, TextColor = Colors.Gray });
@@ -639,8 +728,11 @@ namespace EvangPL.Views.InputDetail
                 return;
             }
 
+            // ✅ [追加] この品目がロット/シリアル管理対象かどうか
+            bool requiresLot = RequiresLotOrSerial(currentItem);
+
             var selectedLocationName = _locationPicker?.SelectedItem as string;
-            var lotNo = _lotEntry?.Text?.Trim();
+            var lotNo = _lotEntry?.Text?.Trim() ?? "";
             var qtyText = _qtyEntry?.Text?.Trim();
 
             if (string.IsNullOrEmpty(selectedLocationName))
@@ -648,20 +740,45 @@ namespace EvangPL.Views.InputDetail
                 await DisplayAlert("エラー", "入庫先ロケーションを選択してください。", "OK");
                 return;
             }
-            if (string.IsNullOrEmpty(lotNo))
+
+            // ✅ [変更] ロット/シリアル管理対象の品目のみ、ロット/シリアル未入力をエラーにする。
+            //    管理対象外の品目（非在庫品目/値引き/通常在庫品目/アセンブリ等）は空のまま保存してよい。
+            if (requiresLot && string.IsNullOrEmpty(lotNo))
             {
                 await DisplayAlert("エラー", "ロット/シリアルを入力またはスキャンしてください。", "OK");
                 return;
             }
+            if (!requiresLot)
+            {
+                // 念のため：編集不可のはずだが、万一値が入っていても管理対象外品目には送らない
+                lotNo = "";
+            }
+
             if (!int.TryParse(qtyText, out int qty) || qty <= 0)
             {
                 await DisplayAlert("エラー", "入庫数量を正しく入力してください。", "OK");
                 return;
             }
-            if (qty > currentItem.remainingQty)
+
+            // ✅ [変更] 数量チェック：
+            //    ①同一品目について、既に_pendingLotsに積んである数量も合算したうえで残数量と比較する
+            //      （1回の入力だけでなく、複数回「+ロットを追加」した合計が残数量を超えないようにする）
+            //    ②会計プリファレンス「受領書での超過を許可」(OVERRECEIPTS)がtrueの場合はこのチェックをスキップする
+            if (!_allowOverReceipt)
             {
-                await DisplayAlert("エラー", $"入庫数量が残数量（{currentItem.remainingQty}個）を超えています。", "OK");
-                return;
+                var alreadyPendingQty = _pendingLots
+                    .Where(p => p.ItemId == currentItem.itemId)
+                    .Sum(p => p.Qty);
+                var totalQty = alreadyPendingQty + qty;
+
+                if (totalQty > currentItem.remainingQty)
+                {
+                    string msg = alreadyPendingQty > 0
+                        ? $"入庫数量の合計（既存{alreadyPendingQty}個＋今回{qty}個＝{totalQty}個）が残数量（{currentItem.remainingQty}個）を超えています。"
+                        : $"入庫数量が残数量（{currentItem.remainingQty}個）を超えています。";
+                    await DisplayAlert("エラー", msg, "OK");
+                    return;
+                }
             }
 
             var matchedLocation = _locationList.FirstOrDefault(l => l.Name == selectedLocationName);
@@ -803,7 +920,9 @@ namespace EvangPL.Views.InputDetail
                 {
                     tableGrid.Add(new Label { Text = item.ItemCode, FontSize = 11, Padding = new Thickness(4) }, col++, dataRowIndex);
                 }
-                tableGrid.Add(new Label { Text = item.LotNo, FontSize = 11, Padding = new Thickness(4) }, col++, dataRowIndex);
+                // ✅ ロット未入力（管理対象外品目）の場合は "-" を表示
+                var lotDisplayText = string.IsNullOrEmpty(item.LotNo) ? "-" : item.LotNo;
+                tableGrid.Add(new Label { Text = lotDisplayText, FontSize = 11, Padding = new Thickness(4) }, col++, dataRowIndex);
                 tableGrid.Add(new Label { Text = $"{item.Qty}個", FontSize = 11, Padding = new Thickness(4) }, col++, dataRowIndex);
 
                 var deleteLabel = new Label
@@ -832,7 +951,6 @@ namespace EvangPL.Views.InputDetail
         }
 
         // ✅ 入力中の _pendingLots（全品目分）をまとめてRESTletへ送る。ActionType="SAVE" を明示
-        // ✅ 入力中の _pendingLots（全品目分）をまとめてRESTletへ送る。ActionType="SAVE" を明示
         private async void OnSaveButtonClicked(object sender, EventArgs e)
         {
             try
@@ -849,6 +967,37 @@ namespace EvangPL.Views.InputDetail
                     await MainThread.InvokeOnMainThreadAsync(() =>
                         DisplayAlert("エラー", "登録する明細がありません。「+ロットを追加」で入力してください。", "OK"));
                     return;
+                }
+
+                // ✅ [追加] 保存直前の最終防衛ライン：品目ごとに _pendingLots の合計数量が
+                //    残数量(remainingQty)を超えていないか再チェックする（超過許可がfalseの場合のみ）。
+                //    通常は「+ロットを追加」時点でチェック済みだが、
+                //    ・PO明細の残数量がAPI再取得等で変わっていた
+                //    ・将来的な実装変更で他の経路から_pendingLotsに追加された
+                //    といったケースに備えた保険的チェック。
+                if (!_allowOverReceipt)
+                {
+                    var overLimitGroups = _pendingLots
+                        .GroupBy(p => p.ItemId)
+                        .Select(g => new
+                        {
+                            ItemId = g.Key,
+                            ItemCode = g.First().ItemCode,
+                            TotalQty = g.Sum(x => x.Qty),
+                            RemainingQty = _poLines.FirstOrDefault(l => l.itemId == g.Key)?.remainingQty
+                        })
+                        .Where(x => x.RemainingQty.HasValue && x.TotalQty > x.RemainingQty.Value)
+                        .ToList();
+
+                    if (overLimitGroups.Count > 0)
+                    {
+                        var firstOver = overLimitGroups.First();
+                        await MainThread.InvokeOnMainThreadAsync(() =>
+                            DisplayAlert("エラー",
+                                $"品目「{firstOver.ItemCode}」の入庫数量合計（{firstOver.TotalQty}個）が残数量（{firstOver.RemainingQty}個）を超えています。数量を見直してください。",
+                                "OK"));
+                        return;
+                    }
                 }
 
                 var lotsToSave = _pendingLots.Select(p => new LotSaveItem
@@ -1004,6 +1153,14 @@ namespace EvangPL.Views.InputDetail
             public string itemId { get; set; } = "";
             public string itemCode { get; set; } = "";
             public string itemName { get; set; } = "";
+            // ✅ [追加] NetSuiteのitemtype値（例: InvtPart / LotNumberedInventoryItem /
+            //    SerializedInventoryItem / NonInvtPart / Discount / Assembly 等）。
+            //    RESTlet側のPO_LINES取得SQLにこの列を追加してもらう必要がある。
+            public string itemType { get; set; } = "";
+            // ✅ [追加] PO明細（行レベル。未設定時はヘッダーのロケーション）を発注入庫時の
+            //    ロケーション自動セットに使用する
+            public string locationId { get; set; } = "";
+            public string locationName { get; set; } = "";
             public int orderedQty { get; set; }
             public int receivedQty { get; set; }
             public int remainingQty { get; set; }
@@ -1031,6 +1188,13 @@ namespace EvangPL.Views.InputDetail
             public string? receiptNumber { get; set; }
             public string? ReceiptId { get; set; }
             public string? Status { get; set; }
+        }
+
+        // ✅ [追加] 会計プリファレンス情報（GetStockInDetail RESTlet の PREFERENCES から取得）
+        public class PreferenceInfo
+        {
+            // 「受領書での超過を許可」(Allow Overage in Receipts / OVERRECEIPTS)
+            public bool AllowOverReceipt { get; set; }
         }
     }
 }
