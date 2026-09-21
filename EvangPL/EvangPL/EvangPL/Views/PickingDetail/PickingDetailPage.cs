@@ -7,6 +7,7 @@ using EvangPL.Utils;
 using MauiIcons.Core;
 using MauiIcons.Fluent;
 using Microsoft.Maui.Controls.Shapes;
+using System;
 using System.Collections.ObjectModel;
 using System.Collections.Generic;
 using System.Linq;
@@ -25,6 +26,17 @@ namespace EvangPL.Views.PickingDetail
     ///   ・画面7-2（梱包情報登録。<see cref="PackageRegistration"/>）：「保存」ボタン押下で
     ///     Navigation.PushAsyncにより遷移する別画面。梱包No/品目/数量をスキャンまたは手入力で追加し、
     ///     「完了」でRESTlet②へActionType=SAVEを送信して出荷確定する（実際のSAVE送信は画面7-2側で行う）。
+    ///
+    /// ✅ [追加分]
+    ///   1. ロット入力時に在庫（LOT_LIST）と突き合わせて存在チェックを行い、
+    ///      見つからない場合はメッセージを表示する。
+    ///   2. 品目のIsLotItem（RESTletのPACKAGE_ITEMSで返却）に応じてロット入力欄の編集可否を切り替える。
+    ///   3. 受注(SO)の場合、有効なロットが入力されたら在庫情報から数量・場所を自動セットする。
+    ///
+    /// ✅ [今回の修正分]
+    ///   4. IsLotItem を bool? にし、RESTlet が未返却(null)の場合は「編集可」として扱う（LotEditable）。
+    ///      これによりロット欄が全品目で編集不可になる不具合を解消。
+    ///   5. 受注(SO)の場合、品目選択時に受注行のロケーションと（未出荷数量 - 登録済み数量）を自動セットする。
     /// </summary>
     public class PickingDetail : EvangContentVM
     {
@@ -44,7 +56,7 @@ namespace EvangPL.Views.PickingDetail
         private List<PackageItem> _packageItems = new List<PackageItem>();
         // ② 出荷元ロケーション候補（RESTletのLOCATION_LISTから取得。InputDetail.cs と同一の流儀）
         private List<LocationItem> _locationList = new List<LocationItem>();
-        // ③ 品目別の在庫ロット候補（RESTletのLOT_LISTから取得。品目コードで絞り込んで使用する）
+        // ③ 品目別の在庫ロット候補（RESTletのLOT_LISTから取得。品目内部IDで絞り込んで使用する）
         private List<LotItem> _lotList = new List<LotItem>();
 
         // ==================== 選択状態 ====================
@@ -52,7 +64,7 @@ namespace EvangPL.Views.PickingDetail
 
         // ==================== 入力コントロール ====================
         private Picker? _locationPicker;
-        private Entry? _entryLot;       // ✅ 【修正】ロット番号入力欄（スキャン/手動入力用）
+        private Entry? _entryLot;       // ロット番号入力欄（スキャン/手動入力用）
         private Entry? _entryQty;
 
         // ==================== 色定数 ====================
@@ -94,7 +106,10 @@ namespace EvangPL.Views.PickingDetail
                 new PackageItem
                 {
                     ItemCode = "部品B-2020",
-                    ItemInternalId = "1001", // ✅ [追加] モック用の内部ID
+                    ItemInternalId = "1001",
+                    IsLotItem = true,        // モックはロット管理対象として扱う
+                    LocationId = "1",        // ✅ [追加] モック：受注行のロケーション
+                    LocationName = "本社倉庫",
                     UnshippedQty = 20,
                     OrderedQty = 30,
                     Customer = _detailInfo?.CustomerName ?? "山田工業(株)",
@@ -104,13 +119,28 @@ namespace EvangPL.Views.PickingDetail
                 new PackageItem
                 {
                     ItemCode = "部品C-3030",
-                    ItemInternalId = "1002", // ✅ [追加] モック用の内部ID
+                    ItemInternalId = "1002",
+                    IsLotItem = false,       // ロット管理対象外品のモック例
+                    LocationId = "2",        // ✅ [追加] モック：受注行のロケーション
+                    LocationName = "第二倉庫",
                     UnshippedQty = 10,
                     OrderedQty = 10,
                     Customer = _detailInfo?.CustomerName ?? "山田工業(株)",
                     ShipDate = _detailInfo?.ScheduleDate ?? "2026-07-08",
                     Details = new List<PackageDetail>()
                 }
+            };
+
+            _locationList = new List<LocationItem>
+            {
+                new LocationItem { Id = "1", Name = "本社倉庫" },
+                new LocationItem { Id = "2", Name = "第二倉庫" }
+            };
+
+            _lotList = new List<LotItem>
+            {
+                new LotItem { ItemInternalId = "1001", LotNo = "LOT-A001", LocationId = "1", LocationName = "本社倉庫", AvailableQty = 15 },
+                new LotItem { ItemInternalId = "1001", LotNo = "LOT-A002", LocationId = "2", LocationName = "第二倉庫", AvailableQty = 8 }
             };
         }
 
@@ -163,6 +193,7 @@ namespace EvangPL.Views.PickingDetail
 
                 _packageItems = ParsePackageItems(apiResult);
                 _locationList = ParseLocationList(apiResult);
+                _lotList = ParseLotList(apiResult);
             }
             catch (Exception ex)
             {
@@ -201,9 +232,39 @@ namespace EvangPL.Views.PickingDetail
             return newList;
         }
 
+        // ✅ SubData の中から SubName="LOT_LIST" を取り出してパースする。
+        //    RESTlet側は {ItemInternalId, ItemCode, LotNo, LocationId, LocationName, AvailableQty} を返す。
+        private List<LotItem> ParseLotList(ResponseData<EvangJsonModel, EvangJsonModel> apiResult)
+        {
+            var newList = new List<LotItem>();
+            if (apiResult.SubData == null || apiResult.SubData.Count == 0)
+            {
+                return newList;
+            }
+
+            foreach (var subData in apiResult.SubData)
+            {
+                if (subData.SubName != "LOT_LIST" || string.IsNullOrEmpty(subData.SubJson))
+                {
+                    continue;
+                }
+
+                try
+                {
+                    newList = BaseUtils.JsonToClass<List<LotItem>>(subData.SubJson!) ?? new List<LotItem>();
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"ParseLotList: JSON解析エラー - {ex.Message}");
+                }
+            }
+
+            return newList;
+        }
+
         // ✅ SubData の中から SubName="PACKAGE_ITEMS" を取り出してパースする
-        //    RESTlet側は {ItemCode, ItemInternalId, OrderedQty, UnshippedQty} を返す
-        //    （✅ [追加] ItemInternalId。未出荷数量が0以下の行は含まれない）
+        //    RESTlet側は {ItemCode, ItemInternalId, IsLotItem, LocationId, LocationName, OrderedQty, UnshippedQty} を返す
+        //    （未出荷数量が0以下の行は含まれない）
         private List<PackageItem> ParsePackageItems(ResponseData<EvangJsonModel, EvangJsonModel> apiResult)
         {
             var newList = new List<PackageItem>();
@@ -226,7 +287,9 @@ namespace EvangPL.Views.PickingDetail
                     {
                         p.Customer = _detailInfo?.CustomerName ?? "";
                         p.ShipDate = _detailInfo?.ScheduleDate ?? "";
-                        p.ItemInternalId ??= ""; // ✅ [追加] RESTletが未返却の場合の保険
+                        p.ItemInternalId ??= ""; // RESTletが未返却の場合の保険
+                        p.LocationId ??= "";
+                        p.LocationName ??= "";
                         p.Details ??= new List<PackageDetail>();
                         newList.Add(p);
                     }
@@ -248,7 +311,7 @@ namespace EvangPL.Views.PickingDetail
 
         private async Task BuildCompleteUI()
         {
-            // [追加] ヘッダー/選択テーブルの描画前に、未出荷品目・明細データを準備する
+            // ヘッダー/選択テーブルの描画前に、未出荷品目・明細データを準備する
             if (UseMockData)
             {
                 InitializeMockData();
@@ -425,8 +488,8 @@ namespace EvangPL.Views.PickingDetail
                 // 列0=品目 / 列1=未出荷数量 / 列2=受注数量
                 var itemCodeLabel = new Label { Text = item.ItemCode, FontSize = 11, Padding = new Thickness(4), BackgroundColor = rowBg };
 
-                // ✅ [追加] 品目の内部ID（非表示）。画面7-2 → RLでのライン照合に使うため、
-                //    UI上は表示しないが品目名の隣に隠しラベルとして持たせておく。
+                // 品目の内部ID（非表示）。画面7-2 → RLでのライン照合に使うため、
+                // UI上は表示しないが品目名の隣に隠しラベルとして持たせておく。
                 var itemInternalIdHiddenLabel = new Label
                 {
                     Text = item.ItemInternalId,
@@ -517,7 +580,7 @@ namespace EvangPL.Views.PickingDetail
                 FontAttributes = FontAttributes.Bold
             });
 
-            // ✅ [追加] 選択中品目の内部ID（非表示）。デバッグ/引き渡し確認用に保持。
+            // 選択中品目の内部ID（非表示）。デバッグ/引き渡し確認用に保持。
             layout.Children.Add(new Label
             {
                 Text = currentPackage.ItemInternalId,
@@ -543,7 +606,7 @@ namespace EvangPL.Views.PickingDetail
             _locationPicker = new Picker
             {
                 Title = "選択",
-                SelectedIndex = -1, // ✅ 出荷元は品目ごとに異なりうるため、入庫先ロケーションと違い自動選択はしない
+                SelectedIndex = -1, // 初期は未選択。SOの場合は下で ApplyDefaultsForSalesOrder が自動セットする
                 BackgroundColor = Colors.Transparent,
                 ItemsSource = locationNames
             };
@@ -552,7 +615,10 @@ namespace EvangPL.Views.PickingDetail
             layout.Children.Add(locRow);
 
             // 2. ロット行（Entry + バーコードアイコン）
-            layout.Children.Add(new Label { Text = "ロット (スキャン可)", FontSize = 12, TextColor = Colors.Gray });
+            //    ✅ [修正] LotEditable（IsLotItem が null の場合は編集可）で編集可否を切り替える。
+            var lotEditable = currentPackage.LotEditable;
+            var lotLabelText = lotEditable ? "ロット (スキャン可)" : "ロット (この品目はロット管理対象外)";
+            layout.Children.Add(new Label { Text = lotLabelText, FontSize = 12, TextColor = Colors.Gray });
             var lotRow = new Grid
             {
                 ColumnDefinitions =
@@ -561,9 +627,25 @@ namespace EvangPL.Views.PickingDetail
                     new ColumnDefinition { Width = 50 }
                 }
             };
-            _entryLot = new Entry { Placeholder = "スキャンまたは入力", BackgroundColor = Colors.Transparent };
+            _entryLot = new Entry
+            {
+                Placeholder = lotEditable ? "スキャンまたは入力" : "入力不要（管理対象外の品目）",
+                BackgroundColor = Colors.Transparent,
+                IsEnabled = lotEditable // ロット管理対象外は編集不可にする
+            };
+            if (lotEditable)
+            {
+                // フォーカスが外れたタイミングでロットの存在チェック＋自動セットを行う。
+                // （TextChanged で1文字ごとに判定すると誤検知しやすいため Unfocused を採用）
+                _entryLot.Unfocused += OnLotEntryUnfocused;
+            }
             lotRow.Add(WrapInputControl(_entryLot), 0, 0);
             lotRow.Add(BuildBarcodeIcon(), 1, 0);
+            if (!lotEditable)
+            {
+                // ロット管理対象外の場合は行全体をグレーアウトして「触れない」ことを視覚的に示す
+                lotRow.Opacity = 0.5;
+            }
             layout.Children.Add(lotRow);
 
             // 3. 数量
@@ -580,6 +662,10 @@ namespace EvangPL.Views.PickingDetail
             qtyRow.Add(WrapInputControl(_entryQty), 0, 0);
             qtyRow.Add(new Label { Text = "個", VerticalOptions = LayoutOptions.Center, HorizontalTextAlignment = TextAlignment.Center }, 1, 0);
             layout.Children.Add(qtyRow);
+
+            // ✅ [追加] 受注(SO)の場合、品目選択時に受注行のロケーションと残数量を自動セットする
+            //    （Picker/Entry が作成済みのこのタイミングで呼び出す）
+            ApplyDefaultsForSalesOrder(currentPackage);
 
             // 4. 選択中品目に紐づく明細プレビュー表（登録済み明細）
             var detailTable = BuildEditableDetailTableForCurrentPackage();
@@ -600,6 +686,93 @@ namespace EvangPL.Views.PickingDetail
 
             border.Content = layout;
             return border;
+        }
+
+        // ==================== [追加] 受注(SO)選択時の場所・数量の自動セット ====================
+        /// <summary>
+        /// 受注(SO)の場合のみ、選択中品目の
+        ///   ・出荷元ロケーション：受注行に設定されているロケーション
+        ///   ・数量：未出荷数量 - 登録済み明細の合計
+        /// を入力欄へ自動セットする。
+        /// ロット品目でロットを入力した場合は OnLotEntryUnfocused がロットの在庫情報で上書きする。
+        /// </summary>
+        private void ApplyDefaultsForSalesOrder(PackageItem pkg)
+        {
+            if ((_detailInfo?.OutboundType ?? "SO") != "SO") return;
+
+            // ロケーション：受注行上の location
+            if (_locationPicker != null && !string.IsNullOrEmpty(pkg.LocationId))
+            {
+                var loc = _locationList.FirstOrDefault(l => l.Id == pkg.LocationId);
+                if (loc != null)
+                {
+                    var names = _locationPicker.ItemsSource?.Cast<string>().ToList() ?? new List<string>();
+                    var idx = names.IndexOf(loc.Name);
+                    if (idx >= 0) _locationPicker.SelectedIndex = idx;
+                }
+            }
+
+            // 数量：未出荷数量 - 登録済み数量
+            if (_entryQty != null)
+            {
+                var remaining = pkg.UnshippedQty - pkg.Details.Sum(d => d.DetailQty);
+                if (remaining > 0) _entryQty.Text = remaining.ToString();
+            }
+        }
+
+        // ==================== ロット入力欄フォーカスアウト時の処理 ====================
+        /// <summary>
+        /// ①存在チェック：入力されたロットが在庫(_lotList)に存在しない場合はメッセージを表示し、入力をクリアする。
+        /// ②自動セット：受注(SO)の場合、存在するロットであれば場所・数量を自動でセットする。
+        /// </summary>
+        private async void OnLotEntryUnfocused(object? sender, FocusEventArgs e)
+        {
+            if (_selectedPackage == null || !_selectedPackage.LotEditable) return;
+
+            var lotNo = _entryLot?.Text?.Trim();
+            if (string.IsNullOrEmpty(lotNo)) return;
+
+            var matches = _lotList
+                .Where(l => l.ItemInternalId == _selectedPackage.ItemInternalId
+                         && string.Equals(l.LotNo, lotNo, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+
+            if (matches.Count == 0)
+            {
+                await DisplayAlert("エラー", $"ロット「{lotNo}」は在庫に見つかりません。入力内容をご確認ください。", "OK");
+                if (_entryLot != null) _entryLot.Text = string.Empty;
+                return;
+            }
+
+            // 複数ロケーションに同一ロットがある場合は在庫数量が最も多いものを優先採用
+            var best = matches.OrderByDescending(l => l.AvailableQty).First();
+
+            // 受注(SO)の場合のみ場所・数量を自動セットする
+            // （RTV/TRは仕入先返品・振替であり、通常「受注」に該当しないためSO限定とする）
+            var outboundType = _detailInfo?.OutboundType ?? "SO";
+            if (outboundType == "SO")
+            {
+                if (_locationPicker != null && !string.IsNullOrEmpty(best.LocationName))
+                {
+                    var names = _locationPicker.ItemsSource?.Cast<string>().ToList() ?? new List<string>();
+                    var idx = names.IndexOf(best.LocationName);
+                    if (idx >= 0)
+                    {
+                        _locationPicker.SelectedIndex = idx;
+                    }
+                }
+
+                if (_entryQty != null)
+                {
+                    var alreadyEntered = _selectedPackage.Details.Sum(d => d.DetailQty);
+                    var remaining = _selectedPackage.UnshippedQty - alreadyEntered;
+                    var autoQty = (int)Math.Min(best.AvailableQty, Math.Max(remaining, 0));
+                    if (autoQty > 0)
+                    {
+                        _entryQty.Text = autoQty.ToString();
+                    }
+                }
+            }
         }
 
         // ==================== 現在選択中の品目の明細一覧（ロット/数量/❌） ====================
@@ -711,11 +884,33 @@ namespace EvangPL.Views.PickingDetail
                 await DisplayAlert("エラー", "出荷元ロケーションを選択してください。", "OK");
                 return;
             }
-            if (string.IsNullOrEmpty(detailNo))
+
+            // ロット管理対象（編集可）品目のみロット必須＋存在チェックを行う
+            if (_selectedPackage.LotEditable)
             {
-                await DisplayAlert("エラー", "ロットを入力してください。", "OK");
-                return;
+                if (string.IsNullOrEmpty(detailNo))
+                {
+                    await DisplayAlert("エラー", "ロットを入力してください。", "OK");
+                    return;
+                }
+
+                // 最終防御として、追加ボタン押下時にもロットの存在チェックを行う
+                // （Unfocusedイベントが発火しないまま追加された場合の保険）
+                var lotExists = _lotList.Any(l =>
+                    l.ItemInternalId == _selectedPackage.ItemInternalId
+                    && string.Equals(l.LotNo, detailNo, StringComparison.OrdinalIgnoreCase));
+                if (!lotExists)
+                {
+                    await DisplayAlert("エラー", $"ロット「{detailNo}」は在庫に見つかりません。", "OK");
+                    return;
+                }
             }
+            else
+            {
+                // ロット管理対象外品目はロット番号を空のまま登録する
+                detailNo = string.Empty;
+            }
+
             if (!int.TryParse(qtyText, out int qty) || qty <= 0)
             {
                 await DisplayAlert("エラー", "数量は1以上の整数で入力してください。", "OK");
@@ -737,7 +932,7 @@ namespace EvangPL.Views.PickingDetail
 
             _selectedPackage.Details.Add(new PackageDetail
             {
-                DetailNo = detailNo,
+                DetailNo = detailNo ?? string.Empty,
                 DetailQty = qty,
                 Location = matchedLocation?.Id ?? "",
                 LocationName = selectedLocationName
@@ -748,6 +943,8 @@ namespace EvangPL.Views.PickingDetail
             if (_entryLot != null) _entryLot.Text = string.Empty;
             if (_entryQty != null) _entryQty.Text = string.Empty;
 
+            // 明細エリアを再構築（SOの場合は ApplyDefaultsForSalesOrder により
+            // 場所＝受注行のロケーション／数量＝残数量 が再セットされる）
             RefreshHeaderAndDetailArea();
             RefreshBottomPendingTable();
         }
@@ -936,16 +1133,27 @@ namespace EvangPL.Views.PickingDetail
 
         /// <summary>
         /// 未出荷品目1行分。RESTlet②(SEARCH)のPACKAGE_ITEMSと1:1対応
-        /// （ItemCode/ItemInternalId/OrderedQty/UnshippedQty）。
+        /// （ItemCode/ItemInternalId/IsLotItem/LocationId/LocationName/OrderedQty/UnshippedQty）。
         /// Details は画面7-1でユーザーが入力したロット/ロケーション/数量の登録済み明細で、サーバーには送らず
         /// クライアント側で保持したまま画面7-2へ引き渡す。
         /// </summary>
         public class PackageItem
         {
             public string ItemCode { get; set; } = string.Empty;
-            // ✅ [追加] 品目の内部ID（NetSuiteのitem内部ID）。
-            //    RL保存時にItemCode(表示テキスト)ではなくこちらでラインを照合するために使用する。
+            // 品目の内部ID（NetSuiteのitem内部ID）。
+            // RL保存時にItemCode(表示テキスト)ではなくこちらでラインを照合するために使用する。
             public string ItemInternalId { get; set; } = string.Empty;
+
+            // ✅ [修正] ロット管理対象品目かどうか。
+            //    null  = RESTletが未返却（編集可として扱う）
+            //    true  = ロット管理対象 / false = ロット管理対象外（ロット入力欄を編集不可にする）
+            public bool? IsLotItem { get; set; }
+            public bool LotEditable => IsLotItem ?? true;
+
+            // ✅ [追加] 受注行に設定されている出荷元ロケーション（SO で品目選択時に自動セットする）
+            public string LocationId { get; set; } = string.Empty;
+            public string LocationName { get; set; } = string.Empty;
+
             public int OrderedQty { get; set; }     // 受注数量（SO上の数量）
             public int UnshippedQty { get; set; }   // 未出荷数量（受注数量 - 既出荷数量）
             public string Customer { get; set; } = string.Empty;
@@ -959,12 +1167,17 @@ namespace EvangPL.Views.PickingDetail
             public string Id { get; set; } = "";
             public string Name { get; set; } = "";
         }
+
+        // RESTletのLOT_LISTと1:1対応。ロットの存在チェックと
+        // 受注(SO)時の場所・数量自動セットに利用する。
         public class LotItem
         {
+            public string ItemInternalId { get; set; } = "";
+            public string ItemCode { get; set; } = "";
             public string LotNo { get; set; } = "";
-            public decimal Qty { get; set; }
-            public string ExpirationDate { get; set; } = "";
-            public string Status { get; set; } = "";
+            public string LocationId { get; set; } = "";
+            public string LocationName { get; set; } = "";
+            public decimal AvailableQty { get; set; }
         }
     }
 
@@ -986,8 +1199,8 @@ namespace EvangPL.Views.PickingDetail
     {
         public string PackageNo { get; set; } = "";
         public string ItemCode { get; set; } = "";
-        // ✅ [追加] RL側で fulfillment の各行(sublist item)を照合するためのキー。
-        //    ItemCode(表示テキスト)は表記ゆれで一致しない可能性があるため、こちらを正として使用する。
+        // RL側で fulfillment の各行(sublist item)を照合するためのキー。
+        // ItemCode(表示テキスト)は表記ゆれで一致しない可能性があるため、こちらを正として使用する。
         public string ItemInternalId { get; set; } = "";
         public string Location { get; set; } = "";
         public string LotNo { get; set; } = "";
