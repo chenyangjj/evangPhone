@@ -90,6 +90,72 @@ namespace EvangPL.Views.StockIn
                 _ = LoadStockInData();
                 _isDataLoaded = true;
             }
+            else
+            {
+                // ✅ [追加] 2回目以降のOnAppearing（＝InputDetail画面で保存後にPopAsyncで
+                //    この一覧画面へ戻ってきた場合）は、既にキャッシュ済みの _searchResultData を
+                //    そのまま出し直すのではなく、保持しておいた検索条件でサーバーへ再検索をかけ、
+                //    ステータス/品目数/数量などを最新化してから一覧を再描画する。
+                _ = RefreshSearchFromServer();
+            }
+        }
+
+        /// <summary>
+        /// 保存済みの検索条件（_keyword / _inboundType / _status / _scheduledDate）で
+        /// GetOrderList RESTletへ再検索をかけ、一覧を最新の状態に更新する。
+        /// 主に InputDetail（受領画面）で保存 → Navigation.PopAsync() でこの画面に戻ってきた際に呼ばれる。
+        /// </summary>
+        private async Task RefreshSearchFromServer()
+        {
+            try
+            {
+                var searchParam = new EvangPL.Views.InboundSearch.InboundSearch.OrderSearchParam
+                {
+                    InboundType = _inboundType,
+                    Status = _status,
+                    ScheduledDate = _scheduledDate?.ToString("yyyy-MM-dd"),
+                    Keyword = _keyword
+                };
+
+                var request = new RequestData<EvangPL.Views.InboundSearch.InboundSearch.OrderSearchParam, EvangJsonModel>("GetOrderList");
+                request.Info = searchParam;
+
+                var result = await this.Post<EvangPL.Views.InboundSearch.InboundSearch.OrderSearchParam, EvangJsonModel, EvangJsonModel, EvangJsonModel>(request);
+
+                if (result == null || !result.Success)
+                {
+                    // ✅ 再検索に失敗した場合は、既存の一覧をそのまま維持する（保存自体は成功しているため
+                    //    ここで画面がエラー表示だけになってしまうのを避ける）
+                    System.Diagnostics.Debug.WriteLine($"RefreshSearchFromServer: 再検索に失敗しました - {result?.ErrorMessage}");
+                    return;
+                }
+
+                var orderList = new List<OrderInfo>();
+                if (result.SubData != null)
+                {
+                    foreach (var subData in result.SubData)
+                    {
+                        if (subData.SubName == "ORDER_LIST" || subData.SubName == "orders")
+                        {
+                            var orders = BaseUtils.JsonToClass<List<OrderInfo>>(subData.SubJson!);
+                            if (orders != null)
+                            {
+                                orderList.AddRange(orders);
+                            }
+                        }
+                    }
+                }
+
+                _searchResultData = orderList;
+
+                // ✅ 再検索結果に合わせてページ位置を調整しつつ一覧を再描画する
+                //    （件数が減った場合など、_currentPage が範囲外にならないよう LoadStockInData 内で補正される）
+                await LoadStockInData();
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"RefreshSearchFromServer Error: {ex.Message}");
+            }
         }
 
         #region 画面レイアウト構築
@@ -235,8 +301,12 @@ namespace EvangPL.Views.StockIn
                 }
                 else
                 {
-                    // ✅ 実データがない場合はモックデータを使用（メニューから直接遷移した場合など）
-                    dataList = GetMockData();
+                    // ✅ [修正] モックデータへのフォールバックを廃止。
+                    //    実データが0件（未検索/検索結果なし/再検索で0件）の場合は、
+                    //    そのまま空の一覧として扱う（ShowEmptyTip()が表示される）。
+                    dataList = new List<StockInItem>();
+                    _totalPage = 1;
+                    if (_currentPage > 1) _currentPage = 1;
                 }
 
                 RefreshPageUI();
@@ -247,68 +317,6 @@ namespace EvangPL.Views.StockIn
                 System.Diagnostics.Debug.WriteLine($"LoadStockInData Error: {ex.Message}");
                 ShowErrorTip();
             }
-        }
-
-        /// <summary>
-        /// モックデータを取得（メニューから直接遷移した場合用）
-        /// </summary>
-        private List<StockInItem> GetMockData()
-        {
-            var allData = new List<StockInItem>
-            {
-                new StockInItem
-                {
-                    OrderId = "MOCK-0114",
-                    OrderNo = "PO-2026-0114",
-                    Status = "未入庫",
-                    SupplierName = "東菱電子部品(株)",
-                    ScheduleDate = "2026-07-08",
-                    ItemCount = 5,
-                    TotalQty = 320
-                },
-                new StockInItem
-                {
-                    OrderId = "MOCK-0115",
-                    OrderNo = "PO-2026-0115",
-                    Status = "一部入庫",
-                    SupplierName = "関東マテリアル(株)",
-                    ScheduleDate = "2026-07-09",
-                    ItemCount = 3,
-                    TotalQty = 150
-                },
-                new StockInItem
-                {
-                    OrderId = "MOCK-0032",
-                    OrderNo = "RMA-0032",
-                    Status = "未処理",
-                    SupplierName = "大和精密工業(株)",
-                    ScheduleDate = "",
-                    ItemCount = 2,
-                    TotalQty = 40
-                },
-                new StockInItem
-                {
-                    OrderId = "MOCK-0116",
-                    OrderNo = "PO-2026-0116",
-                    Status = "未入庫",
-                    SupplierName = "北陸金属工業(株)",
-                    ScheduleDate = "2026-07-10",
-                    ItemCount = 2,
-                    TotalQty = 80
-                }
-            };
-
-            // ページネーション計算
-            int totalRecordCount = allData.Count;
-            _totalPage = (int)Math.Ceiling((double)totalRecordCount / PageSize);
-
-            if (_currentPage > _totalPage && _totalPage > 0)
-                _currentPage = _totalPage;
-
-            return allData
-                .Skip((_currentPage - 1) * PageSize)
-                .Take(PageSize)
-                .ToList();
         }
 
         private void RefreshPageUI()
