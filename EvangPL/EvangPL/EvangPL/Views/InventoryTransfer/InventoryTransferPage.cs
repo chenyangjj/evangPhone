@@ -3,20 +3,18 @@ using EvangSol.Mobibrary.EvangModel;
 using EvangSol.Mobibrary.EvangViewModel;
 using EvangSol.Mobibrary.Utilities.Common;
 using Microsoft.Maui.Controls.Shapes;
-using Microsoft.Maui.Devices.Sensors;
 using System;
 
 namespace EvangPL.Views.InventoryTransfer
 {
     /// <summary>
     /// 画面9: 在庫振替 - 一覧 (Inventory Transfer List)
-    /// 注意：虽然菜单叫 InventoryAdjustment，但根据设计图这是“在庫振替”列表。
-    /// 如果菜单跳转逻辑是 View = "InventoryAdjustment"，则文件名和类名需保持一致。
+    /// レイアウト: 検索エリア + 新規登録ボタン + ページング + 振替レコードカード
     /// </summary>
     public class InventoryTransfer : EvangContentVM
     {
         // ==========================================
-        // [追加] Android原生の下線を消去するためのHandler登録
+        // Androidネイティブの下線消去用Handler登録
         // ==========================================
         static InventoryTransfer()
         {
@@ -43,20 +41,18 @@ namespace EvangPL.Views.InventoryTransfer
         }
 
         // ==========================================
-        // UI コントロール宣言
+        // UIコントロール宣言
         // ==========================================
         private DatePicker? startDatePicker;
         private DatePicker? endDatePicker;
         private Picker? sourceLocationPicker;
         private Picker? destLocationPicker;
-        private Entry? dateRangeEntry; // 設計図に合わせて単一Entryで表現 (またはDatePicker2つ)
         private Entry? itemKeywordEntry;
         private Button? newRegisterButton;
 
         private VerticalStackLayout? contentLayout;
-        private VerticalStackLayout? listContainer;
 
-        // ページング
+        // ページング関連
         private Grid? paginationLayout;
         private Button? prevButton;
         private Button? nextButton;
@@ -67,7 +63,7 @@ namespace EvangPL.Views.InventoryTransfer
         // ==========================================
         private List<TransferRecord>? allData;
         private int currentPage = 0;
-        private int pageSize = 4; // 設計図のスクリーンサイズに合わせて調整
+        private int pageSize = 4;
         private int totalPages = 0;
 
         private CancellationTokenSource? _keywordCts;
@@ -83,7 +79,6 @@ namespace EvangPL.Views.InventoryTransfer
             if (NeedRefreshAfterSave)
             {
                 NeedRefreshAfterSave = false;
-
                 _ = GetMockData("data");
             }
         }
@@ -93,8 +88,6 @@ namespace EvangPL.Views.InventoryTransfer
             SearchCondition = new SearchParam();
             Title = "在庫振替 - 一覧";
             BuildUI();
-            //_ = GetMockData("data");
-
         }
 
         /// <summary>
@@ -107,13 +100,13 @@ namespace EvangPL.Views.InventoryTransfer
             {
                 RowDefinitions =
                 {
-                    new RowDefinition { Height = GridLength.Auto }, // 検索エリア + ボタン + ページング
-                    new RowDefinition { Height = GridLength.Star }  // リストエリア
+                    new RowDefinition { Height = GridLength.Auto },
+                    new RowDefinition { Height = GridLength.Star }
                 },
                 BackgroundColor = Color.FromArgb("#eff1f5")
             };
 
-            // 上部：検索条件 + ボタン + ページング
+            // 上部: 検索条件 + ボタン + ページング
             var topSection = CreateTopSection();
             mainGrid.Add(topSection, 0, 0);
 
@@ -139,11 +132,10 @@ namespace EvangPL.Views.InventoryTransfer
                 Content = mainGrid
             };
             await GetMockData("data");
-            //ShowData(allData);
         }
 
         /// <summary>
-        /// 上部セクション（検索条件、新規登録ボタン、ページング）
+        /// 上部セクション（検索条件、新規登録ボタン、ページング）の生成
         /// </summary>
         private VerticalStackLayout CreateTopSection()
         {
@@ -151,10 +143,8 @@ namespace EvangPL.Views.InventoryTransfer
             {
                 Padding = new Thickness(15, 10),
                 Spacing = 10,
-                BackgroundColor = Colors.White // 上部は白背景にするか、デザイン図に合わせてグレーのままか。デザイン図は全体グレーっぽいが、入力欄は白。
+                BackgroundColor = Colors.Transparent
             };
-            // デザイン図を見ると、背景は薄いグレー(#eff1f5)で、入力欄とカードが白。
-            layout.BackgroundColor = Colors.Transparent;
 
             // --- Row 1: ロケーション選択 ---
             var row1 = new Grid
@@ -163,7 +153,7 @@ namespace EvangPL.Views.InventoryTransfer
                 ColumnSpacing = 10
             };
 
-            // 移動元
+            // 移動元ロケーション
             var srcLayout = new VerticalStackLayout { Spacing = 4 };
             srcLayout.Children.Add(new Label { Text = "移動元ロケーション", FontSize = 11, TextColor = Colors.Gray });
             sourceLocationPicker = new Picker { Title = "すべて", BackgroundColor = Colors.Transparent, HeightRequest = 35 };
@@ -175,29 +165,23 @@ namespace EvangPL.Views.InventoryTransfer
             sourceLocationPicker.SelectedIndexChanged += async (sender, e) =>
             {
                 if (sourceLocationPicker.SelectedIndex >= 0)
-                {
                     sourceLocationPicker.Title = sourceLocationPicker.SelectedItem?.ToString();
-                }
                 else
-                {
                     sourceLocationPicker.Title = "移動元を選択";
-                }
+
                 if (sourceLocationPicker.SelectedIndex != -1)
                 {
                     string selectedName = sourceLocationPicker.Items[sourceLocationPicker.SelectedIndex];
                     var loc = localist.FirstOrDefault(l => l.name == selectedName);
-
                     if (loc != null)
-                    {
                         SearchCondition.SourceId = loc.id;
-                    }
                 }
                 await GetMockData("data");
             };
             srcLayout.Children.Add(CreateInputBorder(sourceLocationPicker));
             row1.Add(srcLayout, 0, 0);
 
-            // 移動先
+            // 移動先ロケーション
             var dstLayout = new VerticalStackLayout { Spacing = 4 };
             dstLayout.Children.Add(new Label { Text = "移動先ロケーション", FontSize = 11, TextColor = Colors.Gray });
             destLocationPicker = new Picker { Title = "すべて", BackgroundColor = Colors.Transparent, HeightRequest = 35 };
@@ -209,22 +193,16 @@ namespace EvangPL.Views.InventoryTransfer
             destLocationPicker.SelectedIndexChanged += async (sender, e) =>
             {
                 if (destLocationPicker.SelectedIndex >= 0)
-                {
                     destLocationPicker.Title = destLocationPicker.SelectedItem?.ToString();
-                }
                 else
-                {
                     destLocationPicker.Title = "移動先を選択";
-                }
+
                 if (destLocationPicker.SelectedIndex != -1)
                 {
                     string selectedName = destLocationPicker.Items[destLocationPicker.SelectedIndex];
                     var loc = localist.FirstOrDefault(l => l.name == selectedName);
-
                     if (loc != null)
-                    {
                         SearchCondition.DestId = loc.id;
-                    }
                 }
                 await GetMockData("data");
             };
@@ -233,13 +211,14 @@ namespace EvangPL.Views.InventoryTransfer
 
             layout.Children.Add(row1);
 
-            // --- Row 2: 期間 & キーワード ---
+            // --- Row 2: 対象期間 & 品目キーワード ---
             var row2 = new Grid
             {
                 ColumnDefinitions = { new ColumnDefinition { Width = GridLength.Star }, new ColumnDefinition { Width = GridLength.Star } },
                 ColumnSpacing = 10
             };
 
+            // 対象期間
             var dateLayout = new VerticalStackLayout { Spacing = 4 };
             dateLayout.Children.Add(new Label { Text = "対象期間:", FontSize = 11, TextColor = Colors.Gray });
 
@@ -297,7 +276,7 @@ namespace EvangPL.Views.InventoryTransfer
             dateLayout.Children.Add(dateRangeGrid);
             row2.Add(dateLayout, 0, 0);
 
-            // 日付変更時に SearchCondition.DateRange を更新
+            // 日付変更時に検索条件を更新
             async Task UpdateDateRange()
             {
                 SearchCondition.DateRangeFrom = startDatePicker.Date.ToString("yyyy/MM/dd");
@@ -306,7 +285,6 @@ namespace EvangPL.Views.InventoryTransfer
             }
             startDatePicker.DateSelected += (s, e) => UpdateDateRange();
             endDatePicker.DateSelected += (s, e) => UpdateDateRange();
-            //UpdateDateRange(); // 初期値セット
 
             // 品目キーワード
             var kwLayout = new VerticalStackLayout { Spacing = 4 };
@@ -329,13 +307,11 @@ namespace EvangPL.Views.InventoryTransfer
 
                 try
                 {
-                    await Task.Delay(1000, token);   // 1000ms
+                    await Task.Delay(1000, token);
                     if (token.IsCancellationRequested) return;
                     await GetMockData("data");
                 }
-                catch (TaskCanceledException)
-                {
-                }
+                catch (TaskCanceledException) { }
             };
             kwLayout.Children.Add(CreateInputBorder(itemKeywordEntry));
             row2.Add(kwLayout, 1, 0);
@@ -364,7 +340,7 @@ namespace EvangPL.Views.InventoryTransfer
         }
 
         /// <summary>
-        /// 入力枠の作成
+        /// 入力枠の生成
         /// </summary>
         private Border CreateInputBorder(View content)
         {
@@ -381,7 +357,7 @@ namespace EvangPL.Views.InventoryTransfer
         }
 
         /// <summary>
-        /// ページングコントロール
+        /// ページングコントロールの生成
         /// </summary>
         private void CreatePaginationControls()
         {
@@ -487,23 +463,22 @@ namespace EvangPL.Views.InventoryTransfer
             UpdatePaginationUI();
         }
 
+        /// <summary>
+        /// リストUIの更新（カード形式で描画）
+        /// </summary>
         private void UpdateListUI(List<TransferRecord> data)
         {
             if (contentLayout == null) return;
-
-            // 既存のリストをクリア (ページング部分以外のコンテンツをクリアする必要があるが、
-            // ここでは contentLayout 全体をリスト専用としているため Clear でOK)
-            // 注意: BuildUI で contentLayout を ScrollView の Content にしているため、ここにはカードだけを入れる
             contentLayout.Children.Clear();
 
             if (data.Count == 0)
             {
                 contentLayout.Children.Add(new Label
                 {
-                    Text = "データがありません",
+                    Text = "検索条件に一致するデータはありません。",
                     HorizontalTextAlignment = TextAlignment.Center,
                     TextColor = Colors.Gray,
-                    Margin = new Thickness(0, 20)
+                    Margin = new Thickness(0, 40, 0, 0)
                 });
                 return;
             }
@@ -516,78 +491,153 @@ namespace EvangPL.Views.InventoryTransfer
         }
 
         /// <summary>
-        /// 一覧カードの作成
+        /// 在庫振替レコードカードの生成
+        /// StockAdjustと同じFrame+Gridレイアウトを採用（主従構造対応）
         /// </summary>
-        private Border CreateTransferCard(TransferRecord record)
+        /// <summary>
+        /// 在庫振替レコードカードの生成
+        /// StockAdjustと同じFrame+Gridレイアウトを採用（主従構造対応）
+        /// </summary>
+        private Frame CreateTransferCard(TransferRecord record)
         {
-            var stack = new VerticalStackLayout
+            var cardFrame = new Frame
             {
-                Spacing = 4,
-                Padding = new Thickness(12, 10)
+                BackgroundColor = Colors.White,
+                CornerRadius = 8,
+                Padding = new Thickness(12),
+                Margin = new Thickness(0, 0, 0, 8),
+                HasShadow = false
             };
 
-            // TR-0031
-            stack.Children.Add(new Label
+            var mainStack = new StackLayout { Spacing = 6 };
+
+            // ===== ヘッダー行: 振替No + 登録日 =====
+            var headerGrid = new Grid
+            {
+                ColumnDefinitions =
+                {
+                    new ColumnDefinition { Width = GridLength.Star },
+                    new ColumnDefinition { Width = GridLength.Auto }
+                }
+            };
+
+            var lblTransferNo = new Label
             {
                 Text = record.Id,
-                FontSize = 14,
+                FontSize = 16,
                 FontAttributes = FontAttributes.Bold,
-                TextColor = Color.FromArgb("#1f3854")
-            });
+                TextColor = Color.FromArgb("#1f3854"),
+                VerticalTextAlignment = TextAlignment.Center
+            };
+            Grid.SetColumn(lblTransferNo, 0);
 
-            // 移動元: ... -> 移動先: ...
-            stack.Children.Add(new Label
+            var lblDate = new Label
+            {
+                Text = $"登録日: {record.RegisterDate}",
+                FontSize = 12,
+                TextColor = Colors.Gray,
+                VerticalTextAlignment = TextAlignment.Center
+            };
+            Grid.SetColumn(lblDate, 1);
+
+            headerGrid.Children.Add(lblTransferNo);
+            headerGrid.Children.Add(lblDate);
+            mainStack.Children.Add(headerGrid);
+
+            // ===== 移動元 → 移動先（セパレータの上に配置） =====
+            var lblRoute = new Label
             {
                 Text = $"移動元: {record.Source} → 移動先: {record.Dest}",
                 FontSize = 12,
                 TextColor = Colors.DimGray
-            });
-
-            // 対象品目数: 3
-            stack.Children.Add(new Label
-            {
-                Text = $"対象品目数: {record.ItemCount}",
-                FontSize = 12,
-                TextColor = Colors.DimGray
-            });
-
-            // 登録日: 2026-07-06
-            stack.Children.Add(new Label
-            {
-                Text = $"登録日: {record.RegisterDate}",
-                FontSize = 12,
-                TextColor = Colors.DimGray
-            });
-
-            var border = new Border
-            {
-                StrokeShape = new RoundRectangle { CornerRadius = 8 },
-                BackgroundColor = Colors.White,
-                Stroke = Color.FromArgb("#dddddd"),
-                StrokeThickness = 1,
-                Content = stack,
-                Padding = 0 // StackLayout に Padding を持たせているため
             };
+            mainStack.Children.Add(lblRoute);
 
-            // タップイベント (詳細画面へ)
-            var tap = new TapGestureRecognizer();
-            tap.Tapped += async (_, _) =>
+            // ===== セパレータ =====
+            mainStack.Children.Add(new BoxView
             {
-                try
-                {
-                    var editPage = new EvangPL.Views.InventoryTransferPageDetails.InventoryTransferPageDetails(record);
-                    await Navigation.PushAsync(editPage);
-                }
-                catch (Exception ex)
-                {
-                    await DisplayAlert("エラー", $"画面遷移に失敗しました: {ex.Message}", "OK");
-                }
-            };
-            border.GestureRecognizers.Add(tap);
+                HeightRequest = 1,
+                Color = Color.FromArgb("#eeeeee"),
+                Margin = new Thickness(0, 4, 0, 4)
+            });
 
-            return border;
+            // ===== 明細リスト（品目コード + 数量） =====
+            if (record.Details != null && record.Details.Count > 0)
+            {
+                foreach (var detail in record.Details)
+                {
+                    var detailGrid = new Grid
+                    {
+                        ColumnDefinitions =
+                        {
+                            new ColumnDefinition { Width = GridLength.Star },
+                            new ColumnDefinition { Width = GridLength.Auto }
+                        },
+                        RowSpacing = 2,
+                        Padding = new Thickness(0, 2)
+                    };
+
+                    // 品目コード
+                    var lblItem = new Label
+                    {
+                        Text = $"品目: {detail.ItemCode}",
+                        FontSize = 12,
+                        TextColor = Colors.Black
+                    };
+                    Grid.SetColumn(lblItem, 0);
+
+                    // 数量（「数量:」プレフィックス付き）
+                    var lblQty = new Label
+                    {
+                        Text = $"数量: {detail.Qty}",
+                        FontSize = 12,
+                        FontAttributes = FontAttributes.Bold,
+                        TextColor = Color.FromArgb("#2e7d32"),
+                        HorizontalTextAlignment = TextAlignment.End
+                    };
+                    Grid.SetColumn(lblQty, 1);
+
+                    detailGrid.Children.Add(lblItem);
+                    detailGrid.Children.Add(lblQty);
+
+                    mainStack.Children.Add(detailGrid);
+                }
+            }
+            else
+            {
+                // 明細がない場合のフォールバック表示
+                mainStack.Children.Add(new Label
+                {
+                    Text = "品目: （明細なし）",
+                    FontSize = 13,
+                    TextColor = Colors.Gray
+                });
+            }
+
+            cardFrame.Content = mainStack;
+
+            // タップイベント（詳細画面へ遷移）
+            //var tap = new TapGestureRecognizer();
+            //tap.Tapped += async (_, _) =>
+            //{
+            //    try
+            //    {
+            //        var editPage = new EvangPL.Views.InventoryTransferPageDetails.InventoryTransferPageDetails(record);
+            //        await Navigation.PushAsync(editPage);
+            //    }
+            //    catch (Exception ex)
+            //    {
+            //        await DisplayAlert("エラー", $"画面遷移に失敗しました: {ex.Message}", "OK");
+            //    }
+            //};
+            //cardFrame.GestureRecognizers.Add(tap);
+
+            return cardFrame;
         }
 
+        /// <summary>
+        /// ページングUIの状態更新
+        /// </summary>
         private void UpdatePaginationUI()
         {
             if (pageLabel == null || prevButton == null || nextButton == null) return;
@@ -597,7 +647,7 @@ namespace EvangPL.Views.InventoryTransfer
             prevButton.IsEnabled = currentPage > 0;
             nextButton.IsEnabled = currentPage < totalPages - 1;
 
-            // ボタンの色調整
+            // ボタンのスタイル切り替え
             prevButton.BackgroundColor = prevButton.IsEnabled ? Colors.White : Color.FromArgb("#e0e0e0");
             prevButton.TextColor = prevButton.IsEnabled ? Color.FromArgb("#1f3854") : Colors.Gray;
             prevButton.BorderColor = prevButton.IsEnabled ? Color.FromArgb("#1f3854") : Colors.Transparent;
@@ -610,24 +660,25 @@ namespace EvangPL.Views.InventoryTransfer
         }
 
         // ==========================================
-        // モックデータ
+        // データ取得ロジック
         // ==========================================
 
+        /// <summary>
+        /// 在庫振替データの取得
+        /// </summary>
         private async Task GetMockData(string kbn)
         {
             try
             {
                 if (string.IsNullOrEmpty(SearchCondition.DateRangeFrom))
-                {
                     SearchCondition.DateRangeFrom = startDatePicker.Date.ToString("yyyy/MM/dd");
-                }
+
                 if (string.IsNullOrEmpty(SearchCondition.DateRangeTo))
-                {
                     SearchCondition.DateRangeTo = endDatePicker.Date.ToString("yyyy/MM/dd");
-                }
+
                 if (string.Compare(SearchCondition.DateRangeFrom, SearchCondition.DateRangeTo) > 0)
                 {
-                    await DisplayAlert("エーラ", "対象期間FROMは対象期間TOより大きくすることはできません。", "OK");
+                    await DisplayAlert("エラー", "対象期間FROMは対象期間TOより大きくすることはできません。", "OK");
                     return;
                 }
 
@@ -638,18 +689,17 @@ namespace EvangPL.Views.InventoryTransfer
                 var resultList = await this.Post<SearchParam, EvangJsonModel, EvangJsonModel, EvangJsonModel>(request);
                 if (resultList == null || resultList.SubData == null)
                     return;
+
                 foreach (var item in resultList.SubData)
                 {
                     switch (item.SubName)
                     {
                         case "PH_LOCATION":
-                            if (item == null || item.SubJson == null)
-                                return;
+                            if (item == null || item.SubJson == null) return;
                             localist = BaseUtils.JsonToClass<List<LocationData>>(item.SubJson);
                             break;
                         case "PH_DATA":
-                            if (item == null || item.SubJson == null)
-                                return;
+                            if (item == null || item.SubJson == null) return;
                             allData = BaseUtils.JsonToClass<List<TransferRecord>>(item.SubJson);
                             break;
                     }
@@ -663,6 +713,9 @@ namespace EvangPL.Views.InventoryTransfer
             ShowData(allData);
         }
 
+        /// <summary>
+        /// ロケーションマスタデータの取得
+        /// </summary>
         private async Task GetLocaData(string kbn)
         {
             try
@@ -674,18 +727,17 @@ namespace EvangPL.Views.InventoryTransfer
                 var resultList = await this.Post<SearchParam, EvangJsonModel, EvangJsonModel, EvangJsonModel>(request);
                 if (resultList == null || resultList.SubData == null)
                     return;
+
                 foreach (var item in resultList.SubData)
                 {
                     switch (item.SubName)
                     {
                         case "PH_LOCATION":
-                            if (item == null || item.SubJson == null)
-                                return;
+                            if (item == null || item.SubJson == null) return;
                             localist = BaseUtils.JsonToClass<List<LocationData>>(item.SubJson);
                             break;
                         case "PH_DATA":
-                            if (item == null || item.SubJson == null)
-                                return;
+                            if (item == null || item.SubJson == null) return;
                             allData = BaseUtils.JsonToClass<List<TransferRecord>>(item.SubJson);
                             break;
                     }
@@ -697,9 +749,15 @@ namespace EvangPL.Views.InventoryTransfer
                 System.Diagnostics.Debug.WriteLine($"GetLocaData Error: {ex.Message}");
             }
         }
-
     }
 
+    // ==========================================
+    // データモデル定義
+    // ==========================================
+
+    /// <summary>
+    /// 在庫振替 検索条件モデル
+    /// </summary>
     public class SearchParam : EvangJsonModel
     {
         public string Kbn { get; set; } = "";
@@ -710,30 +768,37 @@ namespace EvangPL.Views.InventoryTransfer
         public string Keyword { get; set; } = "";
     }
 
-    // ==========================================
-    // データモデル
-    // ==========================================
+    /// <summary>
+    /// 在庫振替 レコードモデル
+    /// </summary>
     public class TransferRecord : EvangJsonModel
     {
-        public string Id { get; set; }
-        public string Source { get; set; }
-        public string Dest { get; set; }
-        public int ItemCount { get; set; }
-        public string RegisterDate { get; set; }
+        public string Id { get; set; } = "";
+        public string Source { get; set; } = "";
+        public string Dest { get; set; } = "";
+        public string RegisterDate { get; set; } = "";
         public int InId { get; set; }
         public int SourceId { get; set; }
         public int DestId { get; set; }
 
-        //public TransferRecord(string id, string source, string dest, int itemCount, string registerDate)
-        //{
-        //    Id = id;
-        //    Source = source;
-        //    Dest = dest;
-        //    ItemCount = itemCount;
-        //    RegisterDate = registerDate;
-        //}
+        /// <summary>
+        /// 振替明細リスト（品目コード・数量の配列）
+        /// </summary>
+        public List<TransferDetailItem> Details { get; set; } = new();
     }
 
+    /// <summary>
+    /// 在庫振替 明細アイテム
+    /// </summary>
+    public class TransferDetailItem : EvangJsonModel
+    {
+        public string ItemCode { get; set; } = "";
+        public int Qty { get; set; }
+    }
+
+    /// <summary>
+    /// ロケーション マスタモデル
+    /// </summary>
     public class LocationData : EvangJsonModel
     {
         public int? id { get; set; }

@@ -1,23 +1,23 @@
-﻿using EvangPL.Components;
+﻿using CommunityToolkit.Mvvm.Messaging;
+using EvangPL.Components;
 using EvangPL.Utils;
 using EvangSol.Mobibrary.DataFeed;
 using EvangSol.Mobibrary.EvangModel;
 using EvangSol.Mobibrary.EvangViewModel;
 using EvangSol.Mobibrary.Utilities.Common;
 using Microsoft.Maui.Controls.Shapes;
-using System.Text.Json;
 using System.Linq;
+using System.Text.Json;
+using static EvangPL.Views.InventoryAdjustment.InventoryAdjustment;
 
 namespace EvangPL.Views.StockAdjust
 {
     /// <summary>
-    /// 棚卸調整 - 一覧画面 【文件名 StockAdjust.cs】
-    /// 布局：筛选区域 + 新規登録按钮 + 分页控件 + 调整记录卡片
-    /// 【修复】去除了 Grid 的 Padding，改为最外层容器布局，解决了后续组件无法显示的 Bug。
+    /// 棚卸調整 - 一覧画面 
     /// </summary>
     public class StockAdjust : EvangContentVM
     {
-        // UI控件缓存
+        
         private Grid? mainGrid;
         private Grid? filterGrid;
         private Button? btnCreateNew;
@@ -27,20 +27,21 @@ namespace EvangPL.Views.StockAdjust
         private Button? nextPageBtn;
         private StackLayout? listContainer;
 
-        // 筛选控件
+        
         private DatePicker? startDatePicker;
         private DatePicker? endDatePicker;
         private Entry? dateRangeEntry;
         private Entry? keywordEntry;
 
-        // 分页参数
+        
         private int _currentPage = 1;
         private int _totalPage = 1;
-        private const int PageSize = 4; // 一页4条，和截图一致
+        private const int PageSize = 4; 
         private CancellationTokenSource? _keywordCts;
 
-        // 查询条件实体
+        
         private StockAdjustPageInfo SearchCondition;
+        private bool _hasNavigatedToDetail = false;
 
         public StockAdjust() : base("strStockAdjustSearch")
         {
@@ -50,36 +51,44 @@ namespace EvangPL.Views.StockAdjust
             _ = LoadAdjustData();
         }
 
+        protected override async void OnAppearing()
+        {
+            base.OnAppearing();
+
+            if (_hasNavigatedToDetail)
+            {
+                _hasNavigatedToDetail = false;
+                await LoadAdjustData();
+            }
+        }
+
         #region 页面布局构建
         private void BuildUI()
         {
-            // 1. 外层容器：处理页面的 Padding 边距，不直接加在 Grid 上，防止渲染 BUG。
+            
             var outerLayout = new Grid
             {
                 Padding = new Thickness(10, 10, 10, 0),
                 BackgroundColor = Color.FromArgb("#eff0f0")
             };
 
-            // 2. 主布局 Grid，只负责分块，不设 Padding。
             mainGrid = new Grid
             {
                 RowDefinitions =
                 {
-                    new RowDefinition { Height = GridLength.Auto },    // 筛选区域
-                    new RowDefinition { Height = GridLength.Auto },    // 新規登録按钮
-                    new RowDefinition { Height = 60 },                 // 分页栏
-                    new RowDefinition { Height = GridLength.Star }      // 列表区域
+                    new RowDefinition { Height = GridLength.Auto },    
+                    new RowDefinition { Height = GridLength.Auto },    
+                    new RowDefinition { Height = 60 },                 
+                    new RowDefinition { Height = GridLength.Star }      
                 },
                 ColumnDefinitions = { new ColumnDefinition() },
                 RowSpacing = 8
             };
 
-            // 1. 筛选栏
             filterGrid = CreateFilterArea();
             Grid.SetRow(filterGrid, 0);
             mainGrid.Children.Add(filterGrid);
 
-            // 2. 【新增】新規登録 蓝色按钮 (参照截图样式)
             btnCreateNew = new Button
             {
                 Text = "+ 新規登録",
@@ -105,12 +114,10 @@ namespace EvangPL.Views.StockAdjust
             Grid.SetRow(btnCreateNew, 1);
             mainGrid.Children.Add(btnCreateNew);
 
-            // 3. 分页控件
             paginationGrid = CreatePaginationBar();
             Grid.SetRow(paginationGrid, 2);
             mainGrid.Children.Add(paginationGrid);
 
-            // 4. 列表滚动区域
             listContainer = new StackLayout
             {
                 Spacing = 8,
@@ -123,14 +130,11 @@ namespace EvangPL.Views.StockAdjust
             Grid.SetRow(scrollView, 3);
             mainGrid.Children.Add(scrollView);
 
-            // 将主 Grid 放入外层容器
             outerLayout.Children.Add(mainGrid);
             Content = outerLayout;
         }
 
-        /// <summary>
-        /// 筛选区域：対象期間、品目キーワード
-        /// </summary>
+       
         private Grid CreateFilterArea()
         {
             var grid = new Grid
@@ -145,8 +149,8 @@ namespace EvangPL.Views.StockAdjust
                         new RowDefinition { Height = GridLength.Auto },
                         new RowDefinition { Height = GridLength.Auto }
                     },
-                    ColumnSpacing = 10,
-                    RowSpacing = 4
+                ColumnSpacing = 10,
+                RowSpacing = 4
             };
 
             // --- 対象期間 ---
@@ -239,7 +243,7 @@ namespace EvangPL.Views.StockAdjust
                 }
                 catch (TaskCanceledException)
                 {
-                    // 被新的输入取消，忽略
+                    
                 }
             };
 
@@ -337,44 +341,47 @@ namespace EvangPL.Views.StockAdjust
         }
 
         /// <summary>
-        /// 加载棚卸調整データ（增加了假数据，列表显示更丰富）
+        /// 加载棚卸調整データ
         /// </summary>
         private async Task LoadAdjustData()
         {
             try
             {
                 CollectSearchCondition();
-                bool useMockData = false; // true=本地调试假数据
+                bool useMockData = false; 
 
                 List<StockAdjustItem> dataList = new List<StockAdjustItem>();
 
                 if (useMockData)
                 {
-                    // 生成 8 条测试数据（模拟数据库，总共2页，每页4条）
+                    
                     dataList.Add(new StockAdjustItem { AdjustNo = "ADJ-0011", ItemCode = "部品E-5050", AdjustReason = "破損", DiffQty = -20, RegisterDate = "2026-07-06" });
                     dataList.Add(new StockAdjustItem { AdjustNo = "ADJ-0012", ItemCode = "部品F-6060", AdjustReason = "棚卸差異", DiffQty = 5, RegisterDate = "2026-07-06" });
                     dataList.Add(new StockAdjustItem { AdjustNo = "ADJ-0013", ItemCode = "部品I-9090", AdjustReason = "破損", DiffQty = -8, RegisterDate = "2026-07-07" });
                     dataList.Add(new StockAdjustItem { AdjustNo = "ADJ-0014", ItemCode = "部品J-1212", AdjustReason = "棚卸差異", DiffQty = 3, RegisterDate = "2026-07-07" });
 
-                    // 增加4条新数据用于测试分页
+                   
                     dataList.Add(new StockAdjustItem { AdjustNo = "ADJ-0015", ItemCode = "部品A-1010", AdjustReason = "在庫調整", DiffQty = 12, RegisterDate = "2026-07-08" });
                     dataList.Add(new StockAdjustItem { AdjustNo = "ADJ-0016", ItemCode = "部品B-2020", AdjustReason = "破損", DiffQty = -5, RegisterDate = "2026-07-08" });
                     dataList.Add(new StockAdjustItem { AdjustNo = "ADJ-0017", ItemCode = "部品C-3030", AdjustReason = "棚卸差異", DiffQty = -2, RegisterDate = "2026-07-09" });
                     dataList.Add(new StockAdjustItem { AdjustNo = "ADJ-0018", ItemCode = "部品D-4040", AdjustReason = "在庫調整", DiffQty = 8, RegisterDate = "2026-07-09" });
 
-                    // 分页计算
+                    
                     int totalRecordCount = dataList.Count;
                     _totalPage = (int)Math.Ceiling((double)totalRecordCount / PageSize);
 
                     if (_currentPage > _totalPage && _totalPage > 0)
                         _currentPage = _totalPage;
 
-                    // 截取当前页
+                    
                     var pagedData = dataList
                         .Skip((_currentPage - 1) * PageSize)
                         .Take(PageSize)
                         .ToList();
                     dataList = pagedData;
+
+                    RefreshPageUI();
+                    //RenderCardList(dataList);
                 }
                 else
                 {
@@ -397,7 +404,7 @@ namespace EvangPL.Views.StockAdjust
                     if (resultList == null || resultList.SubData == null)
                     {
                         RefreshPageUI();
-                        RenderCardList(dataList);
+                        //RenderCardList(dataList);
                         return;
                     }
                     foreach (var item in resultList.SubData)
@@ -408,30 +415,36 @@ namespace EvangPL.Views.StockAdjust
                                 if (item == null || item.SubJson == null)
                                 {
                                     RefreshPageUI();
-                                    RenderCardList(dataList);
+                                    //RenderCardList(dataList);
                                     return;
                                 }
                                 dataList = BaseUtils.JsonToClass<List<StockAdjustItem>>(item.SubJson);
                                 break;
                         }
                     }
-                    // 分页计算
-                    int totalRecordCount = dataList.Count;
+
+                    var groupedData = dataList
+                        .GroupBy(x => x.Id)
+                        .Select(g => g.ToList())
+                        .ToList();
+                    
+                    int totalRecordCount = groupedData.Count;
                     _totalPage = (int)Math.Ceiling((double)totalRecordCount / PageSize);
 
                     if (_currentPage > _totalPage && _totalPage > 0)
                         _currentPage = _totalPage;
 
-                    // 截取当前页
-                    var pagedData = dataList
+                    var pagedGroupedData = groupedData
                         .Skip((_currentPage - 1) * PageSize)
                         .Take(PageSize)
                         .ToList();
-                    dataList = pagedData;
+
+                    RefreshPageUI();
+                    RenderCardList(pagedGroupedData);
                 }
 
-                RefreshPageUI();
-                RenderCardList(dataList);
+                //RefreshPageUI();
+                //RenderCardList(dataList);
             }
             catch (Exception)
             {
@@ -508,20 +521,26 @@ namespace EvangPL.Views.StockAdjust
         }
         #endregion
 
-        #region 调整记录卡片渲染
-        private void RenderCardList(List<StockAdjustItem> dataList)
+        #region
+        /// <summary>
+        /// </summary>
+        private void RenderCardList(List<List<StockAdjustItem>> groupedDataList)
         {
             if (listContainer == null) return;
             listContainer.Children.Clear();
 
-            if (dataList == null || dataList.Count == 0)
+            if (groupedDataList == null || groupedDataList.Count == 0)
             {
                 ShowEmptyTip();
                 return;
             }
 
-            foreach (var item in dataList)
+            foreach (var group in groupedDataList)
             {
+                if (group == null || group.Count == 0) continue;
+
+                var master = group[0];
+
                 var cardFrame = new Frame
                 {
                     BackgroundColor = Colors.White,
@@ -531,75 +550,132 @@ namespace EvangPL.Views.StockAdjust
                     HasShadow = false
                 };
 
-                var cardGrid = new Grid
+                var mainStack = new StackLayout { Spacing = 6 };
+
+                var headerGrid = new Grid
                 {
-                    RowDefinitions =
-                    {
-                        new RowDefinition { Height = GridLength.Auto },
-                        new RowDefinition { Height = GridLength.Auto },
-                        new RowDefinition { Height = GridLength.Auto },
-                        new RowDefinition { Height = GridLength.Auto }
-                    },
-                    RowSpacing = 4
+                    ColumnDefinitions =
+            {
+                new ColumnDefinition { Width = GridLength.Star },
+                new ColumnDefinition { Width = GridLength.Auto }
+            }
                 };
 
-                // 1行：調整番号
                 var lblAdjustNo = new Label
                 {
-                    Text = item.AdjustNo,
+                    Text = master.AdjustNo,
                     FontSize = 16,
-                    FontAttributes = FontAttributes.Bold
+                    FontAttributes = FontAttributes.Bold,
+                    VerticalTextAlignment = TextAlignment.Center
                 };
-                Grid.SetRow(lblAdjustNo, 0);
-                cardGrid.Children.Add(lblAdjustNo);
+                Grid.SetColumn(lblAdjustNo, 0);
 
-                // 2行：品目
-                var lblItem = new Label
-                {
-                    Text = $"品目: {item.ItemCode}",
-                    FontSize = 12,
-                    TextColor = Colors.Gray
-                };
-                Grid.SetRow(lblItem, 1);
-                cardGrid.Children.Add(lblItem);
-
-                // 3行：調整理由 + 差異
-                var lblReason = new Label
-                {
-                    Text = $"調整理由: {item.AdjustReason}　差異: {item.DiffQty}",
-                    FontSize = 12,
-                    TextColor = Colors.Gray
-                };
-                Grid.SetRow(lblReason, 2);
-                cardGrid.Children.Add(lblReason);
-
-                // 4行：登録日
                 var lblDate = new Label
                 {
-                    Text = $"登録日: {item.RegisterDate}",
+                    Text = $"登録日: {master.RegisterDate}",
                     FontSize = 12,
-                    TextColor = Colors.Gray
+                    TextColor = Colors.Gray,
+                    VerticalTextAlignment = TextAlignment.Center
                 };
-                Grid.SetRow(lblDate, 3);
-                cardGrid.Children.Add(lblDate);
+                Grid.SetColumn(lblDate, 1);
 
-                cardFrame.Content = cardGrid;
+                headerGrid.Children.Add(lblAdjustNo);
+                headerGrid.Children.Add(lblDate);
+                mainStack.Children.Add(headerGrid);
 
-                // 卡片点击跳转
-                var tap = new TapGestureRecognizer();
-                tap.Tapped += async (s, e) =>
+                // 分隔线
+                mainStack.Children.Add(new BoxView
                 {
-                    try
+                    HeightRequest = 1,
+                    Color = Color.FromArgb("#eeeeee"),
+                    Margin = new Thickness(0, 4, 0, 4)
+                });
+
+                foreach (var detail in group)
+                {
+                    var detailGrid = new Grid
                     {
-                        var editPage = new EvangPL.Views.InventoryAdjustment.InventoryAdjustment(item);
-                        await Navigation.PushAsync(editPage);
-                    }
-                    catch (Exception ex)
+                        ColumnDefinitions =
+                {
+                    new ColumnDefinition { Width = GridLength.Star },
+                    new ColumnDefinition { Width = GridLength.Auto }
+                },
+                        RowDefinitions =
+                {
+                    new RowDefinition { Height = GridLength.Auto },
+                    new RowDefinition { Height = GridLength.Auto },
+                    new RowDefinition { Height = GridLength.Auto }
+                },
+                        RowSpacing = 2,
+                        Padding = new Thickness(0, 2)
+                    };
+
+                    // 品目コード
+                    var lblItem = new Label
                     {
-                        await DisplayAlert("エラー", $"画面遷移に失敗しました: {ex.Message}", "OK");
-                    }
-                };
-                cardFrame.GestureRecognizers.Add(tap);
+                        Text = $"品目: {detail.ItemCode}",
+                        FontSize = 13,
+                        TextColor = Colors.Black
+                    };
+                    Grid.SetRow(lblItem, 0);
+                    Grid.SetColumn(lblItem, 0);
+
+                    // 差異数量
+                    var lblDiff = new Label
+                    {
+                        Text = $"{(detail.DiffQty > 0 ? "+" : "")}{detail.DiffQty}",
+                        FontSize = 13,
+                        FontAttributes = FontAttributes.Bold,
+                        TextColor = detail.DiffQty >= 0 ? Color.FromArgb("#2e7d32") : Color.FromArgb("#c62828"),
+                        HorizontalTextAlignment = TextAlignment.End
+                    };
+                    Grid.SetRow(lblDiff, 0);
+                    Grid.SetColumn(lblDiff, 1);
+
+                    // 調整理由
+                    var lblReason = new Label
+                    {
+                        Text = $"理由: {detail.AdjustReason}",
+                        FontSize = 11,
+                        TextColor = Colors.Gray
+                    };
+                    Grid.SetRow(lblReason, 1);
+                    Grid.SetColumnSpan(lblReason, 2);
+
+                    // 場所
+                    var lblLoc = new Label
+                    {
+                        Text = $"場所: {detail.LocationName}",
+                        FontSize = 11,
+                        TextColor = Colors.Gray
+                    };
+                    Grid.SetRow(lblLoc, 2);
+                    Grid.SetColumnSpan(lblLoc, 2);
+
+                    detailGrid.Children.Add(lblItem);
+                    detailGrid.Children.Add(lblDiff);
+                    detailGrid.Children.Add(lblReason);
+                    detailGrid.Children.Add(lblLoc);
+
+                    mainStack.Children.Add(detailGrid);
+                }
+
+                cardFrame.Content = mainStack;
+
+                //tap.Tapped += async (s, e) =>
+                //{
+                //    try
+                //    {
+                //        var editPage = new EvangPL.Views.InventoryAdjustment.InventoryAdjustment(group);
+                //        _hasNavigatedToDetail = true;
+                //        await Navigation.PushAsync(editPage);
+                //    }
+                //    catch (Exception ex)
+                //    {
+                //        await DisplayAlert("エラー", $"画面遷移に失敗しました: {ex.Message}", "OK");
+                //    }
+                //};
+                //cardFrame.GestureRecognizers.Add(tap);
 
                 listContainer.Children.Add(cardFrame);
             }
@@ -637,9 +713,9 @@ namespace EvangPL.Views.StockAdjust
         #endregion
     }
 
-    #region 棚卸調整实体Model
+    #region
     /// <summary>
-    /// 棚卸調整 查询条件Model
+    /// 棚卸調整 検索条件モデル
     /// </summary>
     public class StockAdjustPageInfo : EvangJsonModel
     {
@@ -651,7 +727,7 @@ namespace EvangPL.Views.StockAdjust
     }
 
     /// <summary>
-    /// 棚卸調整 明细行Item
+    /// 棚卸調整 Item
     /// </summary>
     public class StockAdjustItem
     {
@@ -663,7 +739,9 @@ namespace EvangPL.Views.StockAdjust
         public int DiffQty { get; set; }
         public string RegisterDate { get; set; } = "";
         public int LocationId { get; set; }
-    
+        public string LocationName { get; set; }
+        public int LineSeq { get; set; }
+
     }
     #endregion
 }
