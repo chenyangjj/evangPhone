@@ -48,6 +48,16 @@ namespace EvangPL.Views.InputDetail
         //    RESTletのSEARCH結果（SubData: "PREFERENCES"）から取得する。取得できない場合は安全側(false)。
         private bool _allowOverReceipt = false;
 
+        // ✅ [追加] 品目ごとに既に在庫として存在するロット/シリアル番号一覧。
+        //    RESTletのSEARCH結果（SubData: "EXISTING_SERIALS"）から取得する。
+        //    シリアル管理品目の受領時、この一覧に既にある番号を入力した場合は
+        //    保存前にエラーとする（NetSuiteの一意性制約による保存時エラー
+        //    「次のシリアル番号は在庫アイテム[XXX]に既に存在します」を事前に防ぐ）。
+        //    ※ ロット管理品目の番号も一緒に含まれるが、ロットは追加受領が正常なユースケース
+        //    （同じロット番号に数量を積み増す）のため、isSerialItem=trueの品目に対してのみ
+        //    この一覧との重複チェックを行う。
+        private List<ExistingSerialItem> _existingSerials = new List<ExistingSerialItem>();
+
         // ✅ [修正] ロット/シリアル入力の要否は、品目タイプ文字列(itemtype)の白名単一致ではなく、
         //    品目マスタの islotitem / isserialitem フラグ（PoLineItem.isLotItem / isSerialItem）で判定する。
         //    itemtypeの表記揺れ・想定外の値に左右されず、より確実に判定できるため。
@@ -80,6 +90,12 @@ namespace EvangPL.Views.InputDetail
 
         // ✅ 選択中の行をハイライトする背景色
         private static readonly Color SelectedRowColor = Color.FromArgb("#d7e8fa");
+
+        // ✅ [追加] 自前のローディング遮罩（EvangContentVM側の挙動に依存せず、確実にShow/Hideする）
+        //    BuildCompleteUI() 内で mainGrid の最上層に重ねて配置する。
+        private Grid? _loadingOverlay;
+        // ✅ [追加] 複数箇所（初期ロード/保存）からShow/Hideが重なっても正しく管理するための参照カウント
+        private int _loadingRefCount = 0;
 
         public InputDetail() : base("strInputDetail")
         {
@@ -119,7 +135,7 @@ namespace EvangPL.Views.InputDetail
             await BuildCompleteUI();
         }
 
-        // ✅ 从后端API加载数据（PO头信息 / PO未入库明细行 / 入库实绩 / ロケーション候補 / 会計プリファレンス）
+        // ✅ 从后端API加载数据（PO头信息 / PO未入库明细行 / 入库实绩 / ロケーション候補 / 会計プリファレンス / 既存ロット/シリアル番号）
         private async Task LoadDataFromApi()
         {
             if (string.IsNullOrEmpty(_orderId))
@@ -144,14 +160,19 @@ namespace EvangPL.Views.InputDetail
                 ResponseData<EvangJsonModel, EvangJsonModel>? result = null;
                 try
                 {
+                    // ✅ [追加] 自前のローディング遮罩を表示。
+                    //    ※注意：LoadDataFromApi() は BuildCompleteUI() より前に呼ばれるため、
+                    //    このタイミングでは _loadingOverlay がまだ null（画面自体が未構築）であり、
+                    //    実際には何も表示されない。初期表示時の"画面全体が薄暗く見える"症状の原因は、
+                    //    このRESTlet呼び出し自体ではなく、他の箇所（画面遷移アニメーションや
+                    //    EvangContentVM側の共通処理）にある可能性が高い。
+                    ShowLoading();
                     result = await this.Post<StockInDetailParam, EvangJsonModel, EvangJsonModel, EvangJsonModel>(request);
                 }
                 finally
                 {
-                    // ⚠️ TODO: ここでローディング遮罩(オーバーレイ)を確実に閉じる。
-                    // EvangContentVM / Post 内部で ShowLoading() が呼ばれているなら、
-                    // 対応する HideLoading() をここで必ず呼ぶこと（例外・エラー時も含めて）。
-                    // 例: HideLoading();  もしくは  await HideLoadingAsync();
+                    // ✅ [修正] 確実にローディング遮罩を閉じる（例外・エラー時も含めて必ず通る）
+                    HideLoading();
                 }
 
                 if (result == null)
@@ -195,27 +216,29 @@ namespace EvangPL.Views.InputDetail
                     }
                 }
 
-                System.Diagnostics.Debug.WriteLine($"LoadDataFromApi: データ読み込み成功 - 未入庫明細{_poLines.Count}件 / 入庫実績{_receiptHistory.Count}件 / ロケーション{_locationList.Count}件 / 超過受領許可={_allowOverReceipt}");
+                System.Diagnostics.Debug.WriteLine($"LoadDataFromApi: データ読み込み成功 - 未入庫明細{_poLines.Count}件 / 入庫実績{_receiptHistory.Count}件 / ロケーション{_locationList.Count}件 / 超過受領許可={_allowOverReceipt} / 既存ロット・シリアル{_existingSerials.Count}件");
             }
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"LoadDataFromApi: API呼び出しエラー - {ex.Message}");
 
-                // ⚠️ TODO: 例外時もローディング遮罩を確実に閉じる（上のfinallyで既にカバーされていれば不要）
-                // HideLoading();
+                // ✅ [補足] ローディング遮罩は内側のtry/finally（HideLoading()）で既に閉じられているため、
+                //    ここで改めて呼ぶ必要はない。
 
                 await MainThread.InvokeOnMainThreadAsync(() =>
                     DisplayAlert("エラー", $"データ取得中にエラーが発生しました: {ex.Message}", "OK"));
             }
         }
 
-        // ✅ PO_LINES / RECEIPT_HISTORY / LOCATION_LIST / PREFERENCES の4ブロックをそれぞれ独立してパースする
+        // ✅ PO_LINES / RECEIPT_HISTORY / LOCATION_LIST / PREFERENCES / EXISTING_SERIALS の
+        //    5ブロックをそれぞれ独立してパースする
         private void ParseSearchResult(ResponseData<EvangJsonModel, EvangJsonModel> result)
         {
             _poLines.Clear();
             _receiptHistory.Clear();
             _locationList.Clear();
             _allowOverReceipt = false; // ✅ [追加] 毎回リセット（取得できなければ安全側=false のまま）
+            _existingSerials.Clear(); // ✅ [追加] 毎回リセット
 
             if (result.SubData == null || result.SubData.Count == 0)
                 return;
@@ -247,6 +270,12 @@ namespace EvangPL.Views.InputDetail
                         var pref = BaseUtils.JsonToClass<PreferenceInfo>(subData.SubJson!);
                         _allowOverReceipt = pref?.AllowOverReceipt ?? false;
                         System.Diagnostics.Debug.WriteLine($"ParseSearchResult: PREFERENCES 解析成功 - AllowOverReceipt={_allowOverReceipt}");
+                    }
+                    // ✅ [追加] 既存ロット/シリアル番号一覧（シリアル管理品目の重複入力事前チェック用）
+                    else if (subData.SubName == "EXISTING_SERIALS")
+                    {
+                        _existingSerials = BaseUtils.JsonToClass<List<ExistingSerialItem>>(subData.SubJson!) ?? new List<ExistingSerialItem>();
+                        System.Diagnostics.Debug.WriteLine($"ParseSearchResult: EXISTING_SERIALS 解析成功 - {_existingSerials.Count}件");
                     }
                 }
                 catch (Exception ex)
@@ -304,9 +333,71 @@ namespace EvangPL.Views.InputDetail
             };
 
             mainGrid.Add(scrollView, 0, 0);
+
+            // ✅ [追加] ローディング遮罩を同じセル（0,0）に重ねて配置し、常に最上層に表示されるようにする。
+            //    Grid.Add は後から追加した要素ほど上に描画されるため、scrollViewの後に追加すればよい。
+            _loadingOverlay = BuildLoadingOverlay();
+            mainGrid.Add(_loadingOverlay, 0, 0);
+
             Content = mainGrid;
 
             System.Diagnostics.Debug.WriteLine("BuildCompleteUI: UI構築完了");
+        }
+
+        // ==================== ローディング遮罩（自前実装） ====================
+
+        // ✅ [追加] ローディング遮罩本体を作成（半透明背景＋中央にインジケータ）。
+        //    EvangContentVM側の遮罩に依存せず、本画面だけで確実にShow/Hideを制御するために自前実装した。
+        private Grid BuildLoadingOverlay()
+        {
+            var overlay = new Grid
+            {
+                BackgroundColor = Color.FromArgb("#80000000"), // 半透明の黒
+                IsVisible = false,
+                InputTransparent = false // ✅ ローディング中はタップを透過させず、下の操作をブロックする
+            };
+
+            var indicator = new ActivityIndicator
+            {
+                IsRunning = false,
+                Color = Colors.White,
+                WidthRequest = 50,
+                HeightRequest = 50,
+                HorizontalOptions = LayoutOptions.Center,
+                VerticalOptions = LayoutOptions.Center
+            };
+
+            overlay.Children.Add(indicator);
+            return overlay;
+        }
+
+        // ✅ [追加] ローディング表示開始（参照カウント方式：初期ロードと保存が重なっても安全に管理できる）
+        private void ShowLoading()
+        {
+            _loadingRefCount++;
+            if (_loadingOverlay != null)
+            {
+                _loadingOverlay.IsVisible = true;
+                if (_loadingOverlay.Children.FirstOrDefault() is ActivityIndicator indicator)
+                {
+                    indicator.IsRunning = true;
+                }
+            }
+        }
+
+        // ✅ [追加] ローディング表示終了（参照カウントが0になった時だけ実際に非表示にする）
+        //    必ず try/finally 内から呼ぶことで、成功時・例外時のいずれでも確実に閉じるようにする。
+        private void HideLoading()
+        {
+            _loadingRefCount = Math.Max(0, _loadingRefCount - 1);
+            if (_loadingRefCount == 0 && _loadingOverlay != null)
+            {
+                _loadingOverlay.IsVisible = false;
+                if (_loadingOverlay.Children.FirstOrDefault() is ActivityIndicator indicator)
+                {
+                    indicator.IsRunning = false;
+                }
+            }
         }
 
         // ==================== ヘッダー（仕入先/入荷予定日 + PO明細選択テーブル） ====================
@@ -650,9 +741,24 @@ namespace EvangPL.Views.InputDetail
             layout.Children.Add(locRow);
 
             // ✅ [変更] ロット/シリアル欄のラベル：品目タイプに応じて注記を追加
+            //    ★[追加] シリアル管理品目の場合は「数量は必ず1」であることを併記し、ユーザーに事前に伝える
+            string lotLabelText;
+            if (!requiresLot)
+            {
+                lotLabelText = "ロット / シリアル";
+            }
+            else if (currentItem.isSerialItem)
+            {
+                lotLabelText = "ロット / シリアル (スキャン可) ";
+            }
+            else
+            {
+                lotLabelText = "ロット / シリアル (スキャン可)";
+            }
+
             layout.Children.Add(new Label
             {
-                Text = requiresLot ? "ロット / シリアル (スキャン可)" : "ロット / シリアル",
+                Text = lotLabelText,
                 FontSize = 12,
                 TextColor = requiresLot ? Colors.Gray : Color.FromArgb("#a3a9b3")
             });
@@ -670,6 +776,10 @@ namespace EvangPL.Views.InputDetail
                 BackgroundColor = Colors.Transparent,
                 IsEnabled = requiresLot
             };
+            if (requiresLot)
+            {
+                _lotEntry.Unfocused += OnLotEntryUnfocused;
+            }
             lotRow.Add(WrapInputControl(_lotEntry, disabled: !requiresLot), 0, 1);
 
             var lotBarcodeIcon = BuildBarcodeIcon();
@@ -684,12 +794,28 @@ namespace EvangPL.Views.InputDetail
             };
             // ✅ [変更] 発注入庫の場合、PO明細行の残数量(remainingQty)を数量欄の初期値としてセットする。
             //    ユーザーはそのまま使うことも、必要に応じて手動で変更することもできる。
+            //    ★[追加] ただしシリアル管理品目は「1件＝数量1」固定のため、初期値も常に"1"にする
+            //    （残数量が2以上あっても、シリアル番号ごとに1件ずつ「+明細を追加」してもらう運用のため）。
+            string initialQtyText;
+            if (currentItem != null && currentItem.isSerialItem)
+            {
+                initialQtyText = "1";
+            }
+            else if (isPurchaseOrderReceipt && currentItem != null)
+            {
+                initialQtyText = currentItem.remainingQty.ToString();
+            }
+            else
+            {
+                initialQtyText = "";
+            }
+
             _qtyEntry = new Entry
             {
                 Placeholder = "数量を入力",
                 Keyboard = Keyboard.Numeric,
                 BackgroundColor = Colors.Transparent,
-                Text = (isPurchaseOrderReceipt && currentItem != null) ? currentItem.remainingQty.ToString() : ""
+                Text = initialQtyText
             };
             qtyRow.Add(WrapInputControl(_qtyEntry), 0, 0);
             qtyRow.Add(new Label { Text = "個", VerticalOptions = LayoutOptions.Center, HorizontalTextAlignment = TextAlignment.Center }, 1, 0);
@@ -752,9 +878,50 @@ namespace EvangPL.Views.InputDetail
                 lotNo = "";
             }
 
+            // ✅ [追加] シリアル管理品目の場合、入力された番号が既にNetSuite上の在庫として
+            //    存在していないか事前チェックする。ここでブロックしないと、保存時にNetSuite側の
+            //    一意性制約で「次のシリアル番号は在庫アイテム[XXX]に既に存在します」というエラーになり、
+            //    ユーザーは保存を押すまで気づけない。
+            //    （既存番号一覧はRESTletのSEARCH結果 EXISTING_SERIALS から取得済み。詳細はフィールド定義を参照）
+            if (currentItem.isSerialItem)
+            {
+                bool alreadyExistsInSystem = _existingSerials.Any(s =>
+                    s.ItemId == currentItem.itemId &&
+                    string.Equals(s.SerialNo, lotNo, StringComparison.OrdinalIgnoreCase));
+                if (alreadyExistsInSystem)
+                {
+                    await DisplayAlert("エラー",
+                        $"シリアル番号「{lotNo}」は品目「{currentItem.itemCode}」の在庫として既に存在しています。別の番号を入力してください。",
+                        "OK");
+                    return;
+                }
+
+                // ✅ 今回のセッション内（未保存分）で同じ番号を重複入力していないかもチェック
+                bool alreadyPendingSameSerial = _pendingLots.Any(p =>
+                    p.ItemId == currentItem.itemId &&
+                    string.Equals(p.LotNo, lotNo, StringComparison.OrdinalIgnoreCase));
+                if (alreadyPendingSameSerial)
+                {
+                    await DisplayAlert("エラー",
+                        $"シリアル番号「{lotNo}」は既にこの明細内に入力済みです。別の番号を入力してください。",
+                        "OK");
+                    return;
+                }
+            }
+
             if (!int.TryParse(qtyText, out int qty) || qty <= 0)
             {
                 await DisplayAlert("エラー", "入庫数量を正しく入力してください。", "OK");
+                return;
+            }
+
+            // ✅ [追加] シリアル管理品目の場合、1件のロット入力（＝1シリアル番号）につき数量は1のみ許可。
+            //    NetSuiteの在庫詳細の仕様上、シリアル番号1つに数量2以上を割り当てることはできないため
+            //    （割り当てると「在庫詳細の合計数量はXとなる必要があります」等のエラーになる）、
+            //    複数個ある場合はシリアル番号ごとに「+明細を追加」を繰り返してもらう必要がある。
+            if (currentItem.isSerialItem && qty > 1)
+            {
+                await DisplayAlert("エラー", "シリアル管理品目のため、数量は1のみ入力できます。複数個ある場合は、シリアル番号を入力しなおして「+明細を追加」を繰り返してください。", "OK");
                 return;
             }
 
@@ -792,10 +959,48 @@ namespace EvangPL.Views.InputDetail
             });
 
             if (_lotEntry != null) _lotEntry.Text = string.Empty;
-            if (_qtyEntry != null) _qtyEntry.Text = string.Empty;
+            // ✅ [変更] シリアル管理品目は次の入力でも数量1を初期値に戻す（都度1に固定される想定のため）
+            if (_qtyEntry != null) _qtyEntry.Text = currentItem.isSerialItem ? "1" : string.Empty;
 
             RefreshPendingLotTable();
             RefreshBottomPendingTable();
+        }
+
+        // ✅ [追加] ロット/シリアル入力欄のフォーカスアウト時チェック。
+        //    シリアル管理品目のみ対象：
+        //    ①既にNetSuite上の在庫として存在する番号（_existingSerials）
+        //    ②今回のセッション内で未保存のまま既に入力済みの番号（_pendingLots）
+        //    のいずれかと一致する場合は、その場でエラー表示して入力をクリアする。
+        //    「+明細を追加」ボタン押下時・保存時のチェックと内容は同じだが、
+        //    フォーカスが外れた時点（スキャン直後含む）でより早く気づけるようにするためのもの。
+        private async void OnLotEntryUnfocused(object? sender, FocusEventArgs e)
+        {
+            var currentItem = _selectedPoLine;
+            if (currentItem == null || !currentItem.isSerialItem) return;
+
+            var lotNo = _lotEntry?.Text?.Trim();
+            if (string.IsNullOrEmpty(lotNo)) return;
+
+            bool alreadyExistsInSystem = _existingSerials.Any(s =>
+                s.ItemId == currentItem.itemId &&
+                string.Equals(s.SerialNo, lotNo, StringComparison.OrdinalIgnoreCase));
+
+            bool alreadyPendingSameSerial = _pendingLots.Any(p =>
+                p.ItemId == currentItem.itemId &&
+                string.Equals(p.LotNo, lotNo, StringComparison.OrdinalIgnoreCase));
+
+            if (alreadyExistsInSystem || alreadyPendingSameSerial)
+            {
+                var reason = alreadyExistsInSystem
+                    ? "既に在庫として存在しています"
+                    : "既にこの明細内に入力済みです";
+
+                await DisplayAlert("エラー",
+                    $"シリアル番号「{lotNo}」は品目「{currentItem.itemCode}」に{reason}。別の番号を入力してください。",
+                    "OK");
+
+                if (_lotEntry != null) _lotEntry.Text = string.Empty;
+            }
         }
 
         // ✅ 明細登録エリア内の小プレビュー表（選択中の品目のみ）を再構築して差し替える
@@ -967,7 +1172,21 @@ namespace EvangPL.Views.InputDetail
                     return;
                 }
 
-                // ✅ [追加] 保存直前の最終防衛ライン：品目ごとに _pendingLots の合計数量が
+                // ✅ [追加] 保存直前の最終防衛ライン（その1）：シリアル管理品目について、
+                //    _pendingLots内の各行の数量が1になっているかを再チェックする。
+                //    通常は「+ロットを追加」時点でチェック済みだが、将来的な実装変更等に備えた保険的チェック。
+                var serialItemIds = _poLines.Where(l => l.isSerialItem).Select(l => l.itemId).ToHashSet();
+                var invalidSerialLot = _pendingLots.FirstOrDefault(p => serialItemIds.Contains(p.ItemId) && p.Qty != 1);
+                if (invalidSerialLot != null)
+                {
+                    await MainThread.InvokeOnMainThreadAsync(() =>
+                        DisplayAlert("エラー",
+                            $"品目「{invalidSerialLot.ItemCode}」はシリアル管理品目のため、数量は1のみ指定可能です（ロット「{invalidSerialLot.LotNo}」の数量: {invalidSerialLot.Qty}）。",
+                            "OK"));
+                    return;
+                }
+
+                // ✅ [追加] 保存直前の最終防衛ライン（その2）：品目ごとに _pendingLots の合計数量が
                 //    残数量(remainingQty)を超えていないか再チェックする（超過許可がfalseの場合のみ）。
                 //    通常は「+ロットを追加」時点でチェック済みだが、
                 //    ・PO明細の残数量がAPI再取得等で変わっていた
@@ -998,6 +1217,25 @@ namespace EvangPL.Views.InputDetail
                     }
                 }
 
+                // ✅ [追加] 保存直前の最終防衛ライン（その3）：シリアル管理品目について、
+                //    _pendingLots内の番号が既存在庫（_existingSerials）と重複していないかを再チェックする。
+                //    通常は「+ロットを追加」時点でチェック済みだが、
+                //    ・他端末/他ユーザーが同じ番号で先に受領していた（本画面表示後にNetSuite側の在庫が変化した）
+                //    ・将来的な実装変更で他の経路から_pendingLotsに追加された
+                //    といったケースに備えた保険的チェック。ここで検知できなかった場合でも、
+                //    RESTlet側のsave()実行時にNetSuiteの一意性制約で最終的にブロックされる。
+                var duplicateSerialLot = _pendingLots.FirstOrDefault(p =>
+                    serialItemIds.Contains(p.ItemId) &&
+                    _existingSerials.Any(s => s.ItemId == p.ItemId && string.Equals(s.SerialNo, p.LotNo, StringComparison.OrdinalIgnoreCase)));
+                if (duplicateSerialLot != null)
+                {
+                    await MainThread.InvokeOnMainThreadAsync(() =>
+                        DisplayAlert("エラー",
+                            $"品目「{duplicateSerialLot.ItemCode}」のシリアル番号「{duplicateSerialLot.LotNo}」は既に在庫として存在しています。「登録済み明細」から削除し、別の番号で登録しなおしてください。",
+                            "OK"));
+                    return;
+                }
+
                 var lotsToSave = _pendingLots.Select(p => new LotSaveItem
                 {
                     ItemId = p.ItemId,
@@ -1024,14 +1262,16 @@ namespace EvangPL.Views.InputDetail
                 ResponseData<EvangJsonModel, EvangJsonModel>? saveResult = null;
                 try
                 {
+                    // ✅ [追加] 保存中はローディング遮罩を表示し、二重タップ等を防止する。
+                    //    こちらは BuildCompleteUI() 実行後（画面表示後）に呼ばれるため、
+                    //    _loadingOverlay は生成済みで、実際に画面が暗転して表示される。
+                    ShowLoading();
                     saveResult = await this.Post<StockInSaveParam, EvangJsonModel, EvangJsonModel, EvangJsonModel>(request);
                 }
                 finally
                 {
-                    // ⚠️ TODO: ここでローディング遮罩(オーバーレイ)を確実に閉じる。
-                    // EvangContentVM / Post 内部で ShowLoading() が呼ばれているなら、
-                    // 対応する HideLoading() をここで必ず呼ぶこと（例外・エラー時も含めて）。
-                    // 例: HideLoading();  もしくは  await HideLoadingAsync();
+                    // ✅ [修正] 確実にローディング遮罩を閉じる（例外・エラー時も含めて必ず通る）
+                    HideLoading();
                 }
 
                 if (saveResult == null)
@@ -1083,8 +1323,8 @@ namespace EvangPL.Views.InputDetail
             }
             catch (Exception ex)
             {
-                // ⚠️ TODO: 例外時もローディング遮罩を確実に閉じる（上のfinallyで既にカバーされていれば不要）
-                // HideLoading();
+                // ✅ [補足] ローディング遮罩は内側のtry/finally（HideLoading()）で既に閉じられているため、
+                //    ここで改めて呼ぶ必要はない。
 
                 await MainThread.InvokeOnMainThreadAsync(() =>
                     DisplayAlert("エラー", $"保存処理中にエラーが発生しました: {ex.Message}", "OK"));
@@ -1161,7 +1401,9 @@ namespace EvangPL.Views.InputDetail
             //    ロット/シリアル入力の要否判定の主キーとして使用する（RequiresLotOrSerial参照）。
             public bool isLotItem { get; set; }
             // ✅ [追加] 品目マスタの「シリアル番号品目」チェックボックス(isserialitem)。
-            //    ロット/シリアル入力の要否判定の主キーとして使用する（RequiresLotOrSerial参照）。
+            //    ロット/シリアル入力の要否判定の主キー、「数量は1のみ」制限の判定、
+            //    および既存シリアル番号重複チェック（_existingSerialsとの突合）に使用する
+            //    （RequiresLotOrSerial / OnAddLotButtonClicked / OnSaveButtonClicked 参照）。
             public bool isSerialItem { get; set; }
             // ✅ [追加] PO明細（行レベル。未設定時はヘッダーのロケーション）を発注入庫時の
             //    ロケーション自動セットに使用する
@@ -1201,6 +1443,15 @@ namespace EvangPL.Views.InputDetail
         {
             // 「受領書での超過を許可」(Allow Overage in Receipts / OVERRECEIPTS)
             public bool AllowOverReceipt { get; set; }
+        }
+
+        // ✅ [追加] 既存ロット/シリアル番号（GetStockInDetail RESTlet の EXISTING_SERIALS から取得）
+        //    シリアル管理品目の受領時、入力された番号がここに存在すれば
+        //    NetSuiteの一意性制約に反するため、保存前にブロックする。
+        public class ExistingSerialItem
+        {
+            public string ItemId { get; set; } = "";
+            public string SerialNo { get; set; } = "";
         }
     }
 }
