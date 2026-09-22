@@ -93,6 +93,12 @@ namespace EvangPL.Views.InventoryAdjustment
         private static readonly Color DisabledFg = Colors.Gray;
         private static readonly Color SelectedRowColor = Color.FromArgb("#d7e8fa");
 
+        // ★ リスト内の未保存空白行（新規入力用）を取得するヘルパー
+        private StockAdjustItem? GetExistingBlankItem()
+        {
+            return _adjustItems.FirstOrDefault(i => i.Id == 0 && string.IsNullOrWhiteSpace(i.ItemCode));
+        }
+
         private List<PendingLotItem> GetLotsForSelectedItem()
         {
             if (_selectedItem == null) return new List<PendingLotItem>();
@@ -112,6 +118,23 @@ namespace EvangPL.Views.InventoryAdjustment
             if (items != null && items.Count > 0)
             {
                 _adjustItems = items;
+                // ★ 読み込んだデータに空白行が含まれていない場合、必ず1件追加する
+                if (GetExistingBlankItem() == null)
+                {
+                    _nextNewLineNo++;
+                    _adjustItems.Add(new StockAdjustItem
+                    {
+                        Id = 0,
+                        LineNo = _nextNewLineNo,
+                        AdjustNo = "",
+                        RegisterDate = "",
+                        ItemCode = "",
+                        LocationId = 0,
+                        LocationName = "",
+                        DiffQty = 0,
+                        AdjustReason = ""
+                    });
+                }
             }
             else
             {
@@ -213,9 +236,10 @@ namespace EvangPL.Views.InventoryAdjustment
                 tableGrid.Add(lblDiff, 2, dataRow);
                 tableGrid.Add(lblReason, 3, dataRow);
 
+                bool isBlank = item.Id == 0 && string.IsNullOrWhiteSpace(item.ItemCode);
                 var deleteLabel = new Label
                 {
-                    Text = "❌",
+                    Text = isBlank ? "" : "❌",
                     FontSize = 11,
                     Padding = new Thickness(0),
                     HorizontalOptions = LayoutOptions.Fill,
@@ -224,10 +248,13 @@ namespace EvangPL.Views.InventoryAdjustment
                     VerticalTextAlignment = TextAlignment.Center,
                     BackgroundColor = rowBg
                 };
-                var capturedForDelete = item;
-                var deleteTap = new TapGestureRecognizer();
-                deleteTap.Tapped += async (s, e) => await OnDeleteDetailRow(capturedForDelete);
-                deleteLabel.GestureRecognizers.Add(deleteTap);
+                if (!isBlank)
+                {
+                    var capturedForDelete = item;
+                    var deleteTap = new TapGestureRecognizer();
+                    deleteTap.Tapped += async (s, e) => await OnDeleteDetailRow(capturedForDelete);
+                    deleteLabel.GestureRecognizers.Add(deleteTap);
+                }
                 tableGrid.Add(deleteLabel, 4, dataRow);
 
                 var captured = item;
@@ -252,8 +279,17 @@ namespace EvangPL.Views.InventoryAdjustment
             return border;
         }
 
+        // 唯一の空白行は削除不可
         private async Task OnDeleteDetailRow(StockAdjustItem item)
         {
+            // 空白行かつリストに他の有効な明細がない場合は削除させない
+            bool isBlank = item.Id == 0 && string.IsNullOrWhiteSpace(item.ItemCode);
+            if (isBlank && GetExistingBlankItem()?.LineNo == item.LineNo && _adjustItems.Count <= 1)
+            {
+                await DisplayAlert("確認", "新規入力用の空行は削除できません。", "OK");
+                return;
+            }
+
             bool confirm = await DisplayAlert("確認", $"明細「{item.ItemCode}」を削除しますか？", "はい", "いいえ");
             if (!confirm) return;
 
@@ -263,10 +299,26 @@ namespace EvangPL.Views.InventoryAdjustment
 
             _savedNewLots.RemoveAll(l => l.LineNo == item.LineNo);
 
-            if (_adjustItems.Count == 0)
+            // 削除後に空白行が0件になった場合のみ、新しい空白行を確保する
+            if (GetExistingBlankItem() == null)
             {
-                _selectedItem = null;
-                _isNewDetail = false;
+                _nextNewLineNo++;
+                var newBlankItem = new StockAdjustItem
+                {
+                    Id = 0,
+                    LineNo = _nextNewLineNo,
+                    AdjustNo = _adjustItems.FirstOrDefault()?.AdjustNo ?? "",
+                    RegisterDate = _adjustItems.FirstOrDefault()?.RegisterDate ?? "",
+                    ItemCode = "",
+                    LocationId = 0,
+                    LocationName = "",
+                    DiffQty = 0,
+                    AdjustReason = ""
+                };
+                _adjustItems.Add(newBlankItem);
+                _lotsPerItem[newBlankItem.LineNo] = new List<PendingLotItem>();
+                _selectedItem = newBlankItem;
+                _isNewDetail = true;
                 _isCurrentDetailSaved = false;
                 _hasUnsavedLotChanges = false;
                 if (_detailSelectionTableHost != null)
@@ -302,28 +354,21 @@ namespace EvangPL.Views.InventoryAdjustment
             UpdateFormEditability();
         }
 
+        // 空白行は切り替え時に絶対に削除しない
+        // 追加ボタン廃止後は空白行＝唯一の入力手段なので常に保持する
         private void RemoveUnsavedNewDetailIfNeeded()
         {
-            if (_selectedItem != null && _selectedItem.Id == 0 && !_isCurrentDetailSaved)
-            {
-                _adjustItems.Remove(_selectedItem);
-                if (_lotsPerItem.ContainsKey(_selectedItem.LineNo))
-                    _lotsPerItem.Remove(_selectedItem.LineNo);
-
-                if (_detailSelectionTableHost != null)
-                    _detailSelectionTableHost.Content = BuildDetailSelectionTable();
-            }
+            // 何もしない。空白行は常にリストに残す。
         }
 
         private void RevertUnsavedLotChangesIfNeeded()
         {
             if (_selectedItem == null) return;
             if (!_hasUnsavedLotChanges) return;
-            if (!_isCurrentDetailSaved) return; 
+            if (!_isCurrentDetailSaved) return;
 
             var lineNo = _selectedItem.LineNo;
 
-            
             var savedLots = _savedNewLots
                 .Where(l => l.LineNo == lineNo)
                 .Select(l => new PendingLotItem
@@ -344,7 +389,6 @@ namespace EvangPL.Views.InventoryAdjustment
         {
             if (_selectedItem != null && _selectedItem.LineNo != item.LineNo)
             {
-                
                 RevertUnsavedLotChangesIfNeeded();
                 RemoveUnsavedNewDetailIfNeeded();
             }
@@ -352,7 +396,7 @@ namespace EvangPL.Views.InventoryAdjustment
             _selectedItem = item;
             _isNewDetail = (item.Id == 0);
             _isCurrentDetailSaved = !_isNewDetail || !string.IsNullOrWhiteSpace(item.ItemCode);
-            _hasUnsavedLotChanges = false; 
+            _hasUnsavedLotChanges = false;
 
             if (_detailSelectionTableHost != null)
                 _detailSelectionTableHost.Content = BuildDetailSelectionTable();
@@ -456,34 +500,7 @@ namespace EvangPL.Views.InventoryAdjustment
                 _locBorder.BackgroundColor = canEditItemAndLoc ? Colors.White : DisabledBg;
         }
 
-        private void OnAddDetailRowClicked(object? sender, EventArgs e)
-        {
-            RevertUnsavedLotChangesIfNeeded();
-            RemoveUnsavedNewDetailIfNeeded();
-
-            _nextNewLineNo++;
-            var newItem = new StockAdjustItem
-            {
-                Id = 0,
-                LineNo = _nextNewLineNo,
-                AdjustNo = _adjustItems.FirstOrDefault()?.AdjustNo ?? "",
-                RegisterDate = _adjustItems.FirstOrDefault()?.RegisterDate ?? "",
-                ItemCode = "",
-                LocationId = 0,
-                LocationName = "",
-                DiffQty = 0,
-                AdjustReason = ""
-            };
-
-            _adjustItems.Add(newItem);
-            _lotsPerItem[newItem.LineNo] = new List<PendingLotItem>();
-
-            if (_detailSelectionTableHost != null)
-                _detailSelectionTableHost.Content = BuildDetailSelectionTable();
-
-            OnDetailRowSelected(newItem);
-        }
-
+        // 保存時に既存の空白行があれば再利用し、重複追加を防ぐ
         private async void OnSaveDetailClicked(object? sender, EventArgs e)
         {
             if (_selectedItem == null)
@@ -571,14 +588,40 @@ namespace EvangPL.Views.InventoryAdjustment
             }
 
             _isCurrentDetailSaved = true;
-            _hasUnsavedLotChanges = false; 
+            _hasUnsavedLotChanges = false;
+
+            StockAdjustItem? nextBlankItem = GetExistingBlankItem();
+
+            if (nextBlankItem == null)
+            {
+                _nextNewLineNo++;
+                nextBlankItem = new StockAdjustItem
+                {
+                    Id = 0,
+                    LineNo = _nextNewLineNo,
+                    AdjustNo = _adjustItems.FirstOrDefault()?.AdjustNo ?? "",
+                    RegisterDate = _adjustItems.FirstOrDefault()?.RegisterDate ?? "",
+                    ItemCode = "",
+                    LocationId = 0,
+                    LocationName = "",
+                    DiffQty = 0,
+                    AdjustReason = ""
+                };
+
+                // 最後尾に追加することで、保存済みの明細が上に並び、新規入力行が常に最下部に来る
+                _adjustItems.Add(nextBlankItem);
+                _lotsPerItem[nextBlankItem.LineNo] = new List<PendingLotItem>();
+            }
 
             if (_detailSelectionTableHost != null)
                 _detailSelectionTableHost.Content = BuildDetailSelectionTable();
 
             RefreshAllLotsSummaryTable();
 
-            await DisplayAlert("完了", "明細の値を保存しました。", "OK");
+            // 空白行を選択状態にしてフォームをクリア
+            OnDetailRowSelected(nextBlankItem);
+
+            await DisplayAlert("完了", "明細を保存しました。", "OK");
         }
 
         private void BuildUI()
@@ -614,21 +657,6 @@ namespace EvangPL.Views.InventoryAdjustment
             _detailSelectionTableHost = new ContentView();
             _detailSelectionTableHost.Content = BuildDetailSelectionTable();
             formContainer.Children.Add(_detailSelectionTableHost);
-
-            var addDetailBtn = new Button
-            {
-                Text = "+ 明細を追加",
-                BackgroundColor = Colors.Transparent,
-                TextColor = Color.FromArgb("#245a96"),
-                BorderColor = Color.FromArgb("#245a96"),
-                BorderWidth = 2,
-                FontAttributes = FontAttributes.Bold,
-                CornerRadius = 5,
-                HeightRequest = 35,
-                Margin = new Thickness(0, 0, 0, 4)
-            };
-            addDetailBtn.Clicked += OnAddDetailRowClicked;
-            formContainer.Children.Add(addDetailBtn);
 
             formContainer.Children.Add(new BoxView
             {
@@ -1119,7 +1147,13 @@ namespace EvangPL.Views.InventoryAdjustment
 
                         foreach (var localLot in savedLocalLots)
                         {
-                            if (!lots.Any(l => l.LotNo == localLot.LotNo && l.ItemCode == localLot.ItemCode))
+                            bool existsAsSaved = lots.Any(l =>
+                                !l.IsNew &&
+                                l.LotNo == localLot.LotNo &&
+                                l.ItemCode == localLot.ItemCode &&
+                                l.LineNo == localLot.LineNo);
+
+                            if (!existsAsSaved)
                                 lots.Add(localLot);
                         }
 
@@ -1407,7 +1441,6 @@ namespace EvangPL.Views.InventoryAdjustment
         private async Task OnRegisterClicked(object sender, EventArgs e)
         {
             RevertUnsavedLotChangesIfNeeded();
-            RemoveUnsavedNewDetailIfNeeded();
 
             var validItems = _adjustItems.Where(i => !string.IsNullOrWhiteSpace(i.ItemCode)).ToList();
 
@@ -1552,7 +1585,6 @@ namespace EvangPL.Views.InventoryAdjustment
                 LineNo = _selectedItem?.LineNo ?? 0
             });
 
-            // ★ 新增Lot也属于未保存修改
             _hasUnsavedLotChanges = true;
 
             if (_lotEntry != null) _lotEntry.Text = string.Empty;
