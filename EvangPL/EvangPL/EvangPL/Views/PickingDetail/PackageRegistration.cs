@@ -8,6 +8,7 @@ using Microsoft.Maui.Controls.Shapes;
 using System.Collections.ObjectModel;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json;
 using PickingDetailInfo = EvangPL.Utils.PickingDetailInfo;
 
 namespace EvangPL.Views.PickingDetail
@@ -106,7 +107,7 @@ namespace EvangPL.Views.PickingDetail
 
             // ---- 梱包No. 行（Entry + バーコードアイコン） ----
             root.Children.Add(new Label { Text = "梱包No.(スキャン可)", FontSize = 12, TextColor = Colors.Gray });
-            _entryPackageNo = new Entry {};
+            _entryPackageNo = new Entry { };
             var packageRow = new Grid
             {
                 ColumnDefinitions =
@@ -121,7 +122,7 @@ namespace EvangPL.Views.PickingDetail
 
             // ✅ 【修正】品目 行（Entry + バーコードアイコン。Pickerからテキスト入力に変更）----
             root.Children.Add(new Label { Text = "品目 (スキャン可)", FontSize = 12, TextColor = Colors.Gray });
-            _entryItemCode = new Entry {};
+            _entryItemCode = new Entry { };
 
             // ✅ [追加] 選択中品目の内部ID（非表示）。品目Entryの入力に連動して更新する。
             _hiddenItemInternalIdLabel = new Label { IsVisible = false };
@@ -158,7 +159,7 @@ namespace EvangPL.Views.PickingDetail
 
             // ---- 数量 ----
             root.Children.Add(new Label { Text = "数量", FontSize = 12, TextColor = Colors.Gray });
-            _entryQty = new Entry {Keyboard = Keyboard.Numeric };
+            _entryQty = new Entry { Keyboard = Keyboard.Numeric };
             root.Children.Add(WrapInputControl(_entryQty));
 
             // ---- 「この内容を追加」ボタン ----
@@ -436,13 +437,58 @@ namespace EvangPL.Views.PickingDetail
                     return;
                 }
 
-                await MainThread.InvokeOnMainThreadAsync(() =>
-                    DisplayAlert("完了", "出荷処理が完了しました。", "OK"));
+                // ✅ [追加] SubData の FULFILLMENT_INFO から出荷伝票番号(fulfillmentNumber)を取り出す。
+                //    画像1（入庫保存完了）と同様に、完了メッセージへ伝票番号を表示するために使用する。
+                string fulfillmentNumber = "";
+                if (saveResult.SubData != null)
+                {
+                    var fulfillInfoSub = saveResult.SubData.FirstOrDefault(s => s.SubName == "FULFILLMENT_INFO");
+                    if (fulfillInfoSub != null && !string.IsNullOrEmpty(fulfillInfoSub.SubJson))
+                    {
+                        try
+                        {
+                            using var fulfillDoc = JsonDocument.Parse(fulfillInfoSub.SubJson);
+                            if (fulfillDoc.RootElement.TryGetProperty("fulfillmentNumber", out var numEle)
+                                && numEle.ValueKind == JsonValueKind.String)
+                            {
+                                fulfillmentNumber = numEle.GetString() ?? "";
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            System.Diagnostics.Debug.WriteLine($"FULFILLMENT_INFO解析エラー: {ex.Message}");
+                        }
+                    }
+                }
 
-                // ✅ [修正] PopToRootAsync() → PopAsync() に変更。
-                //    アプリの最初の画面まで戻ってしまう挙動をやめ、
-                //    画面7-1（PickingDetail、この画面をPushしてきた呼び出し元）へ1つだけ戻る。
+                // ✅ [修正] 「成功」＋出荷伝票番号を表示（画像1の入庫保存完了と同じ体裁）
+                await MainThread.InvokeOnMainThreadAsync(() =>
+                    DisplayAlert("成功", $"出荷保存が完了しました。\n出荷伝票番号: {fulfillmentNumber}", "OK"));
+
+                // ✅ [修正] 画面7-1（PickingDetail）を経由せず、StockOut（画面6：検索結果）まで直接戻り、
+                //    初期表示（1ページ目）で再検索を行う。
+                //    ナビゲーションスタック構成： ... → StockOut → PickingDetail → PackageRegistration(現在)
+                var navStack = Navigation.NavigationStack;
+                EvangPL.Views.StockOut.StockOut? targetStockOut = null;
+                if (navStack.Count >= 3 && navStack[navStack.Count - 3] is EvangPL.Views.StockOut.StockOut so)
+                {
+                    targetStockOut = so;
+                }
+
+                if (navStack.Count >= 2)
+                {
+                    // 画面7-1（PickingDetail）をスタックから除去（画面遷移アニメーションは発生しない）
+                    Navigation.RemovePage(navStack[navStack.Count - 2]);
+                }
+
+                // 現在の画面7-2を閉じる → StackからPickingDetailを除去済みのため、StockOut画面が表示される
                 await Navigation.PopAsync();
+
+                if (targetStockOut != null)
+                {
+                    // ✅ [追加] StockOut側の初期表示用再検索メソッドを呼び出す
+                    await targetStockOut.ReloadInitial();
+                }
             }
             catch (Exception ex)
             {
