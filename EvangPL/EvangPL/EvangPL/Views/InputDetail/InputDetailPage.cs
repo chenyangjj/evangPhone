@@ -48,17 +48,10 @@ namespace EvangPL.Views.InputDetail
         //    RESTletのSEARCH結果（SubData: "PREFERENCES"）から取得する。取得できない場合は安全側(false)。
         private bool _allowOverReceipt = false;
 
-        // ✅ [追加] ロット/シリアル入力が必須となる品目タイプ（NetSuiteのitemtype値）。
-        //    ここに含まれない品目タイプ（非在庫品目、非在庫費用/値引き、通常在庫品目(数量のみ管理)、
-        //    アセンブリ等）を選択した場合は「ロット / シリアル」欄を編集不可にする。
-        //    ※ ロット管理アセンブリ/シリアル管理アセンブリを扱う場合は下記2件のコメントを外してください。
-        private static readonly HashSet<string> LotOrSerialItemTypes = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-        {
-            "LotNumberedInventoryItem",   // ロット管理在庫品目
-            "SerializedInventoryItem",    // シリアル管理在庫品目
-            // "LotNumberedAssemblyItem",    // ロット管理アセンブリ（必要な場合はコメント解除）
-            // "SerializedAssemblyItem",     // シリアル管理アセンブリ（必要な場合はコメント解除）
-        };
+        // ✅ [修正] ロット/シリアル入力の要否は、品目タイプ文字列(itemtype)の白名単一致ではなく、
+        //    品目マスタの islotitem / isserialitem フラグ（PoLineItem.isLotItem / isSerialItem）で判定する。
+        //    itemtypeの表記揺れ・想定外の値に左右されず、より確実に判定できるため。
+        //    詳細は RequiresLotOrSerial() を参照。
 
         // ✅ 修正：「前明細/次明細」のページングを廃止。
         //    代わりに、ヘッダー上部の「未受領PO明細」テーブルで行をタップして選択する方式に変更。
@@ -569,16 +562,21 @@ namespace EvangPL.Views.InputDetail
 
         // ==================== 明細登録エリア ====================
 
-        // ✅ [追加] 選択中の品目がロット/シリアル入力必須かどうかを判定する
+        // ✅ [修正] 選択中の品目がロット/シリアル入力必須かどうかを判定する。
+        //    従来は itemtype 文字列を固定の白名单(LotOrSerialItemTypes)と比較していたが、
+        //    itemtype の表記揺れ・想定外の値（NetSuite側の仕様変更や取得漏れ等）が原因で、
+        //    本来ロット管理対象の品目が「管理対象外」と誤判定されるケースがあった。
+        //    そのため、品目マスタが直接持つ islotitem / isserialitem フラグ
+        //    （RESTletのSQLで取得し、PoLineItem.isLotItem / isSerialItem に格納済み）で
+        //    判定する方式に変更。どちらか一方でもtrueであれば「ロット/シリアル入力必須」とする。
         private static bool RequiresLotOrSerial(PoLineItem? item)
         {
-            if (item == null || string.IsNullOrEmpty(item.itemType))
+            if (item == null)
             {
-                // itemType が取得できていない場合は、既存動作を壊さないよう「必須」扱いにしておく
-                // （RESTlet側でitemtypeを返すよう対応した後は、この分岐に入らなくなる想定）
+                // データが取得できていない場合は、既存動作を壊さないよう「必須」扱いにしておく
                 return true;
             }
-            return LotOrSerialItemTypes.Contains(item.itemType);
+            return item.isLotItem || item.isSerialItem;
         }
 
         // ✅ 修正：戻り値を View に変更。
@@ -623,7 +621,7 @@ namespace EvangPL.Views.InputDetail
                 .ToList();
 
             // ✅ [デバッグ用] ロケーション一覧が空の場合はここで気づけるようにログを残す
-            System.Diagnostics.Debug.WriteLine($"BuildDetailInputArea: locationNames件数={locationNames.Count}, isPurchaseOrderReceipt={isPurchaseOrderReceipt}, currentItem.locationName='{currentItem?.locationName}'");
+            System.Diagnostics.Debug.WriteLine($"BuildDetailInputArea: locationNames件数={locationNames.Count}, isPurchaseOrderReceipt={isPurchaseOrderReceipt}, currentItem.locationName='{currentItem?.locationName}', isLotItem={currentItem?.isLotItem}, isSerialItem={currentItem?.isSerialItem}");
 
             // ✅ [修正] Picker の SelectedIndex を ItemsSource より先に設定すると、MAUIのPickerで
             //    選択が反映されないケースがあるため、まず ItemsSource を設定してからオブジェクト生成後に
@@ -1153,10 +1151,17 @@ namespace EvangPL.Views.InputDetail
             public string itemId { get; set; } = "";
             public string itemCode { get; set; } = "";
             public string itemName { get; set; } = "";
-            // ✅ [追加] NetSuiteのitemtype値（例: InvtPart / LotNumberedInventoryItem /
+            // ✅ NetSuiteのitemtype値（例: InvtPart / LotNumberedInventoryItem /
             //    SerializedInventoryItem / NonInvtPart / Discount / Assembly 等）。
-            //    RESTlet側のPO_LINES取得SQLにこの列を追加してもらう必要がある。
+            //    現状はロット/シリアル要否の判定には使用していない（isLotItem/isSerialItemを使用）。
+            //    表示・ログ用途として引き続き保持。
             public string itemType { get; set; } = "";
+            // ✅ [追加] 品目マスタの「ロット番号品目」チェックボックス(islotitem)。
+            //    ロット/シリアル入力の要否判定の主キーとして使用する（RequiresLotOrSerial参照）。
+            public bool isLotItem { get; set; }
+            // ✅ [追加] 品目マスタの「シリアル番号品目」チェックボックス(isserialitem)。
+            //    ロット/シリアル入力の要否判定の主キーとして使用する（RequiresLotOrSerial参照）。
+            public bool isSerialItem { get; set; }
             // ✅ [追加] PO明細（行レベル。未設定時はヘッダーのロケーション）を発注入庫時の
             //    ロケーション自動セットに使用する
             public string locationId { get; set; } = "";
