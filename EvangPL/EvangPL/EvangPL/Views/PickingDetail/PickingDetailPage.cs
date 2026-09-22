@@ -37,6 +37,19 @@ namespace EvangPL.Views.PickingDetail
     ///   4. IsLotItem を bool? にし、RESTlet が未返却(null)の場合は「編集可」として扱う（LotEditable）。
     ///      これによりロット欄が全品目で編集不可になる不具合を解消。
     ///   5. 受注(SO)の場合、品目選択時に受注行のロケーションと（未出荷数量 - 登録済み数量）を自動セットする。
+    ///
+    /// ✅ [シリアル対応追加分]
+    ///   6. 品目のIsSerialItem（RESTletのPACKAGE_ITEMSで返却）に応じて、シリアル管理品目は
+    ///      1明細行あたりの数量を必ず1に制限する（数量>1の場合はメッセージを表示して明細追加を拒否）。
+    ///
+    /// ✅ [今回の修正分・追加]
+    ///   7. シリアル管理品目（IsSerialItem=true）はロット管理対象外（IsLotItem=false）であっても、
+    ///      入力欄自体は「シリアル番号」を入力するために編集可能にする必要がある。
+    ///      これまでは LotEditable（=IsLotItem）だけで編集可否を判定していたため、
+    ///      「ロット管理対象外 かつ シリアル管理対象」の品目でロット欄（実質シリアル欄）が
+    ///      誤って編集不可になっていた。LotOrSerialEditable を追加し、
+    ///      「ロット管理対象」または「シリアル管理対象」のいずれかであれば編集可とするよう修正。
+    ///      あわせてラベル・プレースホルダー・バリデーションメッセージもシリアル品目向けの文言に切り替える。
     /// </summary>
     public class PickingDetail : EvangContentVM
     {
@@ -64,7 +77,7 @@ namespace EvangPL.Views.PickingDetail
 
         // ==================== 入力コントロール ====================
         private Picker? _locationPicker;
-        private Entry? _entryLot;       // ロット番号入力欄（スキャン/手動入力用）
+        private Entry? _entryLot;       // ロット番号（またはシリアル番号）入力欄（スキャン/手動入力用）
         private Entry? _entryQty;
 
         // ==================== 色定数 ====================
@@ -73,8 +86,6 @@ namespace EvangPL.Views.PickingDetail
         private const int InputCornerRadius = 6;
         private static readonly Color SelectedRowColor = Color.FromArgb("#d7e8fa");
 
-        // [追加] 開発用モックデータ切替（本番は false のまま。true にすると RESTlet を呼ばず内蔵データで検証できる）
-        private const bool UseMockData = false;
 
         // ==================== コンストラクター ====================
         public PickingDetail() : base("strPickingDetail")
@@ -98,51 +109,6 @@ namespace EvangPL.Views.PickingDetail
             BuildUI();
         }
 
-        // ==================== [開発用] モックデータ初期化 ====================
-        private void InitializeMockData()
-        {
-            _packageItems = new List<PackageItem>
-            {
-                new PackageItem
-                {
-                    ItemCode = "部品B-2020",
-                    ItemInternalId = "1001",
-                    IsLotItem = true,        // モックはロット管理対象として扱う
-                    LocationId = "1",        // ✅ [追加] モック：受注行のロケーション
-                    LocationName = "本社倉庫",
-                    UnshippedQty = 20,
-                    OrderedQty = 30,
-                    Customer = _detailInfo?.CustomerName ?? "山田工業(株)",
-                    ShipDate = _detailInfo?.ScheduleDate ?? "2026-07-08",
-                    Details = new List<PackageDetail>()
-                },
-                new PackageItem
-                {
-                    ItemCode = "部品C-3030",
-                    ItemInternalId = "1002",
-                    IsLotItem = false,       // ロット管理対象外品のモック例
-                    LocationId = "2",        // ✅ [追加] モック：受注行のロケーション
-                    LocationName = "第二倉庫",
-                    UnshippedQty = 10,
-                    OrderedQty = 10,
-                    Customer = _detailInfo?.CustomerName ?? "山田工業(株)",
-                    ShipDate = _detailInfo?.ScheduleDate ?? "2026-07-08",
-                    Details = new List<PackageDetail>()
-                }
-            };
-
-            _locationList = new List<LocationItem>
-            {
-                new LocationItem { Id = "1", Name = "本社倉庫" },
-                new LocationItem { Id = "2", Name = "第二倉庫" }
-            };
-
-            _lotList = new List<LotItem>
-            {
-                new LotItem { ItemInternalId = "1001", LotNo = "LOT-A001", LocationId = "1", LocationName = "本社倉庫", AvailableQty = 15 },
-                new LotItem { ItemInternalId = "1001", LotNo = "LOT-A002", LocationId = "2", LocationName = "第二倉庫", AvailableQty = 8 }
-            };
-        }
 
         // ==================== RESTlet②から未出荷品目/明細を取得（ActionType=SEARCH） ====================
         // ✅ InputDetail.LoadDataFromApi() と同じ流儀：Post<..., EvangJsonModel, EvangJsonModel, EvangJsonModel>
@@ -234,6 +200,7 @@ namespace EvangPL.Views.PickingDetail
 
         // ✅ SubData の中から SubName="LOT_LIST" を取り出してパースする。
         //    RESTlet側は {ItemInternalId, ItemCode, LotNo, LocationId, LocationName, AvailableQty} を返す。
+        //    （シリアル管理品目の場合、LotNo にはシリアル番号が入る想定）
         private List<LotItem> ParseLotList(ResponseData<EvangJsonModel, EvangJsonModel> apiResult)
         {
             var newList = new List<LotItem>();
@@ -263,7 +230,7 @@ namespace EvangPL.Views.PickingDetail
         }
 
         // ✅ SubData の中から SubName="PACKAGE_ITEMS" を取り出してパースする
-        //    RESTlet側は {ItemCode, ItemInternalId, IsLotItem, LocationId, LocationName, OrderedQty, UnshippedQty} を返す
+        //    RESTlet側は {ItemCode, ItemInternalId, IsLotItem, IsSerialItem, LocationId, LocationName, OrderedQty, UnshippedQty} を返す
         //    （未出荷数量が0以下の行は含まれない）
         private List<PackageItem> ParsePackageItems(ResponseData<EvangJsonModel, EvangJsonModel> apiResult)
         {
@@ -312,14 +279,7 @@ namespace EvangPL.Views.PickingDetail
         private async Task BuildCompleteUI()
         {
             // ヘッダー/選択テーブルの描画前に、未出荷品目・明細データを準備する
-            if (UseMockData)
-            {
-                InitializeMockData();
-            }
-            else
-            {
-                await LoadPackageItemsFromServer();
-            }
+            await LoadPackageItemsFromServer();
 
             // 1. ヘッダー（顧客/出荷予定日 + 未出荷品目選択テーブル）※画面7-1
             pageHeaderInfo = BuildHeader();
@@ -614,11 +574,23 @@ namespace EvangPL.Views.PickingDetail
             locRow.Add(BuildBarcodeIcon(), 1, 0);
             layout.Children.Add(locRow);
 
-            // 2. ロット行（Entry + バーコードアイコン）
-            //    ✅ [修正] LotEditable（IsLotItem が null の場合は編集可）で編集可否を切り替える。
-            var lotEditable = currentPackage.LotEditable;
-            var lotLabelText = lotEditable ? "ロット (スキャン可)" : "ロット (この品目はロット管理対象外)";
+            // 2. ロット（またはシリアル）行（Entry + バーコードアイコン）
+            //    ✅ [修正] ロット欄は「ロット管理対象」または「シリアル管理対象」のいずれかであれば編集可にする。
+            //       （IsLotItem が null の場合は従来通り編集可扱い。IsSerialItem=true の場合も編集可にする。）
+            var lotEditable = currentPackage.LotOrSerialEditable;
+            var isSerial = currentPackage.IsSerial;
+
+            string lotLabelText;
+            if (isSerial)
+            {
+                lotLabelText = "シリアル (スキャン可)";
+            }
+            else
+            {
+                lotLabelText = lotEditable ? "ロット (スキャン可)" : "ロット (この品目はロット管理対象外)";
+            }
             layout.Children.Add(new Label { Text = lotLabelText, FontSize = 12, TextColor = Colors.Gray });
+
             var lotRow = new Grid
             {
                 ColumnDefinitions =
@@ -629,13 +601,15 @@ namespace EvangPL.Views.PickingDetail
             };
             _entryLot = new Entry
             {
-                Placeholder = lotEditable ? "スキャンまたは入力" : "入力不要（管理対象外の品目）",
+                Placeholder = lotEditable
+                    ? (isSerial ? "シリアル番号をスキャンまたは入力" : "スキャンまたは入力")
+                    : "入力不要（管理対象外の品目）",
                 BackgroundColor = Colors.Transparent,
-                IsEnabled = lotEditable // ロット管理対象外は編集不可にする
+                IsEnabled = lotEditable // ロット・シリアルいずれの管理対象外でもない場合のみ編集不可にする
             };
             if (lotEditable)
             {
-                // フォーカスが外れたタイミングでロットの存在チェック＋自動セットを行う。
+                // フォーカスが外れたタイミングでロット（シリアル）の存在チェック＋自動セットを行う。
                 // （TextChanged で1文字ごとに判定すると誤検知しやすいため Unfocused を採用）
                 _entryLot.Unfocused += OnLotEntryUnfocused;
             }
@@ -643,7 +617,7 @@ namespace EvangPL.Views.PickingDetail
             lotRow.Add(BuildBarcodeIcon(), 1, 0);
             if (!lotEditable)
             {
-                // ロット管理対象外の場合は行全体をグレーアウトして「触れない」ことを視覚的に示す
+                // ロット・シリアルいずれの管理対象外でもない場合は行全体をグレーアウトして「触れない」ことを視覚的に示す
                 lotRow.Opacity = 0.5;
             }
             layout.Children.Add(lotRow);
@@ -662,6 +636,11 @@ namespace EvangPL.Views.PickingDetail
             qtyRow.Add(WrapInputControl(_entryQty), 0, 0);
             qtyRow.Add(new Label { Text = "個", VerticalOptions = LayoutOptions.Center, HorizontalTextAlignment = TextAlignment.Center }, 1, 0);
             layout.Children.Add(qtyRow);
+
+            // ✅ [追加] シリアル管理品目の場合は「数量は1のみ」の注記を表示する
+            if (currentPackage.IsSerial)
+            {
+            }
 
             // ✅ [追加] 受注(SO)の場合、品目選択時に受注行のロケーションと残数量を自動セットする
             //    （Picker/Entry が作成済みのこのタイミングで呼び出す）
@@ -694,7 +673,8 @@ namespace EvangPL.Views.PickingDetail
         ///   ・出荷元ロケーション：受注行に設定されているロケーション
         ///   ・数量：未出荷数量 - 登録済み明細の合計
         /// を入力欄へ自動セットする。
-        /// ロット品目でロットを入力した場合は OnLotEntryUnfocused がロットの在庫情報で上書きする。
+        /// ロット（またはシリアル）品目で値を入力した場合は OnLotEntryUnfocused が在庫情報で上書きする。
+        /// ✅ [追加] シリアル管理品目の場合は、自動セットする数量が1を超えないようにする。
         /// </summary>
         private void ApplyDefaultsForSalesOrder(PackageItem pkg)
         {
@@ -716,21 +696,31 @@ namespace EvangPL.Views.PickingDetail
             if (_entryQty != null)
             {
                 var remaining = pkg.UnshippedQty - pkg.Details.Sum(d => d.DetailQty);
+                if (pkg.IsSerial)
+                {
+                    // シリアル管理品目は自動セットも1件ずつに制限する
+                    remaining = Math.Min(remaining, 1);
+                }
                 if (remaining > 0) _entryQty.Text = remaining.ToString();
             }
         }
 
-        // ==================== ロット入力欄フォーカスアウト時の処理 ====================
+        // ==================== ロット（シリアル）入力欄フォーカスアウト時の処理 ====================
         /// <summary>
-        /// ①存在チェック：入力されたロットが在庫(_lotList)に存在しない場合はメッセージを表示し、入力をクリアする。
-        /// ②自動セット：受注(SO)の場合、存在するロットであれば場所・数量を自動でセットする。
+        /// ①存在チェック：入力されたロット/シリアルが在庫(_lotList)に存在しない場合はメッセージを表示し、入力をクリアする。
+        /// ②自動セット：受注(SO)の場合、存在するロット/シリアルであれば場所・数量を自動でセットする。
+        /// ✅ [修正] LotEditable ではなく LotOrSerialEditable でガードし、シリアル管理品目でも動作するようにする。
+        /// ✅ [追加] シリアル管理品目の場合は、自動セットする数量が1を超えないようにする。
         /// </summary>
         private async void OnLotEntryUnfocused(object? sender, FocusEventArgs e)
         {
-            if (_selectedPackage == null || !_selectedPackage.LotEditable) return;
+            if (_selectedPackage == null || !_selectedPackage.LotOrSerialEditable) return;
 
             var lotNo = _entryLot?.Text?.Trim();
             if (string.IsNullOrEmpty(lotNo)) return;
+
+            var isSerial = _selectedPackage.IsSerial;
+            var label = isSerial ? "シリアル" : "ロット";
 
             var matches = _lotList
                 .Where(l => l.ItemInternalId == _selectedPackage.ItemInternalId
@@ -739,12 +729,12 @@ namespace EvangPL.Views.PickingDetail
 
             if (matches.Count == 0)
             {
-                await DisplayAlert("エラー", $"ロット「{lotNo}」は在庫に見つかりません。入力内容をご確認ください。", "OK");
+                await DisplayAlert("エラー", $"{label}「{lotNo}」は在庫に見つかりません。入力内容をご確認ください。", "OK");
                 if (_entryLot != null) _entryLot.Text = string.Empty;
                 return;
             }
 
-            // 複数ロケーションに同一ロットがある場合は在庫数量が最も多いものを優先採用
+            // 複数ロケーションに同一ロット（シリアル）がある場合は在庫数量が最も多いものを優先採用
             var best = matches.OrderByDescending(l => l.AvailableQty).First();
 
             // 受注(SO)の場合のみ場所・数量を自動セットする
@@ -767,6 +757,11 @@ namespace EvangPL.Views.PickingDetail
                     var alreadyEntered = _selectedPackage.Details.Sum(d => d.DetailQty);
                     var remaining = _selectedPackage.UnshippedQty - alreadyEntered;
                     var autoQty = (int)Math.Min(best.AvailableQty, Math.Max(remaining, 0));
+                    if (isSerial)
+                    {
+                        // シリアル管理品目は自動セットも1件ずつに制限する
+                        autoQty = Math.Min(autoQty, 1);
+                    }
                     if (autoQty > 0)
                     {
                         _entryQty.Text = autoQty.ToString();
@@ -801,7 +796,8 @@ namespace EvangPL.Views.PickingDetail
             }
 
             var items = currentPackage.Details;
-            var headers = new List<string> { "ロット", "数量", "" };
+            var lotColumnHeader = currentPackage.IsSerial ? "シリアル" : "ロット";
+            var headers = new List<string> { lotColumnHeader, "数量", "" };
             var columnWidths = new List<GridLength>
             {
                 new GridLength(3, GridUnitType.Star),
@@ -875,6 +871,9 @@ namespace EvangPL.Views.PickingDetail
                 return;
             }
 
+            var isSerial = _selectedPackage.IsSerial;
+            var label = isSerial ? "シリアル" : "ロット";
+
             var selectedLocationName = _locationPicker?.SelectedItem as string;
             var detailNo = _entryLot?.Text?.Trim();
             var qtyText = _entryQty?.Text?.Trim();
@@ -885,35 +884,44 @@ namespace EvangPL.Views.PickingDetail
                 return;
             }
 
-            // ロット管理対象（編集可）品目のみロット必須＋存在チェックを行う
-            if (_selectedPackage.LotEditable)
+            // ✅ [修正] ロット管理対象 または シリアル管理対象（LotOrSerialEditable）の品目のみ
+            //    入力必須＋在庫存在チェックを行う。
+            if (_selectedPackage.LotOrSerialEditable)
             {
                 if (string.IsNullOrEmpty(detailNo))
                 {
-                    await DisplayAlert("エラー", "ロットを入力してください。", "OK");
+                    await DisplayAlert("エラー", $"{label}を入力してください。", "OK");
                     return;
                 }
 
-                // 最終防御として、追加ボタン押下時にもロットの存在チェックを行う
+                // 最終防御として、追加ボタン押下時にもロット/シリアルの存在チェックを行う
                 // （Unfocusedイベントが発火しないまま追加された場合の保険）
                 var lotExists = _lotList.Any(l =>
                     l.ItemInternalId == _selectedPackage.ItemInternalId
                     && string.Equals(l.LotNo, detailNo, StringComparison.OrdinalIgnoreCase));
                 if (!lotExists)
                 {
-                    await DisplayAlert("エラー", $"ロット「{detailNo}」は在庫に見つかりません。", "OK");
+                    await DisplayAlert("エラー", $"{label}「{detailNo}」は在庫に見つかりません。", "OK");
                     return;
                 }
             }
             else
             {
-                // ロット管理対象外品目はロット番号を空のまま登録する
+                // ロット・シリアルいずれの管理対象外でもない品目は空のまま登録する
                 detailNo = string.Empty;
             }
 
             if (!int.TryParse(qtyText, out int qty) || qty <= 0)
             {
                 await DisplayAlert("エラー", "数量は1以上の整数で入力してください。", "OK");
+                return;
+            }
+
+            // ✅ シリアル管理品目は1明細行あたり数量1のみ許可。
+            //    数量が複数個ある場合は1個ずつ（＝1行ずつ）明細を追加してもらう。
+            if (isSerial && qty > 1)
+            {
+                await DisplayAlert("エラー", "シリアル管理品目のため、数量は1のみ入力できます。複数個ある場合は1個ずつ明細を追加してください。", "OK");
                 return;
             }
 
@@ -978,7 +986,7 @@ namespace EvangPL.Views.PickingDetail
                 FontAttributes = FontAttributes.Bold
             });
 
-            var headers = new List<string> { "品目", "ロット", "数量" };
+            var headers = new List<string> { "品目", "ロット/シリアル", "数量" };
             var columnWidths = new List<GridLength>
             {
                 new GridLength(3, GridUnitType.Star),
@@ -1123,7 +1131,7 @@ namespace EvangPL.Views.PickingDetail
         // ==================== データモデル ====================
         public class PackageDetail
         {
-            public string DetailNo { get; set; } = string.Empty;   // ロット番号
+            public string DetailNo { get; set; } = string.Empty;   // ロット番号（シリアル管理品目の場合はシリアル番号）
             public int DetailQty { get; set; }
             // ✅ Location はNetSuiteの内部ID（SAVE時にそのままRESTletへ渡し、select項目の設定に使う）
             //    LocationName は画面表示専用（プルダウンで選んだテキスト）
@@ -1133,7 +1141,7 @@ namespace EvangPL.Views.PickingDetail
 
         /// <summary>
         /// 未出荷品目1行分。RESTlet②(SEARCH)のPACKAGE_ITEMSと1:1対応
-        /// （ItemCode/ItemInternalId/IsLotItem/LocationId/LocationName/OrderedQty/UnshippedQty）。
+        /// （ItemCode/ItemInternalId/IsLotItem/IsSerialItem/LocationId/LocationName/OrderedQty/UnshippedQty）。
         /// Details は画面7-1でユーザーが入力したロット/ロケーション/数量の登録済み明細で、サーバーには送らず
         /// クライアント側で保持したまま画面7-2へ引き渡す。
         /// </summary>
@@ -1149,6 +1157,18 @@ namespace EvangPL.Views.PickingDetail
             //    true  = ロット管理対象 / false = ロット管理対象外（ロット入力欄を編集不可にする）
             public bool? IsLotItem { get; set; }
             public bool LotEditable => IsLotItem ?? true;
+
+            // ✅ [追加] シリアル管理品目かどうか。
+            //    null/false = シリアル管理対象外（複数個をまとめて1明細行で登録可）
+            //    true       = シリアル管理対象（1明細行あたり数量は必ず1にする）
+            public bool? IsSerialItem { get; set; }
+            public bool IsSerial => IsSerialItem ?? false;
+
+            // ✅ [今回の修正・追加] ロット欄（実質シリアル欄）を編集可能にするかどうかの統合判定。
+            //    「ロット管理対象」または「シリアル管理対象」のいずれかであれば編集可とする。
+            //    これにより「IsLotItem=false かつ IsSerialItem=true」（シリアル管理だがロット管理対象外）
+            //    の品目でも、シリアル番号を入力できるようになる。
+            public bool LotOrSerialEditable => LotEditable || IsSerial;
 
             // ✅ [追加] 受注行に設定されている出荷元ロケーション（SO で品目選択時に自動セットする）
             public string LocationId { get; set; } = string.Empty;
@@ -1168,8 +1188,9 @@ namespace EvangPL.Views.PickingDetail
             public string Name { get; set; } = "";
         }
 
-        // RESTletのLOT_LISTと1:1対応。ロットの存在チェックと
+        // RESTletのLOT_LISTと1:1対応。ロット/シリアルの存在チェックと
         // 受注(SO)時の場所・数量自動セットに利用する。
+        // （シリアル管理品目の場合、LotNo にはシリアル番号が入る想定）
         public class LotItem
         {
             public string ItemInternalId { get; set; } = "";
@@ -1194,7 +1215,7 @@ namespace EvangPL.Views.PickingDetail
         public List<PickingDetailSaveLine> Details { get; set; } = new List<PickingDetailSaveLine>();
     }
 
-    /// <summary>保存時に送信する1明細行（梱包No/品目/品目内部ID/ロケーション/ロット/数量）</summary>
+    /// <summary>保存時に送信する1明細行（梱包No/品目/品目内部ID/ロケーション/ロット(またはシリアル)/数量）</summary>
     public class PickingDetailSaveLine
     {
         public string PackageNo { get; set; } = "";
@@ -1204,6 +1225,7 @@ namespace EvangPL.Views.PickingDetail
         public string ItemInternalId { get; set; } = "";
         public string Location { get; set; } = "";
         public string LotNo { get; set; } = "";
+        // シリアル管理品目の場合、Qtyは必ず1で1行ごとに送信される想定（フロント側でOnAddDetailClickedにて制御済み）。
         public int Qty { get; set; }
     }
     #endregion
