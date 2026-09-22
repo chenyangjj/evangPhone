@@ -69,8 +69,15 @@ namespace EvangPL.Views.InventoryTransferPageDetails
         private const int ButtonCornerRadius = 5;
 
         // ==========================================
+        // ★ リスト内の未保存空白行（新規入力用）を取得するヘルパー
+        // ==========================================
+        private TransferDetailItem? GetExistingBlankDetail()
+        {
+            return _details.FirstOrDefault(d => string.IsNullOrWhiteSpace(d.ItemCode));
+        }
+
+        // ==========================================
         // コンストラクタ
-        // ★ 新規モード：最上部の明細テーブルに空行を1行追加
         // ==========================================
         public InventoryTransferPageDetails() : this(null)
         {
@@ -81,7 +88,6 @@ namespace EvangPL.Views.InventoryTransferPageDetails
             _editRecord = editRecord;
             Title = IsEditMode ? "在庫振替 - 編集" : "在庫振替 - 新規登録";
 
-            // ★ 新規モード：空の明細を1行追加し、その行を選択状態にする
             if (!IsEditMode)
             {
                 _details.Add(new TransferDetailItem
@@ -526,7 +532,8 @@ namespace EvangPL.Views.InventoryTransferPageDetails
         }
 
         // ==========================================
-        // 明細保存ボタン押下時
+        // ★ 明細保存ボタン押下時
+        // ★ 位置チェックは「保存」ボタン押下時に一括で行うため、ここでは実施しない
         // ==========================================
         private async void OnSaveDetailClicked(object? sender, EventArgs e)
         {
@@ -540,22 +547,7 @@ namespace EvangPL.Views.InventoryTransferPageDetails
                 }
 
                 var fromLoc = fromPicker?.SelectedItem as LocationData;
-                if (fromLoc == null || fromLoc.id == null)
-                {
-                    await DisplayAlert("エラー", "移動元ロケーションを選択してください。", "OK");
-                    return;
-                }
                 var toLoc = toPicker?.SelectedItem as LocationData;
-                if (toLoc == null || toLoc.id == null)
-                {
-                    await DisplayAlert("エラー", "移動先ロケーションを選択してください。", "OK");
-                    return;
-                }
-                if (fromLoc.id == toLoc.id)
-                {
-                    await DisplayAlert("エラー", "移動元と移動先に同じロケーションは選択できません。", "OK");
-                    return;
-                }
 
                 if (_currentItemIsLot && _pendingLots.Count == 0)
                 {
@@ -609,6 +601,23 @@ namespace EvangPL.Views.InventoryTransferPageDetails
                     _details.Add(detail);
                 }
 
+                var nextBlankItem = GetExistingBlankDetail();
+                if (nextBlankItem == null)
+                {
+                    var blank = new TransferDetailItem
+                    {
+                        ItemCode     = "",
+                        FromLocation = null,
+                        ToLocation   = null,
+                        IsLotItem    = false,
+                        Lots         = new List<PendingLotItem>()
+                    };
+                    _details.Add(blank);
+                    nextBlankItem = blank;
+                }
+
+                _editingDetailIndex = _details.IndexOf(nextBlankItem);
+
                 RefreshTopTable();
                 RefreshBottomPendingTable();
 
@@ -624,7 +633,7 @@ namespace EvangPL.Views.InventoryTransferPageDetails
         }
 
         // ==========================================
-        // フォームを初期状態に戻す
+        // ★ フォームを初期状態に戻す
         // ==========================================
         private void ClearForm()
         {
@@ -639,7 +648,6 @@ namespace EvangPL.Views.InventoryTransferPageDetails
             _currentItemCode  = null;
             _currentItemIsLot = false;
             islotflag         = false;
-            _editingDetailIndex = -1;
 
             if (_lotSectionContainer != null)
                 _lotSectionContainer.IsVisible = true;
@@ -707,6 +715,7 @@ namespace EvangPL.Views.InventoryTransferPageDetails
                 tableGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
                 var detail = _details[r];
+                bool isBlank = string.IsNullOrWhiteSpace(detail.ItemCode);
                 var rowBg = (r == _editingDetailIndex) ? SelectedRowColor : Colors.White;
 
                 var itemLabel = new Label
@@ -730,9 +739,10 @@ namespace EvangPL.Views.InventoryTransferPageDetails
                     HorizontalTextAlignment = TextAlignment.Center,
                     VerticalTextAlignment = TextAlignment.Center
                 };
+
                 var delLabel = new Label
                 {
-                    Text = "❌",
+                    Text = isBlank ? "" : "❌",
                     FontSize = 11,
                     Padding = new Thickness(4),
                     BackgroundColor = rowBg,
@@ -748,9 +758,12 @@ namespace EvangPL.Views.InventoryTransferPageDetails
                 itemLabel.GestureRecognizers.Add(tapRow);
                 qtyLabel.GestureRecognizers.Add(tapRow);
 
-                var tapDel = new TapGestureRecognizer();
-                tapDel.Tapped += (s, e) => OnDeleteDetail(capIdx);
-                delLabel.GestureRecognizers.Add(tapDel);
+                if (!isBlank)
+                {
+                    var tapDel = new TapGestureRecognizer();
+                    tapDel.Tapped += async (s, e) => await OnDeleteDetailAsync(capIdx);
+                    delLabel.GestureRecognizers.Add(tapDel);
+                }
 
                 tableGrid.Add(itemLabel, 0, rowIdx);
                 tableGrid.Add(qtyLabel, 1, rowIdx);
@@ -768,6 +781,9 @@ namespace EvangPL.Views.InventoryTransferPageDetails
             return tableBorder;
         }
 
+        // ==========================================
+        // 行タップ → フォームへ回显
+        // ==========================================
         private void OnTopTableRowSelected(int index)
         {
             if (index < 0 || index >= _details.Count) return;
@@ -779,6 +795,9 @@ namespace EvangPL.Views.InventoryTransferPageDetails
             RefreshBottomPendingTable();
         }
 
+        // ==========================================
+        // 明細をフォームへ展開
+        // ==========================================
         private void LoadDetailToForm(TransferDetailItem detail)
         {
             _suppressItemSearch = true;
@@ -827,16 +846,50 @@ namespace EvangPL.Views.InventoryTransferPageDetails
             RefreshPendingLotTable();
         }
 
-        private void OnDeleteDetail(int index)
+        // ==========================================
+        // ★ 明細削除（確認ダイアログ付き）
+        // ==========================================
+        private async Task OnDeleteDetailAsync(int index)
         {
             if (index < 0 || index >= _details.Count) return;
 
+            var target = _details[index];
+            bool isBlank = string.IsNullOrWhiteSpace(target.ItemCode);
+
+            if (isBlank) return;
+
+            bool confirm = await DisplayAlert(
+                "確認",
+                $"明細「{target.ItemCode}」を削除しますか？",
+                "はい",
+                "いいえ");
+            if (!confirm) return;
+
             _details.RemoveAt(index);
 
-            if (_editingDetailIndex == index)
+            if (GetExistingBlankDetail() == null)
+            {
+                _details.Add(new TransferDetailItem
+                {
+                    ItemCode     = "",
+                    FromLocation = null,
+                    ToLocation   = null,
+                    IsLotItem    = false,
+                    Lots         = new List<PendingLotItem>()
+                });
+            }
+
+            var nextBlank = GetExistingBlankDetail();
+            if (nextBlank != null)
+            {
+                _editingDetailIndex = _details.IndexOf(nextBlank);
+                LoadDetailToForm(nextBlank);
+            }
+            else
+            {
                 _editingDetailIndex = -1;
-            else if (_editingDetailIndex > index)
-                _editingDetailIndex--;
+                ClearForm();
+            }
 
             RefreshTopTable();
             RefreshPendingLotTable();
@@ -915,7 +968,6 @@ namespace EvangPL.Views.InventoryTransferPageDetails
                     RefreshBottomPendingTable();
                 }
 
-                // ★ 空行（品目未入力）は除外して送信
                 var validDetails = _details
                     .Where(d => !string.IsNullOrWhiteSpace(d.ItemCode))
                     .ToList();
@@ -1126,7 +1178,6 @@ namespace EvangPL.Views.InventoryTransferPageDetails
                 if (_qtyEntry != null) _qtyEntry.Text = string.Empty;
 
                 RefreshPendingLotTable();
-                RefreshBottomPendingTable();
             }
             catch (Exception ex)
             {
@@ -1147,7 +1198,6 @@ namespace EvangPL.Views.InventoryTransferPageDetails
         {
             _pendingLots.Remove(item);
             RefreshPendingLotTable();
-            RefreshBottomPendingTable();
         }
 
         private void RefreshPendingLotTable()
@@ -1167,11 +1217,8 @@ namespace EvangPL.Views.InventoryTransferPageDetails
 
             for (int i = 0; i < _details.Count; i++)
             {
-                if (i == _editingDetailIndex && _details[i].IsLotItem) continue;
                 result.AddRange(_details[i].Lots);
             }
-
-            result.AddRange(_pendingLots);
 
             return result;
         }
@@ -1194,6 +1241,10 @@ namespace EvangPL.Views.InventoryTransferPageDetails
             }
         }
 
+        // ==========================================
+        // ★ 底部表ビルド
+        // onDelete = null を渡すことで ❌ 列を非表示にする
+        // ==========================================
         private View BuildBottomPendingTable()
         {
             var allLots = CollectBottomLots();
@@ -1211,32 +1262,13 @@ namespace EvangPL.Views.InventoryTransferPageDetails
                 FontAttributes = FontAttributes.Bold
             });
             container.Children.Add(
-                BuildEditableLotTableInternal(allLots, showItemColumn: true, onDelete: OnDeleteDetailLot));
+                BuildEditableLotTableInternal(allLots, showItemColumn: true, onDelete: null));
             return container;
-        }
-
-        private void OnDeleteDetailLot(PendingLotItem lot)
-        {
-            if (_pendingLots.Remove(lot))
-            {
-                RefreshPendingLotTable();
-            }
-            else
-            {
-                foreach (var d in _details)
-                {
-                    if (d.Lots.Remove(lot))
-                        break;
-                }
-            }
-
-            RefreshTopTable();
-            RefreshPendingLotTable();
-            RefreshBottomPendingTable();
         }
 
         // ==========================================
         // 削除ボタン付き一覧テーブル
+        // onDelete == null のときは ❌ 列を描画しない
         // ==========================================
         private Border BuildEditableLotTableInternal(
             List<PendingLotItem> items,

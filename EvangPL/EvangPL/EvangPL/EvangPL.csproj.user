@@ -3,7 +3,9 @@
   <PropertyGroup>
     <IsFirstTimeProjectOpen>False</IsFirstTimeProjectOpen>
     <ActiveDebugFramework>net9.0-android</ActiveDebugFramework>
-    <ActiveDebugProfile>Android Emulator</ActiveDebugProfile>
+    <ActiveDebugProfile>Small Phone (Android 13.0 - API 33)</ActiveDebugProfile>
     <SelectedPlatformGroup>Emulator</SelectedPlatformGroup>
+    <DefaultDevice>Small_Phone</DefaultDevice>
+    <SelectedDevice>Small_Phone</SelectedDevice>
   </PropertyGroup>
 </Project>

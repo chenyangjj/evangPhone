@@ -1,0 +1,1371 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>EvangPL</name>
+    </assembly>
+    <members>
+        <member name="T:EvangPL.Components.InboundHistoryCard">
+            <summary>
+            入庫履歴単一カードコンポーネント
+            </summary>
+        </member>
+        <member name="M:EvangPL.Components.InboundHistoryCard.GetStatusColor(System.String)">
+            <summary>
+            ステータスに応じた背景色を返す
+            </summary>
+        </member>
+        <member name="T:EvangPL.Components.InboundRecord">
+            <summary>
+            入庫履歴データモデル
+            </summary>
+        </member>
+        <member name="T:EvangPL.Components.InboundHistoryCardView">
+            <summary>
+            入庫履歴カード一覧ビュー（ページング対応）
+            </summary>
+        </member>
+        <member name="M:EvangPL.Components.InboundHistoryCardView.UpdateData(System.Collections.Generic.List{EvangPL.Components.InboundRecord})">
+            <summary>
+            ページ切り替え時にデータを更新する
+            </summary>
+        </member>
+        <member name="T:EvangPL.Resources.Strings.StringResources">
+            <summary>
+              一个强类型的资源类，用于查找本地化的字符串等。
+            </summary>
+        </member>
+        <member name="P:EvangPL.Resources.Strings.StringResources.ResourceManager">
+            <summary>
+              返回此类使用的缓存的 ResourceManager 实例。
+            </summary>
+        </member>
+        <member name="P:EvangPL.Resources.Strings.StringResources.Culture">
+            <summary>
+              重写当前线程的 CurrentUICulture 属性，对
+              使用此强类型资源类的所有资源查找执行重写。
+            </summary>
+        </member>
+        <member name="P:EvangPL.Resources.Strings.StringResources.strAccount">
+            <summary>
+              查找类似 アカウント 的本地化字符串。
+            </summary>
+        </member>
+        <member name="P:EvangPL.Resources.Strings.StringResources.strAccountID">
+            <summary>
+              查找类似 アカウントID 的本地化字符串。
+            </summary>
+        </member>
+        <member name="P:EvangPL.Resources.Strings.StringResources.strInput">
+            <summary>
+              查找类似 投入 的本地化字符串。
+            </summary>
+        </member>
+        <member name="P:EvangPL.Resources.Strings.StringResources.strLogin">
+            <summary>
+              查找类似 ログイン 的本地化字符串。
+            </summary>
+        </member>
+        <member name="P:EvangPL.Resources.Strings.StringResources.strLogout">
+            <summary>
+              查找类似 ログアウト 的本地化字符串。
+            </summary>
+        </member>
+        <member name="P:EvangPL.Resources.Strings.StringResources.strMaterialsList">
+            <summary>
+              查找类似 所要量一覧 的本地化字符串。
+            </summary>
+        </member>
+        <member name="P:EvangPL.Resources.Strings.StringResources.strMenu">
+            <summary>
+              查找类似 メニュー 的本地化字符串。
+            </summary>
+        </member>
+        <member name="P:EvangPL.Resources.Strings.StringResources.strOrderSearch">
+            <summary>
+              查找类似 オーダー一覧 的本地化字符串。
+            </summary>
+        </member>
+        <member name="P:EvangPL.Resources.Strings.StringResources.strProcessInfo">
+            <summary>
+              查找类似 工順一覧 的本地化字符串。
+            </summary>
+        </member>
+        <member name="P:EvangPL.Resources.Strings.StringResources.strProcessSearch">
+            <summary>
+              查找类似 工順検索 的本地化字符串。
+            </summary>
+        </member>
+        <member name="P:EvangPL.Resources.Strings.StringResources.strVersion">
+            <summary>
+              查找类似 バージョン 的本地化字符串。
+            </summary>
+        </member>
+        <member name="P:EvangPL.Resources.Strings.StringResources.strWorkRecord">
+            <summary>
+              查找类似 作業記録一覧 的本地化字符串。
+            </summary>
+        </member>
+        <member name="T:EvangPL.Views.InboundHistory.InboundHistory">
+            <summary>
+            画面14: 入庫履歴レポート ViewModel
+            </summary>
+        </member>
+        <member name="M:EvangPL.Views.InboundHistory.InboundHistory.BuildUI">
+            <summary>
+            UI全体の構築
+            </summary>
+        </member>
+        <member name="M:EvangPL.Views.InboundHistory.InboundHistory.CreateContentContainer">
+            <summary>
+            結果表示用コンテナの作成
+            </summary>
+        </member>
+        <member name="M:EvangPL.Views.InboundHistory.InboundHistory.CreateFilterFrame">
+            <summary>
+            検索条件フレームの作成
+            </summary>
+        </member>
+        <member name="M:EvangPL.Views.InboundHistory.InboundHistory.CreateInputBorder(Microsoft.Maui.Controls.View)">
+            <summary>
+            角丸ボーダー付きの入力枠を作成するヘルパーメソッド
+            </summary>
+        </member>
+        <member name="M:EvangPL.Views.InboundHistory.InboundHistory.CreatePaginationControls">
+            <summary>
+            ページングコントロールの作成
+            </summary>
+        </member>
+        <member name="M:EvangPL.Views.InboundHistory.InboundHistory.OnbtnSearchClicked(System.Object,System.EventArgs)">
+            <summary>
+            検索ボタンクリック時処理
+            </summary>
+        </member>
+        <member name="M:EvangPL.Views.InboundHistory.InboundHistory.ShowData(System.Collections.Generic.List{EvangPL.Components.InboundRecord})">
+            <summary>
+            検索結果データの表示
+            </summary>
+        </member>
+        <member name="M:EvangPL.Views.InboundHistory.InboundHistory.LoadPage(System.Int32)">
+            <summary>
+            指定ページのデータを読み込んで表示
+            </summary>
+        </member>
+        <member name="M:EvangPL.Views.InboundHistory.InboundHistory.UpdateTableContent(System.Collections.Generic.List{EvangPL.Components.InboundRecord})">
+            <summary>
+            テーブル形式のUI生成・更新
+            </summary>
+        </member>
+        <member name="M:EvangPL.Views.InboundHistory.InboundHistory.UpdatePaginationControls">
+            <summary>
+            ページングコントロールの状態更新
+            </summary>
+        </member>
+        <member name="M:EvangPL.Views.InboundHistory.InboundHistory.ClearContentContainer">
+            <summary>
+            コンテンツエリアのクリア
+            </summary>
+        </member>
+        <member name="M:EvangPL.Views.InboundHistory.InboundHistory.ShowMessage(System.String,Microsoft.Maui.Graphics.Color)">
+            <summary>
+            メッセージ表示
+            </summary>
+        </member>
+        <member name="M:EvangPL.Views.InboundHistory.InboundHistory.GetMockData">
+            <summary>
+            仮データ生成
+            </summary>
+        </member>
+        <member name="T:EvangPL.Views.InboundSearch.SearchCondition">
+            <summary>
+            検索条件エンティティ（StockIn画面への受け渡し用）
+            </summary>
+        </member>
+        <member name="T:EvangPL.Views.InboundSearch.OrderInfo">
+            <summary>
+            オーダー情報モデル（NetSuiteレスポンス構造に合わせて調整）
+            </summary>
+        </member>
+        <member name="M:EvangPL.Views.InboundSearch.InboundSearch.CreateInputBorder(Microsoft.Maui.Controls.View)">
+            <summary>
+            入力コントロールを角丸のBorderで囲みます
+            </summary>
+            <param name="content">内部のEntry, Picker, DatePicker</param>
+            <returns>設定済みのBorder</returns>
+        </member>
+        <member name="M:EvangPL.Views.InboundSearch.InboundSearch.OnbtnSearchClicked(System.Object,System.EventArgs)">
+            <summary>
+            TODO: 検索ロジック
+            </summary>
+        </member>
+        <member name="M:EvangPL.Views.InboundSearch.InboundSearch.BuildSearchCondition">
+            <summary>
+            検索条件オブジェクトを構築（RESTlet呼び出し用）
+            </summary>
+        </member>
+        <member name="M:EvangPL.Views.InboundSearch.InboundSearch.ParseSearchResult(EvangSol.Mobibrary.DataFeed.ResponseData{EvangSol.Mobibrary.EvangModel.EvangJsonModel,EvangSol.Mobibrary.EvangModel.EvangJsonModel})">
+            <summary>
+            検索結果を解析
+            </summary>
+            <param name="result">ResponseData型の結果</param>
+            <returns>オーダーリスト</returns>
+        </member>
+        <member name="T:EvangPL.Views.InboundSearch.InboundSearch.OrderSearchParam">
+            <summary>
+            オーダー検索リクエストパラメータ
+            </summary>
+        </member>
+        <member name="T:EvangPL.Views.InventoryInquiry.InventoryInquiry">
+            <summary>
+            画面16: 在庫照会 ViewModel
+            </summary>
+        </member>
+        <member name="M:EvangPL.Views.InventoryInquiry.InventoryInquiry.BuildUI">
+            <summary>
+            UI全体の構築
+            </summary>
+        </member>
+        <member name="M:EvangPL.Views.InventoryInquiry.InventoryInquiry.CreateContentContainer">
+            <summary>
+            結果表示用コンテナの作成
+            </summary>
+        </member>
+        <member name="M:EvangPL.Views.InventoryInquiry.InventoryInquiry.CreateFilterFrame">
+            <summary>
+            検索条件フレームの作成
+            </summary>
+        </member>
+        <member name="M:EvangPL.Views.InventoryInquiry.InventoryInquiry.CreateInputBorder(Microsoft.Maui.Controls.View,Microsoft.Maui.Graphics.Color)">
+            <summary>
+            角丸ボーダー付きの入力枠を作成するヘルパーメソッド
+            </summary>
+        </member>
+        <member name="M:EvangPL.Views.InventoryInquiry.InventoryInquiry.OnScanClicked(System.Object,System.EventArgs)">
+            <summary>
+            スキャンボタンクリックイベント
+            </summary>
+        </member>
+        <member name="M:EvangPL.Views.InventoryInquiry.InventoryInquiry.OnbtnSearchClicked(System.Object,System.EventArgs)">
+            <summary>
+            検索ボタンクリック時処理
+            </summary>
+            <summary>
+            検索ボタンクリック時処理
+            </summary>
+        </member>
+        <member name="M:EvangPL.Views.InventoryInquiry.InventoryInquiry.ShowResult(System.Collections.Generic.List{EvangPL.Views.InventoryInquiry.InventoryRecord},System.String)">
+            <summary>
+            検索結果の表示
+            </summary>
+        </member>
+        <member name="M:EvangPL.Views.InventoryInquiry.InventoryInquiry.CreateSummarySection">
+            <summary>
+            合計在庫数・引当済数量の表示エリア作成
+            </summary>
+        </member>
+        <member name="M:EvangPL.Views.InventoryInquiry.InventoryInquiry.GetMockData(System.String)">
+            <summary>
+            仮データ生成 (画像の内容に合わせる)
+            </summary>
+        </member>
+        <member name="T:EvangPL.Views.InventoryInquiry.InventoryRecord">
+            <summary>
+            在庫レコード
+            </summary>
+        </member>
+        <member name="T:EvangPL.Views.InventoryMenu.InventoryMenu">
+            <summary>
+            在庫管理サブメニュー画面
+            メインメニューの「在庫管理」カードから遷移する
+            </summary>
+        </member>
+        <member name="M:EvangPL.Views.InventoryMenu.InventoryMenu.BuildCardUI">
+            <summary>
+            カードUIを構築しgridstackに追加する
+            </summary>
+        </member>
+        <member name="M:EvangPL.Views.InventoryMenu.InventoryMenu.CreateMenuCard(System.String,System.String,System.String,System.String)">
+            <summary>
+            サブメニューカードを作成する
+            </summary>
+        </member>
+        <member name="M:EvangPL.Views.InventoryMenu.InventoryMenu.NavigateToView(System.String)">
+            <summary>
+            画面遷移処理
+            </summary>
+        </member>
+        <member name="T:EvangPL.Views.InventoryTransfer.InventoryTransfer">
+            <summary>
+            画面9: 在庫振替 - 一覧 (Inventory Transfer List)
+            レイアウト: 検索エリア + 新規登録ボタン + ページング + 振替レコードカード
+            </summary>
+        </member>
+        <member name="M:EvangPL.Views.InventoryTransfer.InventoryTransfer.BuildUI">
+            <summary>
+            UI全体の構築
+            </summary>
+        </member>
+        <member name="M:EvangPL.Views.InventoryTransfer.InventoryTransfer.CreateTopSection">
+            <summary>
+            上部セクション（検索条件、新規登録ボタン、ページング）の生成
+            </summary>
+        </member>
+        <member name="M:EvangPL.Views.InventoryTransfer.InventoryTransfer.CreateInputBorder(Microsoft.Maui.Controls.View)">
+            <summary>
+            入力枠の生成
+            </summary>
+        </member>
+        <member name="M:EvangPL.Views.InventoryTransfer.InventoryTransfer.CreatePaginationControls">
+            <summary>
+            ページングコントロールの生成
+            </summary>
+        </member>
+        <member name="M:EvangPL.Views.InventoryTransfer.InventoryTransfer.UpdateListUI(System.Collections.Generic.List{EvangPL.Views.InventoryTransfer.TransferRecord})">
+            <summary>
+            リストUIの更新（カード形式で描画）
+            </summary>
+        </member>
+        <member name="M:EvangPL.Views.InventoryTransfer.InventoryTransfer.CreateTransferCard(EvangPL.Views.InventoryTransfer.TransferRecord)">
+            <summary>
+            在庫振替レコードカードの生成
+            StockAdjustと同じFrame+Gridレイアウトを採用（主従構造対応）
+            </summary>
+            <summary>
+            在庫振替レコードカードの生成
+            StockAdjustと同じFrame+Gridレイアウトを採用（主従構造対応）
+            </summary>
+        </member>
+        <member name="M:EvangPL.Views.InventoryTransfer.InventoryTransfer.UpdatePaginationUI">
+            <summary>
+            ページングUIの状態更新
+            </summary>
+        </member>
+        <member name="M:EvangPL.Views.InventoryTransfer.InventoryTransfer.GetMockData(System.String)">
+            <summary>
+            在庫振替データの取得
+            </summary>
+        </member>
+        <member name="M:EvangPL.Views.InventoryTransfer.InventoryTransfer.GetLocaData(System.String)">
+            <summary>
+            ロケーションマスタデータの取得
+            </summary>
+        </member>
+        <member name="T:EvangPL.Views.InventoryTransfer.SearchParam">
+            <summary>
+            在庫振替 検索条件モデル
+            </summary>
+        </member>
+        <member name="T:EvangPL.Views.InventoryTransfer.TransferRecord">
+            <summary>
+            在庫振替 レコードモデル
+            </summary>
+        </member>
+        <member name="P:EvangPL.Views.InventoryTransfer.TransferRecord.Details">
+            <summary>
+            振替明細リスト（品目コード・数量の配列）
+            </summary>
+        </member>
+        <member name="T:EvangPL.Views.InventoryTransfer.TransferDetailItem">
+            <summary>
+            在庫振替 明細アイテム
+            </summary>
+        </member>
+        <member name="T:EvangPL.Views.InventoryTransfer.LocationData">
+            <summary>
+            ロケーション マスタモデル
+            </summary>
+        </member>
+        <member name="M:EvangPL.Views.Menu.Menu.BuildNewCardUI">
+            <summary>
+            カードUIを構築しgridstackに追加する
+            </summary>
+        </member>
+        <member name="M:EvangPL.Views.Menu.Menu.CreateMainCard(System.String,System.String,System.String,System.String)">
+            <summary>
+            メイン機能カードを作成する
+            </summary>
+        </member>
+        <member name="M:EvangPL.Views.Menu.Menu.CreateLegacyMenuButtons">
+            <summary>
+            既存メニューボタンを作成しgridstackに追加する
+            </summary>
+        </member>
+        <member name="M:EvangPL.Views.Menu.Menu.NavigateToView(System.String)">
+            <summary>
+            画面遷移処理
+            </summary>
+        </member>
+        <member name="M:EvangPL.Views.Menu.Menu.OnMenuButtonClick(System.Object,System.EventArgs)">
+            <summary>
+            メニューボタンクリックイベント
+            </summary>
+        </member>
+        <member name="M:EvangPL.Views.OrderSearch.OrderSearch.ShowEmptyDataTip">
+            <summary>
+            数据为空时，显示“数据为空”提示文字
+            </summary>
+        </member>
+        <member name="T:EvangPL.Views.OutboundHistory.OutboundHistory">
+            <summary>
+            画面15: 出荷履歴レポート ViewModel
+            </summary>
+        </member>
+        <member name="M:EvangPL.Views.OutboundHistory.OutboundHistory.BuildUI">
+            <summary>
+            UI全体の構築
+            </summary>
+        </member>
+        <member name="M:EvangPL.Views.OutboundHistory.OutboundHistory.CreateContentContainer">
+            <summary>
+            結果表示用コンテナの作成
+            </summary>
+        </member>
+        <member name="M:EvangPL.Views.OutboundHistory.OutboundHistory.CreateFilterFrame">
+            <summary>
+            検索条件フレームの作成
+            </summary>
+        </member>
+        <member name="M:EvangPL.Views.OutboundHistory.OutboundHistory.CreateInputBorder(Microsoft.Maui.Controls.View)">
+            <summary>
+            角丸ボーダー付きの入力枠を作成するヘルパーメソッド
+            </summary>
+        </member>
+        <member name="M:EvangPL.Views.OutboundHistory.OutboundHistory.CreatePaginationControls">
+            <summary>
+            ページングコントロールの作成
+            </summary>
+        </member>
+        <member name="M:EvangPL.Views.OutboundHistory.OutboundHistory.OnbtnSearchClicked(System.Object,System.EventArgs)">
+            <summary>
+            検索ボタンクリック時処理
+            </summary>
+        </member>
+        <member name="M:EvangPL.Views.OutboundHistory.OutboundHistory.ShowData(System.Collections.Generic.List{EvangPL.Views.OutboundHistory.OutboundRecord})">
+            <summary>
+            検索結果データの表示
+            </summary>
+        </member>
+        <member name="M:EvangPL.Views.OutboundHistory.OutboundHistory.LoadPage(System.Int32)">
+            <summary>
+            指定ページのデータを読み込んで表示
+            </summary>
+        </member>
+        <member name="M:EvangPL.Views.OutboundHistory.OutboundHistory.UpdateTableContent(System.Collections.Generic.List{EvangPL.Views.OutboundHistory.OutboundRecord})">
+            <summary>
+            テーブル形式のUI生成・更新
+            画像に基づき、列は「伝票No.」「取引先」「状態」「数量」の4列
+            </summary>
+        </member>
+        <member name="M:EvangPL.Views.OutboundHistory.OutboundHistory.GetStatusColor(System.String)">
+            <summary>
+            ステータスに応じた色を返す
+            </summary>
+        </member>
+        <member name="M:EvangPL.Views.OutboundHistory.OutboundHistory.UpdatePaginationControls">
+            <summary>
+            ページングコントロールの状態更新
+            </summary>
+        </member>
+        <member name="M:EvangPL.Views.OutboundHistory.OutboundHistory.ClearContentContainer">
+            <summary>
+            コンテンツエリアのクリア
+            </summary>
+        </member>
+        <member name="M:EvangPL.Views.OutboundHistory.OutboundHistory.ShowMessage(System.String,Microsoft.Maui.Graphics.Color)">
+            <summary>
+            メッセージ表示
+            </summary>
+        </member>
+        <member name="M:EvangPL.Views.OutboundHistory.OutboundHistory.GetMockData">
+            <summary>
+            仮データ生成 (画像の内容に合わせる)
+            </summary>
+        </member>
+        <member name="T:EvangPL.Views.OutboundHistory.OutboundRecord">
+            <summary>
+            出荷履歴レコード
+            </summary>
+        </member>
+        <member name="M:EvangPL.Views.OutboundSearch.OutboundSearch.CreateInputBorder(Microsoft.Maui.Controls.View)">
+            <summary>
+            入力コントロールを角丸のBorderで囲みます
+            </summary>
+            <param name="content">内部のEntry, Picker, DatePicker</param>
+            <returns>設定済みのBorder</returns>
+        </member>
+        <member name="M:EvangPL.Views.OutboundSearch.OutboundSearch.OnbtnSearchClicked(System.Object,System.EventArgs)">
+            <summary>
+            検索ロジック：画面上の検索条件を組み立てて、出荷処理-一覧(StockOut)画面へ渡す
+            </summary>
+        </member>
+        <member name="T:EvangPL.Views.PickingDetail.PackageRegistration">
+            <summary>
+            画面7-2：梱包情報登録
+            画面7-1（PickingDetail）で品目ごとに登録した明細（ロケーション/ロット/数量）を受け取り、
+            ここで「梱包No.」と数量をスキャンまたは手入力で追加登録した上で、
+            「完了」押下時に画面7-1の明細と梱包Noを品目単位でマージし、
+            RESTlet②（ActionType=SAVE）へ送信して出荷確定（Item Fulfillment作成）を行う。
+            </summary>
+        </member>
+        <member name="T:EvangPL.Views.PickingDetail.PackageBoxEntry">
+            <summary>画面7-2で追加登録した「梱包No.＋品目＋品目内部ID＋数量」の1行</summary>
+        </member>
+        <member name="T:EvangPL.Views.PickingDetail.PickingDetail">
+             <summary>
+             出荷明細画面（入庫明細画面 InputDetail をベースに出荷用に改造）
+             RESTlet②（詳細/ピッキング専用）を ActionType="SEARCH"/"SAVE" で使い分けて呼び出す
+            
+             画面構成：
+               ・画面7-1（出荷処理 - 詳細/ピッキング。本クラス）：ヘッダー(顧客/出荷予定日)
+                 + 未出荷品目一覧（品目/未出荷数量/受注数量。入庫画面の「品目/残数量/発注数量」に相当）
+                 + 選択中品目の明細登録エリア(ロケーション/ロット/数量) + 底部：全品目の登録済み明細一覧
+               ・画面7-2（梱包情報登録。<see cref="T:EvangPL.Views.PickingDetail.PackageRegistration"/>）：「保存」ボタン押下で
+                 Navigation.PushAsyncにより遷移する別画面。梱包No/品目/数量をスキャンまたは手入力で追加し、
+                 「完了」でRESTlet②へActionType=SAVEを送信して出荷確定する（実際のSAVE送信は画面7-2側で行う）。
+            
+             ✅ [追加分]
+               1. ロット入力時に在庫（LOT_LIST）と突き合わせて存在チェックを行い、
+                  見つからない場合はメッセージを表示する。
+               2. 品目のIsLotItem（RESTletのPACKAGE_ITEMSで返却）に応じてロット入力欄の編集可否を切り替える。
+               3. 受注(SO)の場合、有効なロットが入力されたら在庫情報から数量・場所を自動セットする。
+            
+             ✅ [今回の修正分]
+               4. IsLotItem を bool? にし、RESTlet が未返却(null)の場合は「編集可」として扱う（LotEditable）。
+                  これによりロット欄が全品目で編集不可になる不具合を解消。
+               5. 受注(SO)の場合、品目選択時に受注行のロケーションと（未出荷数量 - 登録済み数量）を自動セットする。
+            
+             ✅ [シリアル対応追加分]
+               6. 品目のIsSerialItem（RESTletのPACKAGE_ITEMSで返却）に応じて、シリアル管理品目は
+                  1明細行あたりの数量を必ず1に制限する（数量>1の場合はメッセージを表示して明細追加を拒否）。
+            
+             ✅ [今回の修正分・追加]
+               7. シリアル管理品目（IsSerialItem=true）はロット管理対象外（IsLotItem=false）であっても、
+                  入力欄自体は「シリアル番号」を入力するために編集可能にする必要がある。
+                  これまでは LotEditable（=IsLotItem）だけで編集可否を判定していたため、
+                  「ロット管理対象外 かつ シリアル管理対象」の品目でロット欄（実質シリアル欄）が
+                  誤って編集不可になっていた。LotOrSerialEditable を追加し、
+                  「ロット管理対象」または「シリアル管理対象」のいずれかであれば編集可とするよう修正。
+                  あわせてラベル・プレースホルダー・バリデーションメッセージもシリアル品目向けの文言に切り替える。
+             </summary>
+        </member>
+        <member name="M:EvangPL.Views.PickingDetail.PickingDetail.OnSaveButtonClicked(System.Object,System.EventArgs)">
+            <summary>
+            画面7-1で登録した各品目のロット/ロケーション/数量明細（_packageItems）を
+            そのまま画面7-2（PackageRegistration）へ引き渡し、新しいページとして遷移する。
+            実際のRESTlet②(ActionType=SAVE)呼び出しは画面7-2側の「完了」で行う。
+            </summary>
+        </member>
+        <member name="M:EvangPL.Views.PickingDetail.PickingDetail.ApplyDefaultsForSalesOrder(EvangPL.Views.PickingDetail.PickingDetail.PackageItem)">
+            <summary>
+            受注(SO)の場合のみ、選択中品目の
+              ・出荷元ロケーション：受注行に設定されているロケーション
+              ・数量：未出荷数量 - 登録済み明細の合計
+            を入力欄へ自動セットする。
+            ロット（またはシリアル）品目で値を入力した場合は OnLotEntryUnfocused が在庫情報で上書きする。
+            ✅ [追加] シリアル管理品目の場合は、自動セットする数量が1を超えないようにする。
+            </summary>
+        </member>
+        <member name="M:EvangPL.Views.PickingDetail.PickingDetail.OnLotEntryUnfocused(System.Object,Microsoft.Maui.Controls.FocusEventArgs)">
+            <summary>
+            ①存在チェック：入力されたロット/シリアルが在庫(_lotList)に存在しない場合はメッセージを表示し、入力をクリアする。
+            ②自動セット：受注(SO)の場合、存在するロット/シリアルであれば場所・数量を自動でセットする。
+            ✅ [修正] LotEditable ではなく LotOrSerialEditable でガードし、シリアル管理品目でも動作するようにする。
+            ✅ [追加] シリアル管理品目の場合は、自動セットする数量が1を超えないようにする。
+            </summary>
+        </member>
+        <member name="T:EvangPL.Views.PickingDetail.PickingDetail.PackageItem">
+            <summary>
+            未出荷品目1行分。RESTlet②(SEARCH)のPACKAGE_ITEMSと1:1対応
+            （ItemCode/ItemInternalId/IsLotItem/IsSerialItem/LocationId/LocationName/OrderedQty/UnshippedQty）。
+            Details は画面7-1でユーザーが入力したロット/ロケーション/数量の登録済み明細で、サーバーには送らず
+            クライアント側で保持したまま画面7-2へ引き渡す。
+            </summary>
+        </member>
+        <member name="T:EvangPL.Views.PickingDetail.PickingDetailRequest">
+            <summary>
+            RESTlet②へ送るリクエスト。ActionType="SEARCH"で明細取得、ActionType="SAVE"で出荷確定。
+            ✅ InputDetail.cs の StockInDetailParam / StockInSaveParam と同じ流儀で ActionType を使う。
+            </summary>
+        </member>
+        <member name="T:EvangPL.Views.PickingDetail.PickingDetailSaveLine">
+            <summary>保存時に送信する1明細行（梱包No/品目/品目内部ID/ロケーション/ロット(またはシリアル)/数量）</summary>
+        </member>
+        <member name="M:EvangPL.Views.Report.Report.NavToPage(System.String)">
+            <summary>
+            页面跳转方法，复用项目现有ClassMapping反射
+            </summary>
+        </member>
+        <member name="T:EvangPL.Views.StockOut.StockOut">
+            <summary>
+            出荷処理 - 検索結果画面 【文件名 StockOut.cs】
+            UI样式参照截图：分页栏置顶、单据卡片、日文标签、状态色
+            RESTlet①（一覧検索専用）を呼び出し、出荷区分（受注/仕入先返品/振替）を横断した検索結果を表示する
+            </summary>
+        </member>
+        <member name="M:EvangPL.Views.StockOut.StockOut.CreatePaginationBar">
+            <summary>
+            分页栏：前へ｜1/2｜次へ  和截图UI一致
+            </summary>
+        </member>
+        <member name="M:EvangPL.Views.StockOut.StockOut.LoadStockOutData">
+            <summary>
+            出荷対象データを取得する。
+            RESTlet①（出荷処理-一覧検索専用）へ SearchCondition を渡し、
+            受注出荷/仕入先返品出荷/振替出荷を横断した検索結果を受け取る。
+            </summary>
+        </member>
+        <member name="M:EvangPL.Views.StockOut.StockOut.BuildMockData(System.Int32@)">
+            <summary>
+            [開発用] UseMockData = true の時のみ使用する内蔵データ（截图4条样本と一致）
+            </summary>
+        </member>
+        <member name="M:EvangPL.Views.StockOut.StockOut.CreateStatusTag(System.String)">
+            <summary>
+            状態ラベル配色 和截图完全一致
+            未出荷：オレンジ / 一部出荷：濃青 / 未出庫：グレー
+            </summary>
+        </member>
+        <member name="P:EvangPL.Views.StockOut.StockOutItem.OrderNo">
+            <summary>伝票番号 SO-xxxx</summary>
+        </member>
+        <member name="P:EvangPL.Views.StockOut.StockOutItem.Status">
+            <summary>ステータス：未出荷 / 一部出荷 / 未出庫</summary>
+        </member>
+        <member name="P:EvangPL.Views.StockOut.StockOutItem.CustomerName">
+            <summary>顧客名/倉庫移動情報</summary>
+        </member>
+        <member name="P:EvangPL.Views.StockOut.StockOutItem.ScheduleDate">
+            <summary>出荷予定日</summary>
+        </member>
+        <member name="P:EvangPL.Views.StockOut.StockOutItem.ItemCount">
+            <summary>品目数</summary>
+        </member>
+        <member name="P:EvangPL.Views.StockOut.StockOutItem.TotalQty">
+            <summary>総数量</summary>
+        </member>
+        <member name="P:EvangPL.Views.StockOut.StockOutItem.OutboundType">
+            <summary>[追加] 出荷区分コード（"SO" / "RTV" / "TR"）。詳細画面(RESTlet②)へ引き継ぐ</summary>
+        </member>
+        <member name="T:EvangPL.Views.StockAdjust.StockAdjust">
+            <summary>
+            棚卸調整 - 一覧画面 
+            </summary>
+        </member>
+        <member name="M:EvangPL.Views.StockAdjust.StockAdjust.CreatePaginationBar">
+            <summary>
+            分页栏：前へ｜1/2｜次へ
+            </summary>
+        </member>
+        <member name="M:EvangPL.Views.StockAdjust.StockAdjust.LoadAdjustData">
+            <summary>
+            加载棚卸調整データ
+            </summary>
+        </member>
+        <member name="M:EvangPL.Views.StockAdjust.StockAdjust.RenderCardList(System.Collections.Generic.List{System.Collections.Generic.List{EvangPL.Views.StockAdjust.StockAdjustItem}})">
+            <summary>
+            </summary>
+        </member>
+        <member name="T:EvangPL.Views.StockAdjust.StockAdjustPageInfo">
+            <summary>
+            棚卸調整 検索条件モデル
+            </summary>
+        </member>
+        <member name="T:EvangPL.Views.StockAdjust.StockAdjustItem">
+            <summary>
+            棚卸調整 Item
+            </summary>
+        </member>
+        <member name="M:EvangPL.Views.StockIn.StockIn.MarkOrderAsCompleted(System.String)">
+            <summary>
+            InputDetail（受領画面）側で保存が完了しPopAsyncする直前に呼び出してもらう。
+            これにより、一覧側で「品目が見つかりません」の誤解を招くAlertを出さずに済む。
+            </summary>
+        </member>
+        <member name="M:EvangPL.Views.StockIn.StockIn.RefreshSearchFromServer">
+            <summary>
+            保存済みの検索条件（_keyword / _inboundType / _status / _scheduledDate）で
+            GetOrderList RESTletへ再検索をかけ、一覧を最新の状態に更新する。
+            主に InputDetail（受領画面）で保存 → Navigation.PopAsync() でこの画面に戻ってきた際に呼ばれる。
+            </summary>
+        </member>
+        <member name="M:EvangPL.Views.StockIn.StockIn.LoadStockInData">
+            <summary>
+            入庫データを読み込む
+            </summary>
+        </member>
+        <member name="T:EvangPL.Resource">
+            <summary>
+            Android Resource Designer class.
+            Exposes the Android Resource designer assembly into the project Namespace.
+            </summary>
+        </member>
+        <member name="M:Microsoft.Maui.Controls.ColorAnimationExtensions_Button.TextColorTo(Microsoft.Maui.Controls.Button,Microsoft.Maui.Graphics.Color,System.UInt32,System.UInt32,Microsoft.Maui.Easing,System.Threading.CancellationToken)">
+            <summary>
+            Animates the TextColor of an <see cref = "T:Microsoft.Maui.ITextStyle"/> to the given color
+            </summary>
+            <param name = "element"></param>
+            <param name = "color">The target color to animate the <see cref = "P:Microsoft.Maui.ITextStyle.TextColor"/> to</param>
+            <param name = "rate">The time, in milliseconds, between the frames of the animation</param>
+            <param name = "length">The duration, in milliseconds, of the animation</param>
+            <param name = "easing">The easing function to be used in the animation</param>
+            <param name = "token"><see cref = "T:System.Threading.CancellationToken"/></param>
+            <returns>Value indicating if the animation completed successfully or not</returns>
+        </member>
+        <member name="M:Microsoft.Maui.Controls.ColorAnimationExtensions_DatePicker.TextColorTo(Microsoft.Maui.Controls.DatePicker,Microsoft.Maui.Graphics.Color,System.UInt32,System.UInt32,Microsoft.Maui.Easing,System.Threading.CancellationToken)">
+            <summary>
+            Animates the TextColor of an <see cref = "T:Microsoft.Maui.ITextStyle"/> to the given color
+            </summary>
+            <param name = "element"></param>
+            <param name = "color">The target color to animate the <see cref = "P:Microsoft.Maui.ITextStyle.TextColor"/> to</param>
+            <param name = "rate">The time, in milliseconds, between the frames of the animation</param>
+            <param name = "length">The duration, in milliseconds, of the animation</param>
+            <param name = "easing">The easing function to be used in the animation</param>
+            <param name = "token"><see cref = "T:System.Threading.CancellationToken"/></param>
+            <returns>Value indicating if the animation completed successfully or not</returns>
+        </member>
+        <member name="M:Microsoft.Maui.Controls.ColorAnimationExtensions_Editor.TextColorTo(Microsoft.Maui.Controls.Editor,Microsoft.Maui.Graphics.Color,System.UInt32,System.UInt32,Microsoft.Maui.Easing,System.Threading.CancellationToken)">
+            <summary>
+            Animates the TextColor of an <see cref = "T:Microsoft.Maui.ITextStyle"/> to the given color
+            </summary>
+            <param name = "element"></param>
+            <param name = "color">The target color to animate the <see cref = "P:Microsoft.Maui.ITextStyle.TextColor"/> to</param>
+            <param name = "rate">The time, in milliseconds, between the frames of the animation</param>
+            <param name = "length">The duration, in milliseconds, of the animation</param>
+            <param name = "easing">The easing function to be used in the animation</param>
+            <param name = "token"><see cref = "T:System.Threading.CancellationToken"/></param>
+            <returns>Value indicating if the animation completed successfully or not</returns>
+        </member>
+        <member name="M:Microsoft.Maui.Controls.ColorAnimationExtensions_Entry.TextColorTo(Microsoft.Maui.Controls.Entry,Microsoft.Maui.Graphics.Color,System.UInt32,System.UInt32,Microsoft.Maui.Easing,System.Threading.CancellationToken)">
+            <summary>
+            Animates the TextColor of an <see cref = "T:Microsoft.Maui.ITextStyle"/> to the given color
+            </summary>
+            <param name = "element"></param>
+            <param name = "color">The target color to animate the <see cref = "P:Microsoft.Maui.ITextStyle.TextColor"/> to</param>
+            <param name = "rate">The time, in milliseconds, between the frames of the animation</param>
+            <param name = "length">The duration, in milliseconds, of the animation</param>
+            <param name = "easing">The easing function to be used in the animation</param>
+            <param name = "token"><see cref = "T:System.Threading.CancellationToken"/></param>
+            <returns>Value indicating if the animation completed successfully or not</returns>
+        </member>
+        <member name="M:Microsoft.Maui.Controls.ColorAnimationExtensions_InputView.TextColorTo(Microsoft.Maui.Controls.InputView,Microsoft.Maui.Graphics.Color,System.UInt32,System.UInt32,Microsoft.Maui.Easing,System.Threading.CancellationToken)">
+            <summary>
+            Animates the TextColor of an <see cref = "T:Microsoft.Maui.ITextStyle"/> to the given color
+            </summary>
+            <param name = "element"></param>
+            <param name = "color">The target color to animate the <see cref = "P:Microsoft.Maui.ITextStyle.TextColor"/> to</param>
+            <param name = "rate">The time, in milliseconds, between the frames of the animation</param>
+            <param name = "length">The duration, in milliseconds, of the animation</param>
+            <param name = "easing">The easing function to be used in the animation</param>
+            <param name = "token"><see cref = "T:System.Threading.CancellationToken"/></param>
+            <returns>Value indicating if the animation completed successfully or not</returns>
+        </member>
+        <member name="M:Microsoft.Maui.Controls.ColorAnimationExtensions_Label.TextColorTo(Microsoft.Maui.Controls.Label,Microsoft.Maui.Graphics.Color,System.UInt32,System.UInt32,Microsoft.Maui.Easing,System.Threading.CancellationToken)">
+            <summary>
+            Animates the TextColor of an <see cref = "T:Microsoft.Maui.ITextStyle"/> to the given color
+            </summary>
+            <param name = "element"></param>
+            <param name = "color">The target color to animate the <see cref = "P:Microsoft.Maui.ITextStyle.TextColor"/> to</param>
+            <param name = "rate">The time, in milliseconds, between the frames of the animation</param>
+            <param name = "length">The duration, in milliseconds, of the animation</param>
+            <param name = "easing">The easing function to be used in the animation</param>
+            <param name = "token"><see cref = "T:System.Threading.CancellationToken"/></param>
+            <returns>Value indicating if the animation completed successfully or not</returns>
+        </member>
+        <member name="M:Microsoft.Maui.Controls.ColorAnimationExtensions_Picker.TextColorTo(Microsoft.Maui.Controls.Picker,Microsoft.Maui.Graphics.Color,System.UInt32,System.UInt32,Microsoft.Maui.Easing,System.Threading.CancellationToken)">
+            <summary>
+            Animates the TextColor of an <see cref = "T:Microsoft.Maui.ITextStyle"/> to the given color
+            </summary>
+            <param name = "element"></param>
+            <param name = "color">The target color to animate the <see cref = "P:Microsoft.Maui.ITextStyle.TextColor"/> to</param>
+            <param name = "rate">The time, in milliseconds, between the frames of the animation</param>
+            <param name = "length">The duration, in milliseconds, of the animation</param>
+            <param name = "easing">The easing function to be used in the animation</param>
+            <param name = "token"><see cref = "T:System.Threading.CancellationToken"/></param>
+            <returns>Value indicating if the animation completed successfully or not</returns>
+        </member>
+        <member name="M:Microsoft.Maui.Controls.ColorAnimationExtensions_RadioButton.TextColorTo(Microsoft.Maui.Controls.RadioButton,Microsoft.Maui.Graphics.Color,System.UInt32,System.UInt32,Microsoft.Maui.Easing,System.Threading.CancellationToken)">
+            <summary>
+            Animates the TextColor of an <see cref = "T:Microsoft.Maui.ITextStyle"/> to the given color
+            </summary>
+            <param name = "element"></param>
+            <param name = "color">The target color to animate the <see cref = "P:Microsoft.Maui.ITextStyle.TextColor"/> to</param>
+            <param name = "rate">The time, in milliseconds, between the frames of the animation</param>
+            <param name = "length">The duration, in milliseconds, of the animation</param>
+            <param name = "easing">The easing function to be used in the animation</param>
+            <param name = "token"><see cref = "T:System.Threading.CancellationToken"/></param>
+            <returns>Value indicating if the animation completed successfully or not</returns>
+        </member>
+        <member name="M:Microsoft.Maui.Controls.ColorAnimationExtensions_SearchBar.TextColorTo(Microsoft.Maui.Controls.SearchBar,Microsoft.Maui.Graphics.Color,System.UInt32,System.UInt32,Microsoft.Maui.Easing,System.Threading.CancellationToken)">
+            <summary>
+            Animates the TextColor of an <see cref = "T:Microsoft.Maui.ITextStyle"/> to the given color
+            </summary>
+            <param name = "element"></param>
+            <param name = "color">The target color to animate the <see cref = "P:Microsoft.Maui.ITextStyle.TextColor"/> to</param>
+            <param name = "rate">The time, in milliseconds, between the frames of the animation</param>
+            <param name = "length">The duration, in milliseconds, of the animation</param>
+            <param name = "easing">The easing function to be used in the animation</param>
+            <param name = "token"><see cref = "T:System.Threading.CancellationToken"/></param>
+            <returns>Value indicating if the animation completed successfully or not</returns>
+        </member>
+        <member name="M:Microsoft.Maui.Controls.ColorAnimationExtensions_TimePicker.TextColorTo(Microsoft.Maui.Controls.TimePicker,Microsoft.Maui.Graphics.Color,System.UInt32,System.UInt32,Microsoft.Maui.Easing,System.Threading.CancellationToken)">
+            <summary>
+            Animates the TextColor of an <see cref = "T:Microsoft.Maui.ITextStyle"/> to the given color
+            </summary>
+            <param name = "element"></param>
+            <param name = "color">The target color to animate the <see cref = "P:Microsoft.Maui.ITextStyle.TextColor"/> to</param>
+            <param name = "rate">The time, in milliseconds, between the frames of the animation</param>
+            <param name = "length">The duration, in milliseconds, of the animation</param>
+            <param name = "easing">The easing function to be used in the animation</param>
+            <param name = "token"><see cref = "T:System.Threading.CancellationToken"/></param>
+            <returns>Value indicating if the animation completed successfully or not</returns>
+        </member>
+        <member name="T:CommunityToolkit.Mvvm.Messaging.__Internals.__IMessengerExtensions">
+            <summary>
+            A helper type with generated registration stubs for types implementing <see cref="T:CommunityToolkit.Mvvm.Messaging.IRecipient`1"/>.
+            </summary>
+            <inheritdoc/>
+            <inheritdoc/>
+            <inheritdoc/>
+            <inheritdoc/>
+            <inheritdoc/>
+            <inheritdoc/>
+            <inheritdoc/>
+            <inheritdoc/>
+            <inheritdoc/>
+            <inheritdoc/>
+            <inheritdoc/>
+            <inheritdoc/>
+            <inheritdoc/>
+            <inheritdoc/>
+            <inheritdoc/>
+            <inheritdoc/>
+            <inheritdoc/>
+            <inheritdoc/>
+            <inheritdoc/>
+            <inheritdoc/>
+            <inheritdoc/>
+            <inheritdoc/>
+            <inheritdoc/>
+            <inheritdoc/>
+            <inheritdoc/>
+            <inheritdoc/>
+            <inheritdoc/>
+            <inheritdoc/>
+            <inheritdoc/>
+            <inheritdoc/>
+            <inheritdoc/>
+            <inheritdoc/>
+            <inheritdoc/>
+            <inheritdoc/>
+        </member>
+        <member name="M:CommunityToolkit.Mvvm.Messaging.__Internals.__IMessengerExtensions.CreateAllMessagesRegistrator(EvangPL.Views.ActualConfirm.ActualConfirm)">
+            <summary>
+            Creates a message registration stub for <see cref="T:EvangPL.Views.ActualConfirm.ActualConfirm"/> objects.
+            </summary>
+            <param name="_">Dummy parameter, only used to disambiguate the method signature.</param>
+            <returns>A message registration stub for <see cref="T:EvangPL.Views.ActualConfirm.ActualConfirm"/> objects.</returns>
+        </member>
+        <member name="M:CommunityToolkit.Mvvm.Messaging.__Internals.__IMessengerExtensions.CreateAllMessagesRegistratorWithToken``1(EvangPL.Views.ActualConfirm.ActualConfirm)">
+            <summary>
+            Creates a message registration stub for <see cref="T:EvangPL.Views.ActualConfirm.ActualConfirm"/> objects.
+            </summary>
+            <typeparam name="TToken">The type of tokens that will be used to register messages.</typeparam>
+            <param name="_">Dummy parameter, only used to disambiguate the method signature.</param>
+            <returns>A message registration stub for <see cref="T:EvangPL.Views.ActualConfirm.ActualConfirm"/> objects.</returns>
+        </member>
+        <member name="M:CommunityToolkit.Mvvm.Messaging.__Internals.__IMessengerExtensions.CreateAllMessagesRegistrator(EvangPL.Views.HariDashi.HariDashi)">
+            <summary>
+            Creates a message registration stub for <see cref="T:EvangPL.Views.HariDashi.HariDashi"/> objects.
+            </summary>
+            <param name="_">Dummy parameter, only used to disambiguate the method signature.</param>
+            <returns>A message registration stub for <see cref="T:EvangPL.Views.HariDashi.HariDashi"/> objects.</returns>
+        </member>
+        <member name="M:CommunityToolkit.Mvvm.Messaging.__Internals.__IMessengerExtensions.CreateAllMessagesRegistratorWithToken``1(EvangPL.Views.HariDashi.HariDashi)">
+            <summary>
+            Creates a message registration stub for <see cref="T:EvangPL.Views.HariDashi.HariDashi"/> objects.
+            </summary>
+            <typeparam name="TToken">The type of tokens that will be used to register messages.</typeparam>
+            <param name="_">Dummy parameter, only used to disambiguate the method signature.</param>
+            <returns>A message registration stub for <see cref="T:EvangPL.Views.HariDashi.HariDashi"/> objects.</returns>
+        </member>
+        <member name="M:CommunityToolkit.Mvvm.Messaging.__Internals.__IMessengerExtensions.CreateAllMessagesRegistrator(EvangPL.Views.Heating.Heating)">
+            <summary>
+            Creates a message registration stub for <see cref="T:EvangPL.Views.Heating.Heating"/> objects.
+            </summary>
+            <param name="_">Dummy parameter, only used to disambiguate the method signature.</param>
+            <returns>A message registration stub for <see cref="T:EvangPL.Views.Heating.Heating"/> objects.</returns>
+        </member>
+        <member name="M:CommunityToolkit.Mvvm.Messaging.__Internals.__IMessengerExtensions.CreateAllMessagesRegistratorWithToken``1(EvangPL.Views.Heating.Heating)">
+            <summary>
+            Creates a message registration stub for <see cref="T:EvangPL.Views.Heating.Heating"/> objects.
+            </summary>
+            <typeparam name="TToken">The type of tokens that will be used to register messages.</typeparam>
+            <param name="_">Dummy parameter, only used to disambiguate the method signature.</param>
+            <returns>A message registration stub for <see cref="T:EvangPL.Views.Heating.Heating"/> objects.</returns>
+        </member>
+        <member name="M:CommunityToolkit.Mvvm.Messaging.__Internals.__IMessengerExtensions.CreateAllMessagesRegistrator(EvangPL.Views.InboundHistory.InboundHistory)">
+            <summary>
+            Creates a message registration stub for <see cref="T:EvangPL.Views.InboundHistory.InboundHistory"/> objects.
+            </summary>
+            <param name="_">Dummy parameter, only used to disambiguate the method signature.</param>
+            <returns>A message registration stub for <see cref="T:EvangPL.Views.InboundHistory.InboundHistory"/> objects.</returns>
+        </member>
+        <member name="M:CommunityToolkit.Mvvm.Messaging.__Internals.__IMessengerExtensions.CreateAllMessagesRegistratorWithToken``1(EvangPL.Views.InboundHistory.InboundHistory)">
+            <summary>
+            Creates a message registration stub for <see cref="T:EvangPL.Views.InboundHistory.InboundHistory"/> objects.
+            </summary>
+            <typeparam name="TToken">The type of tokens that will be used to register messages.</typeparam>
+            <param name="_">Dummy parameter, only used to disambiguate the method signature.</param>
+            <returns>A message registration stub for <see cref="T:EvangPL.Views.InboundHistory.InboundHistory"/> objects.</returns>
+        </member>
+        <member name="M:CommunityToolkit.Mvvm.Messaging.__Internals.__IMessengerExtensions.CreateAllMessagesRegistrator(EvangPL.Views.InboundSearch.InboundSearch)">
+            <summary>
+            Creates a message registration stub for <see cref="T:EvangPL.Views.InboundSearch.InboundSearch"/> objects.
+            </summary>
+            <param name="_">Dummy parameter, only used to disambiguate the method signature.</param>
+            <returns>A message registration stub for <see cref="T:EvangPL.Views.InboundSearch.InboundSearch"/> objects.</returns>
+        </member>
+        <member name="M:CommunityToolkit.Mvvm.Messaging.__Internals.__IMessengerExtensions.CreateAllMessagesRegistratorWithToken``1(EvangPL.Views.InboundSearch.InboundSearch)">
+            <summary>
+            Creates a message registration stub for <see cref="T:EvangPL.Views.InboundSearch.InboundSearch"/> objects.
+            </summary>
+            <typeparam name="TToken">The type of tokens that will be used to register messages.</typeparam>
+            <param name="_">Dummy parameter, only used to disambiguate the method signature.</param>
+            <returns>A message registration stub for <see cref="T:EvangPL.Views.InboundSearch.InboundSearch"/> objects.</returns>
+        </member>
+        <member name="M:CommunityToolkit.Mvvm.Messaging.__Internals.__IMessengerExtensions.CreateAllMessagesRegistrator(EvangPL.Views.InputDetail.InputDetail)">
+            <summary>
+            Creates a message registration stub for <see cref="T:EvangPL.Views.InputDetail.InputDetail"/> objects.
+            </summary>
+            <param name="_">Dummy parameter, only used to disambiguate the method signature.</param>
+            <returns>A message registration stub for <see cref="T:EvangPL.Views.InputDetail.InputDetail"/> objects.</returns>
+        </member>
+        <member name="M:CommunityToolkit.Mvvm.Messaging.__Internals.__IMessengerExtensions.CreateAllMessagesRegistratorWithToken``1(EvangPL.Views.InputDetail.InputDetail)">
+            <summary>
+            Creates a message registration stub for <see cref="T:EvangPL.Views.InputDetail.InputDetail"/> objects.
+            </summary>
+            <typeparam name="TToken">The type of tokens that will be used to register messages.</typeparam>
+            <param name="_">Dummy parameter, only used to disambiguate the method signature.</param>
+            <returns>A message registration stub for <see cref="T:EvangPL.Views.InputDetail.InputDetail"/> objects.</returns>
+        </member>
+        <member name="M:CommunityToolkit.Mvvm.Messaging.__Internals.__IMessengerExtensions.CreateAllMessagesRegistrator(EvangPL.Views.InventoryAdjustment.InventoryAdjustment)">
+            <summary>
+            Creates a message registration stub for <see cref="T:EvangPL.Views.InventoryAdjustment.InventoryAdjustment"/> objects.
+            </summary>
+            <param name="_">Dummy parameter, only used to disambiguate the method signature.</param>
+            <returns>A message registration stub for <see cref="T:EvangPL.Views.InventoryAdjustment.InventoryAdjustment"/> objects.</returns>
+        </member>
+        <member name="M:CommunityToolkit.Mvvm.Messaging.__Internals.__IMessengerExtensions.CreateAllMessagesRegistratorWithToken``1(EvangPL.Views.InventoryAdjustment.InventoryAdjustment)">
+            <summary>
+            Creates a message registration stub for <see cref="T:EvangPL.Views.InventoryAdjustment.InventoryAdjustment"/> objects.
+            </summary>
+            <typeparam name="TToken">The type of tokens that will be used to register messages.</typeparam>
+            <param name="_">Dummy parameter, only used to disambiguate the method signature.</param>
+            <returns>A message registration stub for <see cref="T:EvangPL.Views.InventoryAdjustment.InventoryAdjustment"/> objects.</returns>
+        </member>
+        <member name="M:CommunityToolkit.Mvvm.Messaging.__Internals.__IMessengerExtensions.CreateAllMessagesRegistrator(EvangPL.Views.InventoryInquiry.InventoryInquiry)">
+            <summary>
+            Creates a message registration stub for <see cref="T:EvangPL.Views.InventoryInquiry.InventoryInquiry"/> objects.
+            </summary>
+            <param name="_">Dummy parameter, only used to disambiguate the method signature.</param>
+            <returns>A message registration stub for <see cref="T:EvangPL.Views.InventoryInquiry.InventoryInquiry"/> objects.</returns>
+        </member>
+        <member name="M:CommunityToolkit.Mvvm.Messaging.__Internals.__IMessengerExtensions.CreateAllMessagesRegistratorWithToken``1(EvangPL.Views.InventoryInquiry.InventoryInquiry)">
+            <summary>
+            Creates a message registration stub for <see cref="T:EvangPL.Views.InventoryInquiry.InventoryInquiry"/> objects.
+            </summary>
+            <typeparam name="TToken">The type of tokens that will be used to register messages.</typeparam>
+            <param name="_">Dummy parameter, only used to disambiguate the method signature.</param>
+            <returns>A message registration stub for <see cref="T:EvangPL.Views.InventoryInquiry.InventoryInquiry"/> objects.</returns>
+        </member>
+        <member name="M:CommunityToolkit.Mvvm.Messaging.__Internals.__IMessengerExtensions.CreateAllMessagesRegistrator(EvangPL.Views.InventoryMenu.InventoryMenu)">
+            <summary>
+            Creates a message registration stub for <see cref="T:EvangPL.Views.InventoryMenu.InventoryMenu"/> objects.
+            </summary>
+            <param name="_">Dummy parameter, only used to disambiguate the method signature.</param>
+            <returns>A message registration stub for <see cref="T:EvangPL.Views.InventoryMenu.InventoryMenu"/> objects.</returns>
+        </member>
+        <member name="M:CommunityToolkit.Mvvm.Messaging.__Internals.__IMessengerExtensions.CreateAllMessagesRegistratorWithToken``1(EvangPL.Views.InventoryMenu.InventoryMenu)">
+            <summary>
+            Creates a message registration stub for <see cref="T:EvangPL.Views.InventoryMenu.InventoryMenu"/> objects.
+            </summary>
+            <typeparam name="TToken">The type of tokens that will be used to register messages.</typeparam>
+            <param name="_">Dummy parameter, only used to disambiguate the method signature.</param>
+            <returns>A message registration stub for <see cref="T:EvangPL.Views.InventoryMenu.InventoryMenu"/> objects.</returns>
+        </member>
+        <member name="M:CommunityToolkit.Mvvm.Messaging.__Internals.__IMessengerExtensions.CreateAllMessagesRegistrator(EvangPL.Views.InventoryTransferPageDetails.InventoryTransferPageDetails)">
+            <summary>
+            Creates a message registration stub for <see cref="T:EvangPL.Views.InventoryTransferPageDetails.InventoryTransferPageDetails"/> objects.
+            </summary>
+            <param name="_">Dummy parameter, only used to disambiguate the method signature.</param>
+            <returns>A message registration stub for <see cref="T:EvangPL.Views.InventoryTransferPageDetails.InventoryTransferPageDetails"/> objects.</returns>
+        </member>
+        <member name="M:CommunityToolkit.Mvvm.Messaging.__Internals.__IMessengerExtensions.CreateAllMessagesRegistratorWithToken``1(EvangPL.Views.InventoryTransferPageDetails.InventoryTransferPageDetails)">
+            <summary>
+            Creates a message registration stub for <see cref="T:EvangPL.Views.InventoryTransferPageDetails.InventoryTransferPageDetails"/> objects.
+            </summary>
+            <typeparam name="TToken">The type of tokens that will be used to register messages.</typeparam>
+            <param name="_">Dummy parameter, only used to disambiguate the method signature.</param>
+            <returns>A message registration stub for <see cref="T:EvangPL.Views.InventoryTransferPageDetails.InventoryTransferPageDetails"/> objects.</returns>
+        </member>
+        <member name="M:CommunityToolkit.Mvvm.Messaging.__Internals.__IMessengerExtensions.CreateAllMessagesRegistrator(EvangPL.Views.InventoryTransfer.InventoryTransfer)">
+            <summary>
+            Creates a message registration stub for <see cref="T:EvangPL.Views.InventoryTransfer.InventoryTransfer"/> objects.
+            </summary>
+            <param name="_">Dummy parameter, only used to disambiguate the method signature.</param>
+            <returns>A message registration stub for <see cref="T:EvangPL.Views.InventoryTransfer.InventoryTransfer"/> objects.</returns>
+        </member>
+        <member name="M:CommunityToolkit.Mvvm.Messaging.__Internals.__IMessengerExtensions.CreateAllMessagesRegistratorWithToken``1(EvangPL.Views.InventoryTransfer.InventoryTransfer)">
+            <summary>
+            Creates a message registration stub for <see cref="T:EvangPL.Views.InventoryTransfer.InventoryTransfer"/> objects.
+            </summary>
+            <typeparam name="TToken">The type of tokens that will be used to register messages.</typeparam>
+            <param name="_">Dummy parameter, only used to disambiguate the method signature.</param>
+            <returns>A message registration stub for <see cref="T:EvangPL.Views.InventoryTransfer.InventoryTransfer"/> objects.</returns>
+        </member>
+        <member name="M:CommunityToolkit.Mvvm.Messaging.__Internals.__IMessengerExtensions.CreateAllMessagesRegistrator(EvangPL.Views.Investment.Investment)">
+            <summary>
+            Creates a message registration stub for <see cref="T:EvangPL.Views.Investment.Investment"/> objects.
+            </summary>
+            <param name="_">Dummy parameter, only used to disambiguate the method signature.</param>
+            <returns>A message registration stub for <see cref="T:EvangPL.Views.Investment.Investment"/> objects.</returns>
+        </member>
+        <member name="M:CommunityToolkit.Mvvm.Messaging.__Internals.__IMessengerExtensions.CreateAllMessagesRegistratorWithToken``1(EvangPL.Views.Investment.Investment)">
+            <summary>
+            Creates a message registration stub for <see cref="T:EvangPL.Views.Investment.Investment"/> objects.
+            </summary>
+            <typeparam name="TToken">The type of tokens that will be used to register messages.</typeparam>
+            <param name="_">Dummy parameter, only used to disambiguate the method signature.</param>
+            <returns>A message registration stub for <see cref="T:EvangPL.Views.Investment.Investment"/> objects.</returns>
+        </member>
+        <member name="M:CommunityToolkit.Mvvm.Messaging.__Internals.__IMessengerExtensions.CreateAllMessagesRegistrator(EvangPL.Views.Login.Login)">
+            <summary>
+            Creates a message registration stub for <see cref="T:EvangPL.Views.Login.Login"/> objects.
+            </summary>
+            <param name="_">Dummy parameter, only used to disambiguate the method signature.</param>
+            <returns>A message registration stub for <see cref="T:EvangPL.Views.Login.Login"/> objects.</returns>
+        </member>
+        <member name="M:CommunityToolkit.Mvvm.Messaging.__Internals.__IMessengerExtensions.CreateAllMessagesRegistratorWithToken``1(EvangPL.Views.Login.Login)">
+            <summary>
+            Creates a message registration stub for <see cref="T:EvangPL.Views.Login.Login"/> objects.
+            </summary>
+            <typeparam name="TToken">The type of tokens that will be used to register messages.</typeparam>
+            <param name="_">Dummy parameter, only used to disambiguate the method signature.</param>
+            <returns>A message registration stub for <see cref="T:EvangPL.Views.Login.Login"/> objects.</returns>
+        </member>
+        <member name="M:CommunityToolkit.Mvvm.Messaging.__Internals.__IMessengerExtensions.CreateAllMessagesRegistrator(EvangPL.Views.Login.TabLogin)">
+            <summary>
+            Creates a message registration stub for <see cref="T:EvangPL.Views.Login.TabLogin"/> objects.
+            </summary>
+            <param name="_">Dummy parameter, only used to disambiguate the method signature.</param>
+            <returns>A message registration stub for <see cref="T:EvangPL.Views.Login.TabLogin"/> objects.</returns>
+        </member>
+        <member name="M:CommunityToolkit.Mvvm.Messaging.__Internals.__IMessengerExtensions.CreateAllMessagesRegistratorWithToken``1(EvangPL.Views.Login.TabLogin)">
+            <summary>
+            Creates a message registration stub for <see cref="T:EvangPL.Views.Login.TabLogin"/> objects.
+            </summary>
+            <typeparam name="TToken">The type of tokens that will be used to register messages.</typeparam>
+            <param name="_">Dummy parameter, only used to disambiguate the method signature.</param>
+            <returns>A message registration stub for <see cref="T:EvangPL.Views.Login.TabLogin"/> objects.</returns>
+        </member>
+        <member name="M:CommunityToolkit.Mvvm.Messaging.__Internals.__IMessengerExtensions.CreateAllMessagesRegistrator(EvangPL.Views.MaterialsList.MaterialsList)">
+            <summary>
+            Creates a message registration stub for <see cref="T:EvangPL.Views.MaterialsList.MaterialsList"/> objects.
+            </summary>
+            <param name="_">Dummy parameter, only used to disambiguate the method signature.</param>
+            <returns>A message registration stub for <see cref="T:EvangPL.Views.MaterialsList.MaterialsList"/> objects.</returns>
+        </member>
+        <member name="M:CommunityToolkit.Mvvm.Messaging.__Internals.__IMessengerExtensions.CreateAllMessagesRegistratorWithToken``1(EvangPL.Views.MaterialsList.MaterialsList)">
+            <summary>
+            Creates a message registration stub for <see cref="T:EvangPL.Views.MaterialsList.MaterialsList"/> objects.
+            </summary>
+            <typeparam name="TToken">The type of tokens that will be used to register messages.</typeparam>
+            <param name="_">Dummy parameter, only used to disambiguate the method signature.</param>
+            <returns>A message registration stub for <see cref="T:EvangPL.Views.MaterialsList.MaterialsList"/> objects.</returns>
+        </member>
+        <member name="M:CommunityToolkit.Mvvm.Messaging.__Internals.__IMessengerExtensions.CreateAllMessagesRegistrator(EvangPL.Views.Menu.Menu)">
+            <summary>
+            Creates a message registration stub for <see cref="T:EvangPL.Views.Menu.Menu"/> objects.
+            </summary>
+            <param name="_">Dummy parameter, only used to disambiguate the method signature.</param>
+            <returns>A message registration stub for <see cref="T:EvangPL.Views.Menu.Menu"/> objects.</returns>
+        </member>
+        <member name="M:CommunityToolkit.Mvvm.Messaging.__Internals.__IMessengerExtensions.CreateAllMessagesRegistratorWithToken``1(EvangPL.Views.Menu.Menu)">
+            <summary>
+            Creates a message registration stub for <see cref="T:EvangPL.Views.Menu.Menu"/> objects.
+            </summary>
+            <typeparam name="TToken">The type of tokens that will be used to register messages.</typeparam>
+            <param name="_">Dummy parameter, only used to disambiguate the method signature.</param>
+            <returns>A message registration stub for <see cref="T:EvangPL.Views.Menu.Menu"/> objects.</returns>
+        </member>
+        <member name="M:CommunityToolkit.Mvvm.Messaging.__Internals.__IMessengerExtensions.CreateAllMessagesRegistrator(EvangPL.Views.Menu.TabMenu)">
+            <summary>
+            Creates a message registration stub for <see cref="T:EvangPL.Views.Menu.TabMenu"/> objects.
+            </summary>
+            <param name="_">Dummy parameter, only used to disambiguate the method signature.</param>
+            <returns>A message registration stub for <see cref="T:EvangPL.Views.Menu.TabMenu"/> objects.</returns>
+        </member>
+        <member name="M:CommunityToolkit.Mvvm.Messaging.__Internals.__IMessengerExtensions.CreateAllMessagesRegistratorWithToken``1(EvangPL.Views.Menu.TabMenu)">
+            <summary>
+            Creates a message registration stub for <see cref="T:EvangPL.Views.Menu.TabMenu"/> objects.
+            </summary>
+            <typeparam name="TToken">The type of tokens that will be used to register messages.</typeparam>
+            <param name="_">Dummy parameter, only used to disambiguate the method signature.</param>
+            <returns>A message registration stub for <see cref="T:EvangPL.Views.Menu.TabMenu"/> objects.</returns>
+        </member>
+        <member name="M:CommunityToolkit.Mvvm.Messaging.__Internals.__IMessengerExtensions.CreateAllMessagesRegistrator(EvangPL.Views.OrderSearch.OrderSearch)">
+            <summary>
+            Creates a message registration stub for <see cref="T:EvangPL.Views.OrderSearch.OrderSearch"/> objects.
+            </summary>
+            <param name="_">Dummy parameter, only used to disambiguate the method signature.</param>
+            <returns>A message registration stub for <see cref="T:EvangPL.Views.OrderSearch.OrderSearch"/> objects.</returns>
+        </member>
+        <member name="M:CommunityToolkit.Mvvm.Messaging.__Internals.__IMessengerExtensions.CreateAllMessagesRegistratorWithToken``1(EvangPL.Views.OrderSearch.OrderSearch)">
+            <summary>
+            Creates a message registration stub for <see cref="T:EvangPL.Views.OrderSearch.OrderSearch"/> objects.
+            </summary>
+            <typeparam name="TToken">The type of tokens that will be used to register messages.</typeparam>
+            <param name="_">Dummy parameter, only used to disambiguate the method signature.</param>
+            <returns>A message registration stub for <see cref="T:EvangPL.Views.OrderSearch.OrderSearch"/> objects.</returns>
+        </member>
+        <member name="M:CommunityToolkit.Mvvm.Messaging.__Internals.__IMessengerExtensions.CreateAllMessagesRegistrator(EvangPL.Views.OutboundHistory.OutboundHistory)">
+            <summary>
+            Creates a message registration stub for <see cref="T:EvangPL.Views.OutboundHistory.OutboundHistory"/> objects.
+            </summary>
+            <param name="_">Dummy parameter, only used to disambiguate the method signature.</param>
+            <returns>A message registration stub for <see cref="T:EvangPL.Views.OutboundHistory.OutboundHistory"/> objects.</returns>
+        </member>
+        <member name="M:CommunityToolkit.Mvvm.Messaging.__Internals.__IMessengerExtensions.CreateAllMessagesRegistratorWithToken``1(EvangPL.Views.OutboundHistory.OutboundHistory)">
+            <summary>
+            Creates a message registration stub for <see cref="T:EvangPL.Views.OutboundHistory.OutboundHistory"/> objects.
+            </summary>
+            <typeparam name="TToken">The type of tokens that will be used to register messages.</typeparam>
+            <param name="_">Dummy parameter, only used to disambiguate the method signature.</param>
+            <returns>A message registration stub for <see cref="T:EvangPL.Views.OutboundHistory.OutboundHistory"/> objects.</returns>
+        </member>
+        <member name="M:CommunityToolkit.Mvvm.Messaging.__Internals.__IMessengerExtensions.CreateAllMessagesRegistrator(EvangPL.Views.OutboundSearch.OutboundSearch)">
+            <summary>
+            Creates a message registration stub for <see cref="T:EvangPL.Views.OutboundSearch.OutboundSearch"/> objects.
+            </summary>
+            <param name="_">Dummy parameter, only used to disambiguate the method signature.</param>
+            <returns>A message registration stub for <see cref="T:EvangPL.Views.OutboundSearch.OutboundSearch"/> objects.</returns>
+        </member>
+        <member name="M:CommunityToolkit.Mvvm.Messaging.__Internals.__IMessengerExtensions.CreateAllMessagesRegistratorWithToken``1(EvangPL.Views.OutboundSearch.OutboundSearch)">
+            <summary>
+            Creates a message registration stub for <see cref="T:EvangPL.Views.OutboundSearch.OutboundSearch"/> objects.
+            </summary>
+            <typeparam name="TToken">The type of tokens that will be used to register messages.</typeparam>
+            <param name="_">Dummy parameter, only used to disambiguate the method signature.</param>
+            <returns>A message registration stub for <see cref="T:EvangPL.Views.OutboundSearch.OutboundSearch"/> objects.</returns>
+        </member>
+        <member name="M:CommunityToolkit.Mvvm.Messaging.__Internals.__IMessengerExtensions.CreateAllMessagesRegistrator(EvangPL.Views.OutHigh.OutHigh)">
+            <summary>
+            Creates a message registration stub for <see cref="T:EvangPL.Views.OutHigh.OutHigh"/> objects.
+            </summary>
+            <param name="_">Dummy parameter, only used to disambiguate the method signature.</param>
+            <returns>A message registration stub for <see cref="T:EvangPL.Views.OutHigh.OutHigh"/> objects.</returns>
+        </member>
+        <member name="M:CommunityToolkit.Mvvm.Messaging.__Internals.__IMessengerExtensions.CreateAllMessagesRegistratorWithToken``1(EvangPL.Views.OutHigh.OutHigh)">
+            <summary>
+            Creates a message registration stub for <see cref="T:EvangPL.Views.OutHigh.OutHigh"/> objects.
+            </summary>
+            <typeparam name="TToken">The type of tokens that will be used to register messages.</typeparam>
+            <param name="_">Dummy parameter, only used to disambiguate the method signature.</param>
+            <returns>A message registration stub for <see cref="T:EvangPL.Views.OutHigh.OutHigh"/> objects.</returns>
+        </member>
+        <member name="M:CommunityToolkit.Mvvm.Messaging.__Internals.__IMessengerExtensions.CreateAllMessagesRegistrator(EvangPL.Views.PickingDetail.PackageRegistration)">
+            <summary>
+            Creates a message registration stub for <see cref="T:EvangPL.Views.PickingDetail.PackageRegistration"/> objects.
+            </summary>
+            <param name="_">Dummy parameter, only used to disambiguate the method signature.</param>
+            <returns>A message registration stub for <see cref="T:EvangPL.Views.PickingDetail.PackageRegistration"/> objects.</returns>
+        </member>
+        <member name="M:CommunityToolkit.Mvvm.Messaging.__Internals.__IMessengerExtensions.CreateAllMessagesRegistratorWithToken``1(EvangPL.Views.PickingDetail.PackageRegistration)">
+            <summary>
+            Creates a message registration stub for <see cref="T:EvangPL.Views.PickingDetail.PackageRegistration"/> objects.
+            </summary>
+            <typeparam name="TToken">The type of tokens that will be used to register messages.</typeparam>
+            <param name="_">Dummy parameter, only used to disambiguate the method signature.</param>
+            <returns>A message registration stub for <see cref="T:EvangPL.Views.PickingDetail.PackageRegistration"/> objects.</returns>
+        </member>
+        <member name="M:CommunityToolkit.Mvvm.Messaging.__Internals.__IMessengerExtensions.CreateAllMessagesRegistrator(EvangPL.Views.PickingDetail.PickingDetail)">
+            <summary>
+            Creates a message registration stub for <see cref="T:EvangPL.Views.PickingDetail.PickingDetail"/> objects.
+            </summary>
+            <param name="_">Dummy parameter, only used to disambiguate the method signature.</param>
+            <returns>A message registration stub for <see cref="T:EvangPL.Views.PickingDetail.PickingDetail"/> objects.</returns>
+        </member>
+        <member name="M:CommunityToolkit.Mvvm.Messaging.__Internals.__IMessengerExtensions.CreateAllMessagesRegistratorWithToken``1(EvangPL.Views.PickingDetail.PickingDetail)">
+            <summary>
+            Creates a message registration stub for <see cref="T:EvangPL.Views.PickingDetail.PickingDetail"/> objects.
+            </summary>
+            <typeparam name="TToken">The type of tokens that will be used to register messages.</typeparam>
+            <param name="_">Dummy parameter, only used to disambiguate the method signature.</param>
+            <returns>A message registration stub for <see cref="T:EvangPL.Views.PickingDetail.PickingDetail"/> objects.</returns>
+        </member>
+        <member name="M:CommunityToolkit.Mvvm.Messaging.__Internals.__IMessengerExtensions.CreateAllMessagesRegistrator(EvangPL.Views.PreWorkCheck.PreWorkCheck)">
+            <summary>
+            Creates a message registration stub for <see cref="T:EvangPL.Views.PreWorkCheck.PreWorkCheck"/> objects.
+            </summary>
+            <param name="_">Dummy parameter, only used to disambiguate the method signature.</param>
+            <returns>A message registration stub for <see cref="T:EvangPL.Views.PreWorkCheck.PreWorkCheck"/> objects.</returns>
+        </member>
+        <member name="M:CommunityToolkit.Mvvm.Messaging.__Internals.__IMessengerExtensions.CreateAllMessagesRegistratorWithToken``1(EvangPL.Views.PreWorkCheck.PreWorkCheck)">
+            <summary>
+            Creates a message registration stub for <see cref="T:EvangPL.Views.PreWorkCheck.PreWorkCheck"/> objects.
+            </summary>
+            <typeparam name="TToken">The type of tokens that will be used to register messages.</typeparam>
+            <param name="_">Dummy parameter, only used to disambiguate the method signature.</param>
+            <returns>A message registration stub for <see cref="T:EvangPL.Views.PreWorkCheck.PreWorkCheck"/> objects.</returns>
+        </member>
+        <member name="M:CommunityToolkit.Mvvm.Messaging.__Internals.__IMessengerExtensions.CreateAllMessagesRegistrator(EvangPL.Views.ProcessDetail.ProcessDetail)">
+            <summary>
+            Creates a message registration stub for <see cref="T:EvangPL.Views.ProcessDetail.ProcessDetail"/> objects.
+            </summary>
+            <param name="_">Dummy parameter, only used to disambiguate the method signature.</param>
+            <returns>A message registration stub for <see cref="T:EvangPL.Views.ProcessDetail.ProcessDetail"/> objects.</returns>
+        </member>
+        <member name="M:CommunityToolkit.Mvvm.Messaging.__Internals.__IMessengerExtensions.CreateAllMessagesRegistratorWithToken``1(EvangPL.Views.ProcessDetail.ProcessDetail)">
+            <summary>
+            Creates a message registration stub for <see cref="T:EvangPL.Views.ProcessDetail.ProcessDetail"/> objects.
+            </summary>
+            <typeparam name="TToken">The type of tokens that will be used to register messages.</typeparam>
+            <param name="_">Dummy parameter, only used to disambiguate the method signature.</param>
+            <returns>A message registration stub for <see cref="T:EvangPL.Views.ProcessDetail.ProcessDetail"/> objects.</returns>
+        </member>
+        <member name="M:CommunityToolkit.Mvvm.Messaging.__Internals.__IMessengerExtensions.CreateAllMessagesRegistrator(EvangPL.Views.ProcessInfo.ProcessInfo)">
+            <summary>
+            Creates a message registration stub for <see cref="T:EvangPL.Views.ProcessInfo.ProcessInfo"/> objects.
+            </summary>
+            <param name="_">Dummy parameter, only used to disambiguate the method signature.</param>
+            <returns>A message registration stub for <see cref="T:EvangPL.Views.ProcessInfo.ProcessInfo"/> objects.</returns>
+        </member>
+        <member name="M:CommunityToolkit.Mvvm.Messaging.__Internals.__IMessengerExtensions.CreateAllMessagesRegistratorWithToken``1(EvangPL.Views.ProcessInfo.ProcessInfo)">
+            <summary>
+            Creates a message registration stub for <see cref="T:EvangPL.Views.ProcessInfo.ProcessInfo"/> objects.
+            </summary>
+            <typeparam name="TToken">The type of tokens that will be used to register messages.</typeparam>
+            <param name="_">Dummy parameter, only used to disambiguate the method signature.</param>
+            <returns>A message registration stub for <see cref="T:EvangPL.Views.ProcessInfo.ProcessInfo"/> objects.</returns>
+        </member>
+        <member name="M:CommunityToolkit.Mvvm.Messaging.__Internals.__IMessengerExtensions.CreateAllMessagesRegistrator(EvangPL.Views.ProcessSearch.ProcessSearch)">
+            <summary>
+            Creates a message registration stub for <see cref="T:EvangPL.Views.ProcessSearch.ProcessSearch"/> objects.
+            </summary>
+            <param name="_">Dummy parameter, only used to disambiguate the method signature.</param>
+            <returns>A message registration stub for <see cref="T:EvangPL.Views.ProcessSearch.ProcessSearch"/> objects.</returns>
+        </member>
+        <member name="M:CommunityToolkit.Mvvm.Messaging.__Internals.__IMessengerExtensions.CreateAllMessagesRegistratorWithToken``1(EvangPL.Views.ProcessSearch.ProcessSearch)">
+            <summary>
+            Creates a message registration stub for <see cref="T:EvangPL.Views.ProcessSearch.ProcessSearch"/> objects.
+            </summary>
+            <typeparam name="TToken">The type of tokens that will be used to register messages.</typeparam>
+            <param name="_">Dummy parameter, only used to disambiguate the method signature.</param>
+            <returns>A message registration stub for <see cref="T:EvangPL.Views.ProcessSearch.ProcessSearch"/> objects.</returns>
+        </member>
+        <member name="M:CommunityToolkit.Mvvm.Messaging.__Internals.__IMessengerExtensions.CreateAllMessagesRegistrator(EvangPL.Views.Report.Report)">
+            <summary>
+            Creates a message registration stub for <see cref="T:EvangPL.Views.Report.Report"/> objects.
+            </summary>
+            <param name="_">Dummy parameter, only used to disambiguate the method signature.</param>
+            <returns>A message registration stub for <see cref="T:EvangPL.Views.Report.Report"/> objects.</returns>
+        </member>
+        <member name="M:CommunityToolkit.Mvvm.Messaging.__Internals.__IMessengerExtensions.CreateAllMessagesRegistratorWithToken``1(EvangPL.Views.Report.Report)">
+            <summary>
+            Creates a message registration stub for <see cref="T:EvangPL.Views.Report.Report"/> objects.
+            </summary>
+            <typeparam name="TToken">The type of tokens that will be used to register messages.</typeparam>
+            <param name="_">Dummy parameter, only used to disambiguate the method signature.</param>
+            <returns>A message registration stub for <see cref="T:EvangPL.Views.Report.Report"/> objects.</returns>
+        </member>
+        <member name="M:CommunityToolkit.Mvvm.Messaging.__Internals.__IMessengerExtensions.CreateAllMessagesRegistrator(EvangPL.Views.StockOut.StockOut)">
+            <summary>
+            Creates a message registration stub for <see cref="T:EvangPL.Views.StockOut.StockOut"/> objects.
+            </summary>
+            <param name="_">Dummy parameter, only used to disambiguate the method signature.</param>
+            <returns>A message registration stub for <see cref="T:EvangPL.Views.StockOut.StockOut"/> objects.</returns>
+        </member>
+        <member name="M:CommunityToolkit.Mvvm.Messaging.__Internals.__IMessengerExtensions.CreateAllMessagesRegistratorWithToken``1(EvangPL.Views.StockOut.StockOut)">
+            <summary>
+            Creates a message registration stub for <see cref="T:EvangPL.Views.StockOut.StockOut"/> objects.
+            </summary>
+            <typeparam name="TToken">The type of tokens that will be used to register messages.</typeparam>
+            <param name="_">Dummy parameter, only used to disambiguate the method signature.</param>
+            <returns>A message registration stub for <see cref="T:EvangPL.Views.StockOut.StockOut"/> objects.</returns>
+        </member>
+        <member name="M:CommunityToolkit.Mvvm.Messaging.__Internals.__IMessengerExtensions.CreateAllMessagesRegistrator(EvangPL.Views.StockAdjust.StockAdjust)">
+            <summary>
+            Creates a message registration stub for <see cref="T:EvangPL.Views.StockAdjust.StockAdjust"/> objects.
+            </summary>
+            <param name="_">Dummy parameter, only used to disambiguate the method signature.</param>
+            <returns>A message registration stub for <see cref="T:EvangPL.Views.StockAdjust.StockAdjust"/> objects.</returns>
+        </member>
+        <member name="M:CommunityToolkit.Mvvm.Messaging.__Internals.__IMessengerExtensions.CreateAllMessagesRegistratorWithToken``1(EvangPL.Views.StockAdjust.StockAdjust)">
+            <summary>
+            Creates a message registration stub for <see cref="T:EvangPL.Views.StockAdjust.StockAdjust"/> objects.
+            </summary>
+            <typeparam name="TToken">The type of tokens that will be used to register messages.</typeparam>
+            <param name="_">Dummy parameter, only used to disambiguate the method signature.</param>
+            <returns>A message registration stub for <see cref="T:EvangPL.Views.StockAdjust.StockAdjust"/> objects.</returns>
+        </member>
+        <member name="M:CommunityToolkit.Mvvm.Messaging.__Internals.__IMessengerExtensions.CreateAllMessagesRegistrator(EvangPL.Views.StockIn.StockIn)">
+            <summary>
+            Creates a message registration stub for <see cref="T:EvangPL.Views.StockIn.StockIn"/> objects.
+            </summary>
+            <param name="_">Dummy parameter, only used to disambiguate the method signature.</param>
+            <returns>A message registration stub for <see cref="T:EvangPL.Views.StockIn.StockIn"/> objects.</returns>
+        </member>
+        <member name="M:CommunityToolkit.Mvvm.Messaging.__Internals.__IMessengerExtensions.CreateAllMessagesRegistratorWithToken``1(EvangPL.Views.StockIn.StockIn)">
+            <summary>
+            Creates a message registration stub for <see cref="T:EvangPL.Views.StockIn.StockIn"/> objects.
+            </summary>
+            <typeparam name="TToken">The type of tokens that will be used to register messages.</typeparam>
+            <param name="_">Dummy parameter, only used to disambiguate the method signature.</param>
+            <returns>A message registration stub for <see cref="T:EvangPL.Views.StockIn.StockIn"/> objects.</returns>
+        </member>
+        <member name="M:CommunityToolkit.Mvvm.Messaging.__Internals.__IMessengerExtensions.CreateAllMessagesRegistrator(EvangPL.Views.StockOutDetail.StockOutDetail)">
+            <summary>
+            Creates a message registration stub for <see cref="T:EvangPL.Views.StockOutDetail.StockOutDetail"/> objects.
+            </summary>
+            <param name="_">Dummy parameter, only used to disambiguate the method signature.</param>
+            <returns>A message registration stub for <see cref="T:EvangPL.Views.StockOutDetail.StockOutDetail"/> objects.</returns>
+        </member>
+        <member name="M:CommunityToolkit.Mvvm.Messaging.__Internals.__IMessengerExtensions.CreateAllMessagesRegistratorWithToken``1(EvangPL.Views.StockOutDetail.StockOutDetail)">
+            <summary>
+            Creates a message registration stub for <see cref="T:EvangPL.Views.StockOutDetail.StockOutDetail"/> objects.
+            </summary>
+            <typeparam name="TToken">The type of tokens that will be used to register messages.</typeparam>
+            <param name="_">Dummy parameter, only used to disambiguate the method signature.</param>
+            <returns>A message registration stub for <see cref="T:EvangPL.Views.StockOutDetail.StockOutDetail"/> objects.</returns>
+        </member>
+        <member name="M:CommunityToolkit.Mvvm.Messaging.__Internals.__IMessengerExtensions.CreateAllMessagesRegistrator(EvangPL.Views.Thaw.Thaw)">
+            <summary>
+            Creates a message registration stub for <see cref="T:EvangPL.Views.Thaw.Thaw"/> objects.
+            </summary>
+            <param name="_">Dummy parameter, only used to disambiguate the method signature.</param>
+            <returns>A message registration stub for <see cref="T:EvangPL.Views.Thaw.Thaw"/> objects.</returns>
+        </member>
+        <member name="M:CommunityToolkit.Mvvm.Messaging.__Internals.__IMessengerExtensions.CreateAllMessagesRegistratorWithToken``1(EvangPL.Views.Thaw.Thaw)">
+            <summary>
+            Creates a message registration stub for <see cref="T:EvangPL.Views.Thaw.Thaw"/> objects.
+            </summary>
+            <typeparam name="TToken">The type of tokens that will be used to register messages.</typeparam>
+            <param name="_">Dummy parameter, only used to disambiguate the method signature.</param>
+            <returns>A message registration stub for <see cref="T:EvangPL.Views.Thaw.Thaw"/> objects.</returns>
+        </member>
+        <member name="M:CommunityToolkit.Mvvm.Messaging.__Internals.__IMessengerExtensions.CreateAllMessagesRegistrator(EvangPL.Views.WorkRecord.WorkRecord)">
+            <summary>
+            Creates a message registration stub for <see cref="T:EvangPL.Views.WorkRecord.WorkRecord"/> objects.
+            </summary>
+            <param name="_">Dummy parameter, only used to disambiguate the method signature.</param>
+            <returns>A message registration stub for <see cref="T:EvangPL.Views.WorkRecord.WorkRecord"/> objects.</returns>
+        </member>
+        <member name="M:CommunityToolkit.Mvvm.Messaging.__Internals.__IMessengerExtensions.CreateAllMessagesRegistratorWithToken``1(EvangPL.Views.WorkRecord.WorkRecord)">
+            <summary>
+            Creates a message registration stub for <see cref="T:EvangPL.Views.WorkRecord.WorkRecord"/> objects.
+            </summary>
+            <typeparam name="TToken">The type of tokens that will be used to register messages.</typeparam>
+            <param name="_">Dummy parameter, only used to disambiguate the method signature.</param>
+            <returns>A message registration stub for <see cref="T:EvangPL.Views.WorkRecord.WorkRecord"/> objects.</returns>
+        </member>
+    </members>
+</doc>
