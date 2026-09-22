@@ -702,7 +702,7 @@ namespace EvangPL.Views.InputDetail
 
             var addLotBtn = new Button
             {
-                Text = "+ロットを追加",
+                Text = "+明細を追加",
                 BackgroundColor = Colors.Transparent,
                 TextColor = Color.FromArgb("#245a96"),
                 BorderColor = Color.FromArgb("#245a96"),
