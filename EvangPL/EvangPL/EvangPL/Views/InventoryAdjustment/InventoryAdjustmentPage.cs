@@ -451,7 +451,7 @@ namespace EvangPL.Views.InventoryAdjustment
 
             ApplyItemDetail(detail);
 
-            if (differenceEntry != null && !(_currentItems?.FirstOrDefault()?.IsLotItem ?? false))
+            if (differenceEntry != null && !(_currentItems?.FirstOrDefault()?.IsAnyLotItem ?? false))
                 differenceEntry.Text = item.DiffQty.ToString();
 
             ApplyReasonFromMemo(item.AdjustReason);
@@ -493,7 +493,48 @@ namespace EvangPL.Views.InventoryAdjustment
                 _locBorder.BackgroundColor = canEditItemAndLoc ? Colors.White : DisabledBg;
         }
 
-        // ★ 保存時に既存の空白行があれば再利用し、重複追加を防ぐ
+        // 明細保存前に品目タイプをチェック
+        private async Task<(bool Success, string? ErrorMessage)> CheckItemTypeAsync(string itemCode)
+        {
+            try
+            {
+                var request = new RequestData<StockAdjustSearchParam, EvangJsonModel>(RESTLET_STOCK_ADJUST);
+                request.Info = new StockAdjustSearchParam
+                {
+                    Kbn = "checkitemtype",
+                    Keyword = itemCode
+                };
+
+                ResponseData<EvangJsonModel, EvangJsonModel>? result = null;
+                try
+                {
+                    result = await this.Post<StockAdjustSearchParam, EvangJsonModel, EvangJsonModel, EvangJsonModel>(request);
+                }
+                finally { }
+
+                if (result == null)
+                    return (false, "品目の確認に失敗しました。");
+
+                if (result.SubData != null)
+                {
+                    foreach (var sub in result.SubData)
+                    {
+                        if (sub.SubName == "PH_CHECKTYPERESULT" && !string.IsNullOrEmpty(sub.SubJson))
+                        {
+                            return (false, sub.SubJson);
+                        }
+                    }
+                }
+
+                return (true, null);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[InventoryAdjustment] CheckItemTypeAsync エラー: {ex}");
+                return (false, $"品目タイプの確認中にエラーが発生しました。\n{ex.Message}");
+            }
+        }
+
         private async void OnSaveDetailClicked(object? sender, EventArgs e)
         {
             if (_selectedItem == null)
@@ -514,7 +555,7 @@ namespace EvangPL.Views.InventoryAdjustment
                 return;
             }
 
-            bool isLotItem = _currentItems?.FirstOrDefault()?.IsLotItem ?? false;
+            bool isLotItem = _currentItems?.FirstOrDefault()?.IsAnyLotItem ?? false;
             if (isLotItem)
             {
                 var lots = GetLotsForSelectedItem();
@@ -551,6 +592,18 @@ namespace EvangPL.Views.InventoryAdjustment
                 return;
             }
 
+            var checkItemCode = itemEntry?.Text?.Trim() ?? "";
+            if (!string.IsNullOrEmpty(checkItemCode))
+            {
+                var (checkSuccess, checkError) = await CheckItemTypeAsync(checkItemCode);
+                if (!checkSuccess)
+                {
+                    await DisplayAlert("エラー", checkError ?? "品目が正しくありません。", "OK");
+                    return;
+                }
+            }
+
+            // 以降、実際の保存処理
             _selectedItem.DiffQty = diff;
             _selectedItem.AdjustReason = reasonPicker?.SelectedItem?.ToString() ?? "";
 
@@ -567,7 +620,6 @@ namespace EvangPL.Views.InventoryAdjustment
 
             _savedNewLots.RemoveAll(l => l.LineNo == currentLineNo);
 
-            // ★ ここが本改修の核心：lot 品目 / 非 lot 品目の両方に対応
             if (isLotItem)
             {
                 var currentLots = GetLotsForSelectedItem();
@@ -585,8 +637,6 @@ namespace EvangPL.Views.InventoryAdjustment
             }
             else
             {
-                // ★ 非 lot 品目：伪 lot（LotNo=""）を _savedNewLots に追加
-                // → 底部表にも品目 + 数量が表示される
                 _savedNewLots.Add(new PendingLotItem
                 {
                     ItemCode = currentItemCode,
@@ -1119,6 +1169,7 @@ namespace EvangPL.Views.InventoryAdjustment
                         if (locations != null && locations.Count > 0)
                         {
                             bool needFillPicker = _locationList.Count == 0
+
                                                   || locationPicker == null
                                                   || locationPicker.Items.Count == 0;
                             _locationList = locations;
@@ -1188,7 +1239,7 @@ namespace EvangPL.Views.InventoryAdjustment
         {
             _currentItems = items;
             var first = items?.FirstOrDefault();
-            bool isLotItem = first?.IsLotItem ?? false;
+            bool isLotItem = first?.IsAnyLotItem ?? false;
 
             ApplyReasonFromMemo(first?.Memo);
 
@@ -1404,7 +1455,7 @@ namespace EvangPL.Views.InventoryAdjustment
         {
             if (differenceEntry == null) return;
 
-            bool isLotItem = _currentItems?.FirstOrDefault()?.IsLotItem ?? false;
+            bool isLotItem = _currentItems?.FirstOrDefault()?.IsAnyLotItem ?? false;
             var lots = GetLotsForSelectedItem();
 
             if (isLotItem)
@@ -1560,7 +1611,7 @@ namespace EvangPL.Views.InventoryAdjustment
 
         private async void OnAddLotButtonClicked(object? sender, EventArgs e)
         {
-            bool isLotItem = _currentItems?.FirstOrDefault()?.IsLotItem ?? false;
+            bool isLotItem = _currentItems?.FirstOrDefault()?.IsAnyLotItem ?? false;
             var itemCode = itemEntry?.Text?.Trim() ?? "";
 
             if (!isLotItem || string.IsNullOrEmpty(itemCode))
@@ -1580,6 +1631,14 @@ namespace EvangPL.Views.InventoryAdjustment
             if (!int.TryParse(qtyText, out int qty) || qty <= 0)
             {
                 await DisplayAlert("エラー", "数量を正しく入力してください。", "OK");
+                return;
+            }
+
+            // ★ 修正点2: シリアルLotの場合、数量は1のみ許可
+            bool isSerialLot = _currentItems?.FirstOrDefault()?.IsSerialLotItem ?? false;
+            if (isSerialLot && qty > 1)
+            {
+                await DisplayAlert("エラー", "シリアル番号管理品目の場合、数量は1のみ入力可能です。", "OK");
                 return;
             }
 
@@ -1786,8 +1845,9 @@ namespace EvangPL.Views.InventoryAdjustment
             [JsonPropertyName("HandQuantity")]
             public int? HandQuantity { get; set; }
 
+            // ★ 修正点2: stringに変更。"1"=通常Lot, "2"=シリアルLot
             [JsonPropertyName("IsLotItem")]
-            public bool IsLotItem { get; set; }
+            public string? IsLotItem { get; set; }
 
             [JsonPropertyName("LotNo")]
             public string LotNo { get; set; } = "";
@@ -1797,6 +1857,14 @@ namespace EvangPL.Views.InventoryAdjustment
 
             [JsonPropertyName("Memo")]
             public string? Memo { get; set; }
+
+            // ★ ヘルパー: Lot管理品目かどうか（"1"または"2"）
+            [JsonIgnore]
+            public bool IsAnyLotItem => IsLotItem == "1" || IsLotItem == "2";
+
+            // ★ ヘルパー: シリアルLotかどうか（"2"）
+            [JsonIgnore]
+            public bool IsSerialLotItem => IsLotItem == "2";
         }
 
         public class PendingLotItem
