@@ -1,4 +1,0 @@
-Layout/auto_item.xml;layout/auto_item.xml
-Layout/spinner_down_item.xml;layout/spinner_down_item.xml
-Layout/spinner_item.xml;layout/spinner_item.xml
-values/colors.xml;values/colors.xml
