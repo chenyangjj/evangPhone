@@ -99,7 +99,7 @@ namespace EvangPL.Views.PickingDetail
             // ---- タイトル行（梱包を追加） ----
             var titleLabel = new Label
             {
-                Text = "梱包を追加",
+                Text = "梱包情報を追加",
                 FontSize = 20,
                 FontAttributes = FontAttributes.Bold
             };
