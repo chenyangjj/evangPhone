@@ -1311,7 +1311,7 @@ namespace EvangPL.Views.InputDetail
                 // ✅ [追加] 一覧画面（StockIn）に「この伝票の受領処理が完了した」ことを伝えておく。
                 //    一覧画面へ戻った際に再度このカードをタップしても、
                 //    「対象の入庫明細が見つかりません」という誤解を招くAlertが表示されないようにするため。
-                EvangPL.Views.StockIn.StockIn.MarkOrderAsCompleted(_orderId);
+                //EvangPL.Views.StockIn.StockIn.MarkOrderAsCompleted(_orderId);
 
                 // ✅ [変更] 保存成功後は本画面を再構築せず、呼び出し元の一覧画面（StockIn）へ戻る。
                 //    一覧画面側の OnAppearing で、保存済みの検索条件を使ってサーバーへ再検索をかけ、
