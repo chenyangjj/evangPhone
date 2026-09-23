@@ -165,6 +165,15 @@ namespace EvangPL.Views.PickingDetail
             // ---- 数量 ----
             root.Children.Add(new Label { Text = "数量", FontSize = 12, TextColor = Colors.Gray });
             _entryQty = new Entry { Keyboard = Keyboard.Numeric };
+            _entryQty.TextChanged += (s, e) =>
+            {
+                if (string.IsNullOrEmpty(e.NewTextValue)) return;
+                var filtered = new string(e.NewTextValue.Where(char.IsDigit).ToArray());
+                if (filtered != e.NewTextValue)
+                {
+                    _entryQty.Text = filtered;
+                }
+            };
             root.Children.Add(WrapInputControl(_entryQty));
 
             // ✅ 【修正】画面初期表示時に最初の品目コードを自動入力（従来のSelectedIndex=0相当）
