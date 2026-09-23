@@ -599,8 +599,7 @@ namespace EvangPL.Views.InventoryTransferPageDetails
         // ==========================================
         private async void OnSaveDetailClicked(object? sender, EventArgs e)
         {
-            try
-            {
+            
                 try
                 {
                     var selectedLocation = fromPicker?.SelectedItem as LocationData;
