@@ -1,6 +1,5 @@
 ﻿using EvangPL.Components;
 using EvangPL.Utils;
-using EvangPL.Views.ProcessInfo;
 using EvangSol.Mobibrary.DataFeed;
 using EvangSol.Mobibrary.EvangModel;
 using EvangSol.Mobibrary.EvangViewModel;
