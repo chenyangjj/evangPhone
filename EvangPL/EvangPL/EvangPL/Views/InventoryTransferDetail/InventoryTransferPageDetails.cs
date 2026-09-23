@@ -357,7 +357,14 @@ namespace EvangPL.Views.InventoryTransferPageDetails
             _itemEntry.TextChanged += OnItemTextChanged;
 
             itemRow.Add(WrapInputControl(_itemEntry), 0, 0);
-            itemRow.Add(BuildBarcodeIcon(), 1, 0);
+            itemRow.Add(BuildBarcodeIcon((scannedCode) =>
+            {
+                // ★ 品目入力欄に反映（TextChanged が自動で検索をトリガー）
+                if (_itemEntry != null)
+                {
+                    _itemEntry.Text = scannedCode;
+                }
+            }), 1, 0);
             layout.Children.Add(itemRow);
 
             // ロット関連
@@ -1593,7 +1600,8 @@ namespace EvangPL.Views.InventoryTransferPageDetails
             };
         }
 
-        private Border BuildBarcodeIcon()
+        // ★ 改造版：接受一个回调 onScanResult，点击图标时打开扫描页
+        private Border BuildBarcodeIcon(Action<string> onScanResult)
         {
             var barsLayout = new HorizontalStackLayout
             {
@@ -1614,7 +1622,7 @@ namespace EvangPL.Views.InventoryTransferPageDetails
                 });
             }
 
-            return new Border
+            var border = new Border
             {
                 Stroke = InputBorderColor,
                 StrokeThickness = 1,
@@ -1626,6 +1634,20 @@ namespace EvangPL.Views.InventoryTransferPageDetails
                 HorizontalOptions = LayoutOptions.End,
                 Content = barsLayout
             };
+
+            // ★ 追加：タップでスキャンページを開く
+            var tap = new TapGestureRecognizer();
+            tap.Tapped += async (s, e) =>
+            {
+                await ScanHelper.ScanAsync(Navigation, (code) =>
+                {
+                    // 結果をメインスレッドで処理
+                    Dispatcher.Dispatch(() => onScanResult(code));
+                });
+            };
+            border.GestureRecognizers.Add(tap);
+
+            return border;
         }
 
         private async Task GetLocaData(string kbn)
