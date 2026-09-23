@@ -601,7 +601,31 @@ namespace EvangPL.Views.InventoryTransferPageDetails
         {
             try
             {
-                var itemCode = _itemEntry?.Text?.Trim();
+                try
+                {
+                    var selectedLocation = fromPicker?.SelectedItem as LocationData;
+                    if (selectedLocation == null || selectedLocation.id == null)
+                    {
+                        await DisplayAlert("エラー", "移動元ロケーションを選択してください。", "OK");
+                        return;
+                    }
+                    int? fromlocationId = selectedLocation.id;
+
+                    var selectedLocationto = toPicker?.SelectedItem as LocationData;
+                    if (selectedLocationto == null || selectedLocationto.id == null)
+                    {
+                        await DisplayAlert("エラー", "移動先ロケーションを選択してください。", "OK");
+                        return;
+                    }
+                    int? tolocationId = selectedLocationto.id;
+
+                    if (fromlocationId.Value == tolocationId.Value)
+                    {
+                        await DisplayAlert("エラー", "移動元と移動先に同じロケーションは選択できません。", "OK");
+                        return;
+                    }
+
+                    var itemCode = _itemEntry?.Text?.Trim();
                 if (string.IsNullOrEmpty(itemCode))
                 {
                     await DisplayAlert("エラー", "品目を入力してください。", "OK");
