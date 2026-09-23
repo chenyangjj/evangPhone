@@ -449,6 +449,18 @@ namespace EvangPL.Views.InventoryTransferPageDetails
                 TextColor = Colors.Black,
                 PlaceholderColor = Colors.Gray
             };
+
+            // ★ 修改点⑤: 输入框层面过滤掉 '-' 和其它非数字字符（双重保险）
+            _qtyEntry.TextChanged += (s, e) =>
+            {
+                if (string.IsNullOrEmpty(e.NewTextValue)) return;
+                var filtered = new string(e.NewTextValue.Where(char.IsDigit).ToArray());
+                if (filtered != e.NewTextValue)
+                {
+                    _qtyEntry.Text = filtered;
+                }
+            };
+
             _qtyEntryBorder = WrapInputControl(_qtyEntry);
             qtyRow.Add(_qtyEntryBorder, 0, 0);
             qtyRow.Add(new Label
@@ -602,13 +614,25 @@ namespace EvangPL.Views.InventoryTransferPageDetails
                     return;
                 }
 
+                // ★ 修改点②: 非 Lot 品目の数量チェックを細分化（負値・0を明確にエラー化）
                 int nonLotQty = 0;
                 if (!_currentItemIsLot)
                 {
                     var qtyTextCheck = _qtyEntry?.Text?.Trim();
-                    if (!int.TryParse(qtyTextCheck, out nonLotQty) || nonLotQty <= 0)
+
+                    if (!int.TryParse(qtyTextCheck, out nonLotQty))
                     {
                         await DisplayAlert("エラー", "移動数量を正しく入力してください。", "OK");
+                        return;
+                    }
+                    if (nonLotQty < 0)
+                    {
+                        await DisplayAlert("エラー", "移動数量にマイナス値は入力できません。", "OK");
+                        return;
+                    }
+                    if (nonLotQty == 0)
+                    {
+                        await DisplayAlert("エラー", "移動数量は1以上を入力してください。", "OK");
                         return;
                     }
                 }
@@ -993,18 +1017,38 @@ namespace EvangPL.Views.InventoryTransferPageDetails
                         Qty = x.Qty
                     }).ToList();
 
+                    // ★ 修改点③: 未入力・解析失敗・負値・0 をすべて明示的にエラー化（サイレント破棄を廃止）
                     if (!_currentItemIsLot && pendingLots.Count == 0)
                     {
                         var qtyText = _qtyEntry?.Text?.Trim();
-                        if (int.TryParse(qtyText, out int qtyVal) && qtyVal > 0)
+
+                        if (string.IsNullOrEmpty(qtyText))
                         {
-                            pendingLots.Add(new PendingLotItem
-                            {
-                                ItemCode = currentItemCode,
-                                LotNo = "",
-                                Qty = qtyVal
-                            });
+                            await DisplayAlert("エラー", "移動数量を入力してください。", "OK");
+                            return;
                         }
+                        if (!int.TryParse(qtyText, out int qtyVal))
+                        {
+                            await DisplayAlert("エラー", "移動数量を正しく入力してください。", "OK");
+                            return;
+                        }
+                        if (qtyVal < 0)
+                        {
+                            await DisplayAlert("エラー", "移動数量にマイナス値は入力できません。", "OK");
+                            return;
+                        }
+                        if (qtyVal == 0)
+                        {
+                            await DisplayAlert("エラー", "移動数量は1以上を入力してください。", "OK");
+                            return;
+                        }
+
+                        pendingLots.Add(new PendingLotItem
+                        {
+                            ItemCode = currentItemCode,
+                            LotNo = "",
+                            Qty = qtyVal
+                        });
                     }
 
                     var pendingDetail = new TransferDetailItem
@@ -1034,6 +1078,28 @@ namespace EvangPL.Views.InventoryTransferPageDetails
                 {
                     await DisplayAlert("エラー", "保存する明細がありません。", "OK");
                     return;
+                }
+
+                // ★ 修改点④: 保存前の最終チェック（全ロット数量が非負かつ非ゼロであること）
+                foreach (var d in validDetails)
+                {
+                    foreach (var lot in d.Lots)
+                    {
+                        if (lot.Qty < 0)
+                        {
+                            await DisplayAlert("エラー",
+                                $"明細「{d.ItemCode}」にマイナスの数量が含まれています。\n数量を修正してください。",
+                                "OK");
+                            return;
+                        }
+                        if (lot.Qty == 0)
+                        {
+                            await DisplayAlert("エラー",
+                                $"明細「{d.ItemCode}」に数量0のロットが含まれています。\n数量を修正するか、該当ロットを削除してください。",
+                                "OK");
+                            return;
+                        }
+                    }
                 }
 
                 var detailParams = validDetails.Select(d => new StockTransferDetailParam
@@ -1227,9 +1293,21 @@ namespace EvangPL.Views.InventoryTransferPageDetails
                     await DisplayAlert("エラー", "ロット/シリアルを入力またはスキャンしてください。", "OK");
                     return;
                 }
-                if (!int.TryParse(qtyText, out int qty) || qty <= 0)
+
+                // ★ 修改点①: パース失敗 / 負値 / 0 を個別にチェック
+                if (!int.TryParse(qtyText, out int qty))
                 {
                     await DisplayAlert("エラー", "移動数量を正しく入力してください。", "OK");
+                    return;
+                }
+                if (qty < 0)
+                {
+                    await DisplayAlert("エラー", "移動数量にマイナス値は入力できません。", "OK");
+                    return;
+                }
+                if (qty == 0)
+                {
+                    await DisplayAlert("エラー", "移動数量は1以上を入力してください。", "OK");
                     return;
                 }
 
