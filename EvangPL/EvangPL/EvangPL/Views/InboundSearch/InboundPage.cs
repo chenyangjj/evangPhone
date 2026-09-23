@@ -364,11 +364,11 @@ namespace EvangPL.Views.InboundSearch
 
                 // 4. 検索結果を解析
                 var orderList = ParseSearchResult(result);
-                if (orderList == null || orderList.Count == 0)
-                {
-                    await DisplayAlert("お知らせ", "条件に一致する入庫データが見つかりません", "OK");
-                    return;
-                }
+                //if (orderList == null || orderList.Count == 0)
+                //{
+                //    await DisplayAlert("お知らせ", "条件に一致する入庫データが見つかりません", "OK");
+                //    return;
+                //}
 
                 // メニューと同様にフレームワークファクトリを使用し、手動での new StockIn() は禁止
                 var pageObj = ClassMapping.CreatePageInstance(viewName);
