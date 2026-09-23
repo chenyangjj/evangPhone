@@ -906,7 +906,7 @@ namespace EvangPL.Views.InventoryAdjustment
 
             _lotSectionContainer.Children.Add(new Label
             {
-                Text = "移動数量",
+                Text = "移動数量（マイナス入力可）",
                 FontSize = 12,
                 TextColor = Colors.Gray,
                 Margin = new Thickness(0, 5, 0, 0)
@@ -923,8 +923,9 @@ namespace EvangPL.Views.InventoryAdjustment
             };
             _qtyEntry = new Entry
             {
-                Placeholder = "数量を入力",
-                Keyboard = Keyboard.Numeric,
+                Placeholder = "数量を入力（-可）",
+                // ★ 修改点1: Keyboard.Text で負号入力可能にする
+                Keyboard = Keyboard.Text,
                 BackgroundColor = Colors.Transparent,
                 HeightRequest = 35,
                 FontSize = 13,
@@ -932,6 +933,19 @@ namespace EvangPL.Views.InventoryAdjustment
                 Margin = new Thickness(10, 0)
             };
             _qtyEntry.TextChanged += OnQtyEntryTextChanged;
+
+            // ★ Android では数字キーボード + signed flag に切り替え（マイナス入力可）
+#if ANDROID
+            _qtyEntry.HandlerChanged += (s, e) =>
+            {
+                if (_qtyEntry?.Handler?.PlatformView is Android.Widget.EditText et)
+                {
+                    et.InputType = Android.Text.InputTypes.ClassNumber
+                                 | Android.Text.InputTypes.NumberFlagSigned;
+                }
+            };
+#endif
+
             var qtyBorder = CreateInputBorder(_qtyEntry, Colors.White);
             qtyRow.Add(qtyBorder, 0, 0);
             qtyRow.Add(new Label
@@ -1169,7 +1183,6 @@ namespace EvangPL.Views.InventoryAdjustment
                         if (locations != null && locations.Count > 0)
                         {
                             bool needFillPicker = _locationList.Count == 0
-
                                                   || locationPicker == null
                                                   || locationPicker.Items.Count == 0;
                             _locationList = locations;
@@ -1460,8 +1473,9 @@ namespace EvangPL.Views.InventoryAdjustment
 
             if (isLotItem)
             {
+                // ★ 修改点4: 負数も合計に含める
                 int sum = lots.Sum(p => p.Qty ?? 0);
-                if (int.TryParse(_qtyEntry?.Text?.Trim(), out int pendingQty) && pendingQty > 0)
+                if (int.TryParse(_qtyEntry?.Text?.Trim(), out int pendingQty) && pendingQty != 0)
                     sum += pendingQty;
 
                 differenceEntry.IsReadOnly = true;
@@ -1628,17 +1642,19 @@ namespace EvangPL.Views.InventoryAdjustment
                 await DisplayAlert("エラー", "ロット/シリアルを入力またはスキャンしてください。", "OK");
                 return;
             }
-            if (!int.TryParse(qtyText, out int qty) || qty <= 0)
+
+            // ★ 修改点2: 負数を許可（0のみ除外）
+            if (!int.TryParse(qtyText, out int qty) || qty == 0)
             {
-                await DisplayAlert("エラー", "数量を正しく入力してください。", "OK");
+                await DisplayAlert("エラー", "数量を正しく入力してください（0以外、マイナス可）。", "OK");
                 return;
             }
 
-            // ★ 修正点2: シリアルLotの場合、数量は1のみ許可
+            // ★ 修改点3: シリアルLotの場合は ±1 のみ許可
             bool isSerialLot = _currentItems?.FirstOrDefault()?.IsSerialLotItem ?? false;
-            if (isSerialLot && qty > 1)
+            if (isSerialLot && Math.Abs(qty) != 1)
             {
-                await DisplayAlert("エラー", "シリアル番号管理品目の場合、数量は1のみ入力可能です。", "OK");
+                await DisplayAlert("エラー", "シリアル番号管理品目の場合、数量は1または-1のみ入力可能です。", "OK");
                 return;
             }
 
@@ -1845,7 +1861,7 @@ namespace EvangPL.Views.InventoryAdjustment
             [JsonPropertyName("HandQuantity")]
             public int? HandQuantity { get; set; }
 
-            // ★ 修正点2: stringに変更。"1"=通常Lot, "2"=シリアルLot
+            // ★ stringに変更。"1"=通常Lot, "2"=シリアルLot
             [JsonPropertyName("IsLotItem")]
             public string? IsLotItem { get; set; }
 
