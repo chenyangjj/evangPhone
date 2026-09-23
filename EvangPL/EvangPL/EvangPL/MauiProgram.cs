@@ -4,6 +4,7 @@ using EvangSol.Mobibrary.DataFeed;
 using Microsoft.Extensions.Logging;
 using Microsoft.Maui.LifecycleEvents;
 using System.Reflection;
+using ZXing.Net.Maui.Controls;
 
 namespace EvangPL
 {
@@ -15,7 +16,8 @@ namespace EvangPL
             builder
                 .UseMauiApp<App>()
                 .UseEvangMobibrary()
-                .UseMauiCommunityToolkit();
+                .UseMauiCommunityToolkit()
+                .UseBarcodeReader();
 
             builder.ConfigureFonts(fonts =>
                 {
