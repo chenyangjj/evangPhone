@@ -19,6 +19,13 @@ namespace EvangPL.Views.PickingDetail
     /// ここで「梱包No.」と数量をスキャンまたは手入力で追加登録した上で、
     /// 「完了」押下時に画面7-1の明細と梱包Noを品目単位でマージし、
     /// RESTlet②（ActionType=SAVE）へ送信して出荷確定（Item Fulfillment作成）を行う。
+    ///
+    /// ✅ [今回の修正分]
+    ///   1. 品目コードを入力/選択した際、その品目の明細数量合計（画面7-1で登録済みの明細合計）から
+    ///      「この画面で既に登録済みの数量」を差し引いた残数量を、数量欄へ自動セットするようにした。
+    ///   2. 「+梱包内容を追加」押下時、入力数量がその品目の残数量を超えている場合はエラーメッセージを
+    ///      表示して追加を拒否するようにした。
+    ///   3. 追加成功後は数量欄をクリアするのではなく、追加後の新しい残数量を再セットするようにした。
     /// </summary>
     public class PackageRegistration : EvangContentVM
     {
@@ -42,6 +49,11 @@ namespace EvangPL.Views.PickingDetail
         //    画面7-1から引き継いだ _packageItems から構築する。
         private Dictionary<string, string> _itemInternalIdMap = new Dictionary<string, string>();
 
+        // ✅ [追加] ItemCode(表示テキスト) → 明細数量合計 のマップ。
+        //    画面7-1で登録された、この品目に紐づく全明細（ロット/シリアル行）の数量合計。
+        //    数量欄の自動セット・追加時の超過チェックに使用する。
+        private Dictionary<string, int> _itemDetailQtyMap = new Dictionary<string, int>();
+
         // ✅ [追加] 現在入力中の品目の内部ID（非表示）。完了時にRESTletへ送信するItemInternalIdの元データ。
         private Label? _hiddenItemInternalIdLabel;
 
@@ -64,6 +76,13 @@ namespace EvangPL.Views.PickingDetail
                 .Where(p => p.Details != null && p.Details.Count > 0)
                 .GroupBy(p => p.ItemCode)
                 .ToDictionary(g => g.Key, g => g.First().ItemInternalId ?? "");
+
+            // ✅ [追加] 品目コード → 明細数量合計のマップを構築
+            //    （同一品目コードが複数のPackageItemに分かれている場合も、全明細の数量を合算する）
+            _itemDetailQtyMap = _packageItems
+                .Where(p => p.Details != null && p.Details.Count > 0)
+                .GroupBy(p => p.ItemCode)
+                .ToDictionary(g => g.Key, g => g.Sum(p => p.Details.Sum(d => d.DetailQty)));
 
             BuildUI();
         }
@@ -127,22 +146,8 @@ namespace EvangPL.Views.PickingDetail
             // ✅ [追加] 選択中品目の内部ID（非表示）。品目Entryの入力に連動して更新する。
             _hiddenItemInternalIdLabel = new Label { IsVisible = false };
 
-            _entryItemCode.TextChanged += (s, e) =>
-            {
-                var code = _entryItemCode?.Text?.Trim();
-                _hiddenItemInternalIdLabel.Text =
-                    (!string.IsNullOrEmpty(code) && _itemInternalIdMap.TryGetValue(code, out var iid)) ? iid : "";
-            };
-
-            // ✅ 【修正】画面初期表示時に最初の品目コードを自動入力（従来のSelectedIndex=0相当）
-            if (_itemCodeList.Count > 0)
-            {
-                var initialCode = _itemCodeList[0];
-                _entryItemCode.Text = initialCode;
-                // ✅ [追加] 初期入力に合わせて隠し内部IDラベルも同期しておく
-                _hiddenItemInternalIdLabel.Text =
-                    _itemInternalIdMap.TryGetValue(initialCode, out var initialIid) ? initialIid : "";
-            }
+            // 数量Entryはこの後で生成するため、TextChangedの購読は _entryQty 生成後に行う（下記参照）。
+            _entryItemCode.TextChanged += OnItemCodeTextChanged;
 
             var itemRow = new Grid
             {
@@ -161,6 +166,14 @@ namespace EvangPL.Views.PickingDetail
             root.Children.Add(new Label { Text = "数量", FontSize = 12, TextColor = Colors.Gray });
             _entryQty = new Entry { Keyboard = Keyboard.Numeric };
             root.Children.Add(WrapInputControl(_entryQty));
+
+            // ✅ 【修正】画面初期表示時に最初の品目コードを自動入力（従来のSelectedIndex=0相当）
+            //    ここで _entryItemCode.Text をセットすると TextChanged(OnItemCodeTextChanged) が発火し、
+            //    非表示内部IDラベル・数量欄（残数量）も連動して自動セットされる。
+            if (_itemCodeList.Count > 0)
+            {
+                _entryItemCode.Text = _itemCodeList[0];
+            }
 
             // ---- 「この内容を追加」ボタン ----
             var addBtn = new Button
@@ -256,6 +269,8 @@ namespace EvangPL.Views.PickingDetail
                         {
                             AddedPackageList.Remove(entry);
                             RefreshAddedCount();
+                            // ✅ [追加] 削除後は現在入力中の品目の残数量が変わるため、数量欄を再計算する
+                            RefreshQtyForCurrentItem();
                         }
                     };
                     deleteLabel.GestureRecognizers.Add(tap);
@@ -283,6 +298,49 @@ namespace EvangPL.Views.PickingDetail
                 BackgroundColor = Colors.White
             };
             Content = scrollView;
+        }
+
+        // ==================== [追加] 品目コード変更時：内部ID同期 ＋ 数量自動セット ====================
+        /// <summary>
+        /// 品目Entryのテキストが変更されるたびに呼ばれる。
+        ///   ・非表示の内部IDラベルを、入力された品目コードに対応する内部IDへ更新する。
+        ///   ・数量欄に、その品目の「残数量（明細合計 - この画面で既に追加済みの数量）」を自動セットする。
+        /// </summary>
+        private void OnItemCodeTextChanged(object? sender, TextChangedEventArgs e)
+        {
+            var code = _entryItemCode?.Text?.Trim();
+
+            if (_hiddenItemInternalIdLabel != null)
+            {
+                _hiddenItemInternalIdLabel.Text =
+                    (!string.IsNullOrEmpty(code) && _itemInternalIdMap.TryGetValue(code, out var iid)) ? iid : "";
+            }
+
+            RefreshQtyForCurrentItem();
+        }
+
+        // ==================== [追加] 現在入力中の品目の残数量を数量欄へ反映する ====================
+        /// <summary>
+        /// 現在 _entryItemCode に入力されている品目コードについて、
+        ///   残数量 = 画面7-1で登録済みの明細数量合計 - この画面(AddedPackageList)で既に追加済みの合計
+        /// を計算し、数量欄へセットする。
+        /// 対象品目が画面7-1の明細に見つからない場合は数量欄を空にする（自由入力に任せる）。
+        /// </summary>
+        private void RefreshQtyForCurrentItem()
+        {
+            if (_entryQty == null) return;
+
+            var code = _entryItemCode?.Text?.Trim();
+            if (!string.IsNullOrEmpty(code) && _itemDetailQtyMap.TryGetValue(code, out var totalQty))
+            {
+                var alreadyAdded = AddedPackageList.Where(p => p.ItemCode == code).Sum(p => p.Qty);
+                var remaining = totalQty - alreadyAdded;
+                _entryQty.Text = remaining > 0 ? remaining.ToString() : "0";
+            }
+            else
+            {
+                _entryQty.Text = string.Empty;
+            }
         }
 
         // ==================== 「+ この内容を追加」 ====================
@@ -320,6 +378,19 @@ namespace EvangPL.Views.PickingDetail
                 if (!proceed) return;
             }
 
+            // ✅ [追加] 明細の残数量を超えていないかチェック
+            //    （画面7-1で登録済みの明細数量合計 - この画面で既に追加済みの合計 が「残数量」）
+            if (_itemDetailQtyMap.TryGetValue(itemCode, out var totalQtyForItem))
+            {
+                var alreadyAdded = AddedPackageList.Where(p => p.ItemCode == itemCode).Sum(p => p.Qty);
+                var remaining = totalQtyForItem - alreadyAdded;
+                if (qty > remaining)
+                {
+                    await DisplayAlert("エラー", $"数量（{qty}）が明細の残数量（{remaining}）を超えています。", "OK");
+                    return;
+                }
+            }
+
             // ✅ [追加] 非表示ラベルに保持している内部IDを取得（万一未設定ならマップから再取得）
             var itemInternalId = _hiddenItemInternalIdLabel?.Text;
             if (string.IsNullOrEmpty(itemInternalId))
@@ -337,7 +408,9 @@ namespace EvangPL.Views.PickingDetail
 
             if (_entryPackageNo != null) _entryPackageNo.Text = string.Empty;
             // ✅ 品目はクリアせず現在の入力を維持（連続登録の利便性向上）
-            if (_entryQty != null) _entryQty.Text = string.Empty;
+
+            // ✅ [修正] 数量欄はクリアではなく、追加後の新しい残数量を再セットする
+            RefreshQtyForCurrentItem();
 
             RefreshAddedCount();
 
