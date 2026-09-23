@@ -550,7 +550,7 @@ namespace EvangPL.Views.InventoryTransferPageDetails
         // ==========================================
         // 明細保存前に品目タイプをチェック
         // ==========================================
-        private async Task<(bool Success, string? ErrorMessage)> CheckItemTypeAsync(string itemCode)
+        private async Task<(bool Success, string? ErrorMessage)> CheckItemTypeAsync(string itemCode, List<PendingLotItem>? lots, int? fromLocationId, string? fromLocationName)
         {
             try
             {
@@ -558,7 +558,10 @@ namespace EvangPL.Views.InventoryTransferPageDetails
                 request.Info = new StockTransferSearchParam
                 {
                     Kbn = "checkitemtype",
-                    Keyword = itemCode
+                    Keyword = itemCode,
+                    FromLocationId = fromLocationId,
+                    FromLocationName = fromLocationName,
+                    Lots = lots
                 };
 
                 ResponseData<EvangJsonModel, EvangJsonModel>? result = null;
@@ -638,7 +641,8 @@ namespace EvangPL.Views.InventoryTransferPageDetails
                 }
 
                 // 全ての前台チェック通過後、保存前に品目タイプチェック
-                var (checkSuccess, checkError) = await CheckItemTypeAsync(itemCode);
+                var checkLots = _pendingLots.Select(x => new PendingLotItem { ItemCode = x.ItemCode, LotNo = x.LotNo, Qty = x.Qty }).ToList();
+                var (checkSuccess, checkError) = await CheckItemTypeAsync(itemCode, checkLots, fromLoc?.id, fromLoc?.name);
                 if (!checkSuccess)
                 {
                     await DisplayAlert("エラー", checkError ?? "品目が正しくありません。", "OK");
@@ -1677,6 +1681,7 @@ namespace EvangPL.Views.InventoryTransferPageDetails
             public int Id { get; set; }
             public string? Keyword { get; set; }
             public int? FromLocationId { get; set; }
+            public string? FromLocationName { get; set; }
             public int? ToLocationId { get; set; }
             public List<PendingLotItem>? Lots { get; set; }
         }
