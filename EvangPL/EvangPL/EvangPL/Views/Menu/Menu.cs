@@ -23,15 +23,7 @@ public class Menu : EvangContentVM
     private readonly Dictionary<Button, MenuItem> _buttonMenuMap = new();
 
     List<MenuItem> _menulist =
-    [
-        new MenuItem { Name = "strInboundSearch", View = "InboundSearch" },
-        new MenuItem { Name = "strOutboundSearch", View = "OutboundSearch" },
-        //new MenuItem { Name = "strInventoryAdjustment", View = "InventoryAdjustment" },
-        new MenuItem { Name = "strInboundHistory", View = "InboundHistory" },
-        new MenuItem { Name = "strStockOut", View = "StockOut" },
-        //new MenuItem { Name = "strInventoryInquiry", View = "InventoryInquiry" },
-        new MenuItem { Name = "strStockIn", View = "StockIn" },
-    ];
+    [];
 
     public Menu() : base("strMenu", null)
     {
