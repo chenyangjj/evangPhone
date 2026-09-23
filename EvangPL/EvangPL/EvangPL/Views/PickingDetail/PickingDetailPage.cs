@@ -633,6 +633,15 @@ namespace EvangPL.Views.PickingDetail
                 }
             };
             _entryQty = new Entry { Placeholder = "数量を入力", Keyboard = Keyboard.Numeric, BackgroundColor = Colors.Transparent };
+            _entryQty.TextChanged += (s, e) =>
+            {
+                if (string.IsNullOrEmpty(e.NewTextValue)) return;
+                var filtered = new string(e.NewTextValue.Where(char.IsDigit).ToArray());
+                if (filtered != e.NewTextValue)
+                {
+                    _entryQty.Text = filtered;
+                }
+            };
             qtyRow.Add(WrapInputControl(_entryQty), 0, 0);
             qtyRow.Add(new Label { Text = "個", VerticalOptions = LayoutOptions.Center, HorizontalTextAlignment = TextAlignment.Center }, 1, 0);
             layout.Children.Add(qtyRow);
