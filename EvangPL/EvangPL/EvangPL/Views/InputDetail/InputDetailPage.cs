@@ -817,6 +817,15 @@ namespace EvangPL.Views.InputDetail
                 BackgroundColor = Colors.Transparent,
                 Text = initialQtyText
             };
+            _qtyEntry.TextChanged += (s, e) =>
+            {
+                if (string.IsNullOrEmpty(e.NewTextValue)) return;
+                var filtered = new string(e.NewTextValue.Where(char.IsDigit).ToArray());
+                if (filtered != e.NewTextValue)
+                {
+                    _qtyEntry.Text = filtered;
+                }
+            };
             qtyRow.Add(WrapInputControl(_qtyEntry), 0, 0);
             qtyRow.Add(new Label { Text = "個", VerticalOptions = LayoutOptions.Center, HorizontalTextAlignment = TextAlignment.Center }, 1, 0);
             layout.Children.Add(new Label { Text = "入庫数量", FontSize = 12, TextColor = Colors.Gray });
