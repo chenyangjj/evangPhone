@@ -924,7 +924,7 @@ namespace EvangPL.Views.InventoryAdjustment
             _qtyEntry = new Entry
             {
                 Placeholder = "数量を入力（-可）",
-                // ★ 修改点1: Keyboard.Text で負号入力可能にする
+                //  Keyboard.Text で負号入力可能にする
                 Keyboard = Keyboard.Text,
                 BackgroundColor = Colors.Transparent,
                 HeightRequest = 35,
