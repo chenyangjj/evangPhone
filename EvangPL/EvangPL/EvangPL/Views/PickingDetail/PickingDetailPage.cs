@@ -106,6 +106,10 @@ namespace EvangPL.Views.PickingDetail
         public PickingDetail(PickingDetailInfo detailInfo) : base("strPickingDetail")
         {
             _detailInfo = detailInfo;
+            if (_detailInfo != null && !string.IsNullOrEmpty(_detailInfo.OrderNo))
+            {
+                Title = _detailInfo.OrderNo;
+            }
             BuildUI();
         }
 
