@@ -151,7 +151,7 @@ namespace EvangPL.Views.InventoryInquiry
                     new ColumnDefinition { Width = 40 } // ボタン幅
                 },
                 ColumnSpacing = 10,
-                //HeightRequest = 40 // 【重要】行全体の高さを固定
+                //HeightRequest = 40 // 行全体の高さを固定
             };
 
             itemCodeEntry = new Entry
@@ -324,7 +324,7 @@ namespace EvangPL.Views.InventoryInquiry
                     return;
                 }
 
-                // 2. 检查 contentLayout 是否存在
+                
                 if (contentLayout == null)
                 {
                     System.Diagnostics.Debug.WriteLine(">>> [ERROR] contentLayout is NULL! Cannot update UI.");
@@ -355,7 +355,7 @@ namespace EvangPL.Views.InventoryInquiry
                 }
 
                 // 6. 結果表示
-                // 【修正】直接调用，不包裹 MainThread，因为 async 事件处理器通常已在 UI 线程
+                
                 ShowResult(resultData, itemCode);
 
                 System.Diagnostics.Debug.WriteLine(">>> [DEBUG] OnbtnSearchClicked END Successfully");
@@ -363,14 +363,14 @@ namespace EvangPL.Views.InventoryInquiry
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($">>> [EXCEPTION] {ex}");
-                // 确保错误信息显示出来
+                
                 try
                 {
                     ShowMessage($"エラー: {ex.Message}", Colors.Red);
                 }
                 catch
                 {
-                    // 如果 ShowMessage 也挂了，至少弹窗
+                    
                     await DisplayAlert("Critical Error", ex.ToString(), "OK");
                 }
             }
