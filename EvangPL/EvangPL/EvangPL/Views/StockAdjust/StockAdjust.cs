@@ -223,8 +223,9 @@ namespace EvangPL.Views.StockAdjust
             {
                 Placeholder = "検索キーワード",
                 Text = SearchCondition.Keyword,
-                BackgroundColor = Colors.White,
-                HeightRequest = 42
+                BackgroundColor = Colors.Transparent,
+                HeightRequest = 42,
+                TextColor = Colors.Black,
             };
             keywordEntry.TextChanged += async (s, e) =>
             {
@@ -247,16 +248,48 @@ namespace EvangPL.Views.StockAdjust
                 }
             };
 
+            var kwRow = new Grid
+            {
+                ColumnDefinitions =
+                {
+                    new ColumnDefinition { Width = GridLength.Star },   // 入力欄
+                    new ColumnDefinition { Width = 50 }                  // スキャンアイコン幅
+                },
+                ColumnSpacing = 8
+            };
+            kwRow.Add(CreateInputBorder(keywordEntry), 0, 0);
+
+            var itemScanBorder = BuildBarcodeIcon();
+            var itemScanTap = new TapGestureRecognizer();
+            itemScanTap.Tapped += async (s, e) =>
+            {
+                await ScanHelper.ScanAsync(Navigation, (scannedCode) =>
+                {
+                    if (string.IsNullOrEmpty(scannedCode)) return;
+
+                    Dispatcher.Dispatch(() =>
+                    {
+                        if (keywordEntry != null)
+                        {
+                            // スキャン結果を品目キーワード欄へ反映（TextChangedで自動検索が走る）
+                            keywordEntry.Text = scannedCode;
+                        }
+                    });
+                });
+            };
+            itemScanBorder.GestureRecognizers.Add(itemScanTap);
+            kwRow.Add(itemScanBorder, 1, 0);
+
             Grid.SetRow(lblDateTitle, 0); Grid.SetColumn(lblDateTitle, 0);
             Grid.SetRow(dateRangeGrid, 1); Grid.SetColumn(dateRangeGrid, 0);
 
             Grid.SetRow(lblKeywordTitle, 0); Grid.SetColumn(lblKeywordTitle, 1);
-            Grid.SetRow(keywordEntry, 1); Grid.SetColumn(keywordEntry, 1);
+            Grid.SetRow(kwRow, 1); Grid.SetColumn(kwRow, 1);   // ← 给 kwRow 定位
 
             grid.Children.Add(lblDateTitle);
             grid.Children.Add(dateRangeGrid);
             grid.Children.Add(lblKeywordTitle);
-            grid.Children.Add(keywordEntry);
+            grid.Children.Add(kwRow);
             return grid;
         }
 
@@ -711,6 +744,45 @@ namespace EvangPL.Views.StockAdjust
             });
         }
         #endregion
+
+        /// <summary>
+        /// 白黒のバーコードアイコン（他画面と統一）
+        /// </summary>
+        private Border BuildBarcodeIcon()
+        {
+            var barsLayout = new HorizontalStackLayout
+            {
+                Spacing = 2,
+                HorizontalOptions = LayoutOptions.Center,
+                VerticalOptions = LayoutOptions.Center
+            };
+
+            double[] barWidths = { 2, 4, 2, 6, 2, 4, 2 };
+            foreach (var w in barWidths)
+            {
+                barsLayout.Children.Add(new BoxView
+                {
+                    Color = Color.FromArgb("#1e3a5f"),
+                    WidthRequest = w,
+                    HeightRequest = 22,
+                    VerticalOptions = LayoutOptions.Center
+                });
+            }
+
+            return new Border
+            {
+                Stroke = Color.FromArgb("#cdd2dc"),
+                StrokeThickness = 1,
+                StrokeShape = new RoundRectangle { CornerRadius = 6 },
+                BackgroundColor = Colors.White,
+                Padding = new Thickness(8, 6),
+                WidthRequest = 50,
+                HeightRequest = 45,
+                HorizontalOptions = LayoutOptions.End,
+                VerticalOptions = LayoutOptions.Center,
+                Content = barsLayout
+            };
+        }
     }
 
     #region
