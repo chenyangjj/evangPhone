@@ -575,7 +575,7 @@ namespace EvangPL.Views.PickingDetail
                 ItemsSource = locationNames
             };
             locRow.Add(WrapInputControl(_locationPicker, showDropdownArrow: true), 0, 0);
-            locRow.Add(BuildBarcodeIcon(), 1, 0);
+            //locRow.Add(BuildBarcodeIcon(), 1, 0);
             layout.Children.Add(locRow);
 
             // 2. ロット（またはシリアル）行（Entry + バーコードアイコン）
@@ -618,12 +618,34 @@ namespace EvangPL.Views.PickingDetail
                 _entryLot.Unfocused += OnLotEntryUnfocused;
             }
             lotRow.Add(WrapInputControl(_entryLot), 0, 0);
-            lotRow.Add(BuildBarcodeIcon(), 1, 0);
-            if (!lotEditable)
+            var lotBarcodeIcon = BuildBarcodeIcon();
+            if (lotEditable)
             {
-                // ロット・シリアルいずれの管理対象外でもない場合は行全体をグレーアウトして「触れない」ことを視覚的に示す
-                lotRow.Opacity = 0.5;
+                var lotBarcodeTap = new TapGestureRecognizer();
+                lotBarcodeTap.Tapped += async (s, e) =>
+                {
+                    await ScanHelper.ScanAsync(Navigation, (scannedCode) =>
+                    {
+                        if (string.IsNullOrEmpty(scannedCode) || _entryLot == null) return;
+
+                        // スキャン結果をロット（またはシリアル）Entryへ反映
+                        _entryLot.Text = scannedCode;
+
+                        // Entryからフォーカスが外れた時と同じチェック（存在チェック＋SO時の場所/数量自動セット）を
+                        // ここで明示的に呼び出す。MAUIではプログラムによるText設定では
+                        // Unfocusedが自動発火しないため。
+                        OnLotEntryUnfocused(_entryLot, new FocusEventArgs(_entryLot, false));
+                    });
+                };
+                lotBarcodeIcon.GestureRecognizers.Add(lotBarcodeTap);
             }
+            else
+            {
+                // ロット・シリアルいずれの管理対象外ならアイコンも無効化
+                lotBarcodeIcon.Opacity = 0.5;
+            }
+
+            lotRow.Add(lotBarcodeIcon, 1, 0);
             layout.Children.Add(lotRow);
 
             // 3. 数量
