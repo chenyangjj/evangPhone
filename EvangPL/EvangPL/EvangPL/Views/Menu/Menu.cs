@@ -17,6 +17,7 @@ public class Menu : EvangContentVM
 
     public Label? version;
     public Button? btnlogout;
+    public Label? headerCompanyInfo;
 
     private VerticalStackLayout? gridstack;
 
@@ -49,6 +50,18 @@ public class Menu : EvangContentVM
             VerticalOptions = LayoutOptions.Center
         };
         headerGrid_Add(headerBar, headerTitle, 0);
+
+        headerCompanyInfo = new Label
+        {
+            Text = "",
+            TextColor = Colors.White,
+            FontSize = 12,
+            VerticalOptions = LayoutOptions.Center,
+            HorizontalOptions = LayoutOptions.End
+        };
+
+        // 把 Label 加到 Grid 的第 1 列（最右侧）
+        headerGrid_Add(headerBar, headerCompanyInfo, 1);
 
         NavigationPage.SetHasNavigationBar(this, true);
         NavigationPage.SetTitleView(this, headerBar);
@@ -93,6 +106,36 @@ public class Menu : EvangContentVM
         GetBaseMasterData();
         BuildNewCardUI();
         CreateLegacyMenuButtons();
+        _ = LoadCompanyInfoAsync();
+    }
+
+    private async Task LoadCompanyInfoAsync()
+    {
+        if (!LocalMemory.restlets.ContainsKey("GetCompany"))
+        {
+            LocalMemory.restlets.Add("GetCompany", "https://9323639-sb1.restlets.api.netsuite.com/app/site/hosting/restlet.nl?script=2073&deploy=1");
+        }
+        var request = new RequestData<EvangJsonModel, EvangJsonModel>("GetCompany");
+        ResponseData<EvangJsonModel, EvangJsonModel>? result = null;
+        try
+        {
+            result = await this.Post<EvangJsonModel, EvangJsonModel, EvangJsonModel, EvangJsonModel>(request);
+        }
+        finally { }
+        if (result == null)
+            return;
+
+        if (result.SubData != null)
+        {
+            foreach (var sub in result.SubData)
+            {
+                if (sub.SubName == "PH_COMPANY" && !string.IsNullOrEmpty(sub.SubJson))
+                {
+                    headerCompanyInfo.Text = sub.SubJson;
+                    break;
+                }
+            }
+        }
     }
 
     private static void headerGrid_Add(Grid grid, View view, int column)
@@ -126,7 +169,7 @@ public class Menu : EvangContentVM
         gridstack.Children.Add(new BoxView { HeightRequest = 1, Color = Color.FromArgb("#dddddd"), Margin = new Thickness(0, 10, 0, 5) });
         gridstack.Children.Add(new Label
         {
-            Text = "その他の機能",
+            Text = "",
             FontSize = 16,
             FontAttributes = FontAttributes.Bold,
             TextColor = TextPrimary,
@@ -241,6 +284,30 @@ public class Menu : EvangContentVM
 
     public async virtual void OnLogoutClicked(object? sender, EventArgs e)
     {
+        bool confirm = await DisplayAlert("確認", "ログアウトしますか？", "はい", "いいえ");
+        if (!confirm) return;
+
+        try
+        {
+            var oauth = new OAuth2Client();
+            await oauth.LogoutAsync();
+
+            LocalMemory.Account = null;
+            LocalMemory.restlets.Clear();
+
+            if (ClassMapping.CreatePageInstance(typeof(Login.Login)) is not Login.Login loginPage)
+            {
+                ShowError("ログイン画面の生成に失敗しました。");
+                return;
+            }
+
+            Application.Current!.MainPage = new NavigationPage(loginPage);
+        }
+        catch (Exception ex)
+        {
+            //Debug.WriteLine($"[Logout Error] {ex.Message}");
+            ShowError($"ログアウト処理中にエラーが発生しました:\n{ex.Message}");
+        }
     }
 
     /// <summary>
@@ -325,6 +392,7 @@ public class Menu : EvangContentVM
         LocalMemory.restlets.Add("SaveAdjust", "https://9323639-sb1.restlets.api.netsuite.com/app/site/hosting/restlet.nl?script=2068&deploy=1");
         LocalMemory.restlets.Add("GetTransfer", "https://9323639-sb1.restlets.api.netsuite.com/app/site/hosting/restlet.nl?script=2071&deploy=1");
         LocalMemory.restlets.Add("SaveTransfer", "https://9323639-sb1.restlets.api.netsuite.com/app/site/hosting/restlet.nl?script=2072&deploy=1");
+        LocalMemory.restlets.Add("GetCompany", "https://9323639-sb1.restlets.api.netsuite.com/app/site/hosting/restlet.nl?script=2073&deploy=1");
         LocalMemory.restlets.Add("GetStockInDetail", "https://9323639-sb1.restlets.api.netsuite.com/app/site/hosting/restlet.nl?script=2061&deploy=1");
         LocalMemory.restlets.Add("SaveStockIn", "https://9323639-sb1.restlets.api.netsuite.com/app/site/hosting/restlet.nl?script=2061&deploy=1");
         LocalMemory.restlets.Add("GetOrderList", "https://9323639-sb1.restlets.api.netsuite.com/app/site/hosting/restlet.nl?script=2056&deploy=1");
