@@ -741,7 +741,7 @@ namespace EvangPL.Views.InputDetail
                 _locationPicker.SelectedIndex = 0;
             }
             locRow.Add(WrapInputControl(_locationPicker, showDropdownArrow: true), 0, 1);
-            locRow.Add(BuildBarcodeIcon(), 1, 1);
+            //locRow.Add(BuildBarcodeIcon(), 1, 1);
             layout.Children.Add(locRow);
 
             // ✅ [変更] ロット/シリアル欄のラベル：品目タイプに応じて注記を追加
@@ -789,6 +789,29 @@ namespace EvangPL.Views.InputDetail
             var lotBarcodeIcon = BuildBarcodeIcon();
             lotBarcodeIcon.IsEnabled = requiresLot;
             lotBarcodeIcon.Opacity = requiresLot ? 1.0 : 0.5;
+            if (requiresLot)
+            {
+                var barcodeTap = new TapGestureRecognizer();
+                barcodeTap.Tapped += async (s, e) =>
+                {
+                    await ScanHelper.ScanAsync(Navigation, (scannedCode) =>
+                    {
+                        if (string.IsNullOrEmpty(scannedCode) || _lotEntry == null) return;
+
+                        // スキャン結果をロット/シリアル入力欄に反映
+                        _lotEntry.Text = scannedCode;
+
+                        // ✅ シリアル管理品目の場合は、その場で既存重複チェックを走らせる
+                        //    （+明細を追加を押す前に、早期に気付けるようにするため）
+                        if (currentItem.isSerialItem)
+                        {
+                            OnLotEntryUnfocused(_lotEntry, new FocusEventArgs(_lotEntry, false));
+                        }
+                    });
+                };
+                lotBarcodeIcon.GestureRecognizers.Add(barcodeTap);
+            }
+
             lotRow.Add(lotBarcodeIcon, 1, 1);
             layout.Children.Add(lotRow);
 
