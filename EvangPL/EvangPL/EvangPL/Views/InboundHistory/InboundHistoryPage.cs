@@ -261,7 +261,7 @@ namespace EvangPL.Views.InboundHistory
             filterLayout.Children.Add(row1Grid);
 
             var itemLayout = new VerticalStackLayout { Spacing = 4 };
-            itemLayout.Children.Add(new Label { Text = "品目:", FontSize = 13, TextColor = Colors.Gray });
+            itemLayout.Children.Add(new Label { Text = "品目 (スキャン可):", FontSize = 13, TextColor = Colors.Gray });
 
             itemKeywordEntry = new Entry
             {
@@ -273,7 +273,41 @@ namespace EvangPL.Views.InboundHistory
                 Margin = new Thickness(10, 0)
             };
             var itemBorder = CreateInputBorder(itemKeywordEntry);
-            itemLayout.Children.Add(itemBorder);
+
+            var itemRow = new Grid
+            {
+                ColumnDefinitions =
+                {
+                    new ColumnDefinition { Width = GridLength.Star },   // 入力欄
+                    new ColumnDefinition { Width = 50 }                  // スキャンアイコン幅
+                },
+                ColumnSpacing = 10
+            };
+            itemRow.Add(itemBorder, 0, 0);
+
+            var itemScanBorder = BuildBarcodeIcon();
+            var itemScanTap = new TapGestureRecognizer();
+            itemScanTap.Tapped += async (s, e) =>
+            {
+                await ScanHelper.ScanAsync(Navigation, (scannedCode) =>
+                {
+                    if (string.IsNullOrEmpty(scannedCode)) return;
+
+                    Dispatcher.Dispatch(() =>
+                    {
+                        if (itemKeywordEntry != null)
+                        {
+                            // スキャン結果を品目キーワード欄へ反映
+                            itemKeywordEntry.Text = scannedCode;
+                        }
+                    });
+                });
+            };
+            itemScanBorder.GestureRecognizers.Add(itemScanTap);
+            itemRow.Add(itemScanBorder, 1, 0);
+
+            itemLayout.Children.Add(itemRow);
+
             filterLayout.Children.Add(itemLayout);
 
             // --- 検索ボタン ---
@@ -898,6 +932,45 @@ namespace EvangPL.Views.InboundHistory
                         break;
                 }
             }
+        }
+
+        /// <summary>
+        /// 白黒のバーコードアイコン（他画面と統一）
+        /// </summary>
+        private Border BuildBarcodeIcon()
+        {
+            var barsLayout = new HorizontalStackLayout
+            {
+                Spacing = 2,
+                HorizontalOptions = LayoutOptions.Center,
+                VerticalOptions = LayoutOptions.Center
+            };
+
+            double[] barWidths = { 2, 4, 2, 6, 2, 4, 2 };
+            foreach (var w in barWidths)
+            {
+                barsLayout.Children.Add(new BoxView
+                {
+                    Color = Color.FromArgb("#1e3a5f"),
+                    WidthRequest = w,
+                    HeightRequest = 22,
+                    VerticalOptions = LayoutOptions.Center
+                });
+            }
+
+            return new Border
+            {
+                Stroke = Color.FromArgb("#cdd2dc"),
+                StrokeThickness = 1,
+                StrokeShape = new RoundRectangle { CornerRadius = 6 },
+                BackgroundColor = Colors.White,
+                Padding = new Thickness(8, 6),
+                WidthRequest = 50,
+                HeightRequest = 45,
+                HorizontalOptions = LayoutOptions.End,
+                VerticalOptions = LayoutOptions.Center,
+                Content = barsLayout
+            };
         }
     }
 }
