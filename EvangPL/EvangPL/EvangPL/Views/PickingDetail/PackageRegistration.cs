@@ -136,7 +136,21 @@ namespace EvangPL.Views.PickingDetail
                 }
             };
             packageRow.Add(WrapInputControl(_entryPackageNo), 0, 0);
-            packageRow.Add(BuildBarcodeIcon(), 1, 0);
+            var packageBarcodeIcon = BuildBarcodeIcon();
+            var packageBarcodeTap = new TapGestureRecognizer();
+            packageBarcodeTap.Tapped += async (s, e) =>
+            {
+                await ScanHelper.ScanAsync(Navigation, (scannedCode) =>
+                {
+                    if (string.IsNullOrEmpty(scannedCode)) return;
+                    if (_entryPackageNo != null)
+                    {
+                        _entryPackageNo.Text = scannedCode;
+                    }
+                });
+            };
+            packageBarcodeIcon.GestureRecognizers.Add(packageBarcodeTap);
+            packageRow.Add(packageBarcodeIcon, 1, 0);
             root.Children.Add(packageRow);
 
             // ✅ 【修正】品目 行（Entry + バーコードアイコン。Pickerからテキスト入力に変更）----
@@ -158,7 +172,22 @@ namespace EvangPL.Views.PickingDetail
                 }
             };
             itemRow.Add(WrapInputControl(_entryItemCode), 0, 0);
-            itemRow.Add(BuildBarcodeIcon(), 1, 0); // ✅ 品目もスキャン対応にするためバーコードアイコンを表示
+            var itemBarcodeIcon = BuildBarcodeIcon();
+            var itemBarcodeTap = new TapGestureRecognizer();
+            itemBarcodeTap.Tapped += async (s, e) =>
+            {
+                await ScanHelper.ScanAsync(Navigation, (scannedCode) =>
+                {
+                    if (string.IsNullOrEmpty(scannedCode) || _entryItemCode == null) return;
+
+                    // スキャン結果を品目Entryへ反映。
+                    // Entry.Textの変更で OnItemCodeTextChanged が自動発火し、
+                    // 内部IDの同期・残数量の自動セットも連動して行われる。
+                    _entryItemCode.Text = scannedCode;
+                });
+            };
+            itemBarcodeIcon.GestureRecognizers.Add(itemBarcodeTap);
+            itemRow.Add(itemBarcodeIcon, 1, 0);
             root.Children.Add(itemRow);
             root.Children.Add(_hiddenItemInternalIdLabel); // ✅ [追加] 非表示の内部IDラベルをツリーに追加
 
