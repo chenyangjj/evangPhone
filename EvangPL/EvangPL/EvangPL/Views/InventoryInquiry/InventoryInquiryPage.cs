@@ -148,7 +148,7 @@ namespace EvangPL.Views.InventoryInquiry
                 ColumnDefinitions =
                 {
                     new ColumnDefinition { Width = GridLength.Star },
-                    new ColumnDefinition { Width = 40 } // ボタン幅
+                    new ColumnDefinition { Width = 50 } // ボタン幅
                 },
                 ColumnSpacing = 10,
                 //HeightRequest = 40 // 行全体の高さを固定
@@ -167,29 +167,7 @@ namespace EvangPL.Views.InventoryInquiry
             var itemBorder = CreateInputBorder(itemCodeEntry, Colors.White);
 
             // --- スキャンボタン (Border + Image + TapGesture) ---
-            var scanImage = new Image
-            {
-                Source = "scan.png", // バーコードアイコン
-                Aspect = Aspect.AspectFit,
-                WidthRequest = 33,
-                HeightRequest = 31,
-                HorizontalOptions = LayoutOptions.Center,
-                VerticalOptions = LayoutOptions.Center
-            };
-
-            scanButtonBorder = new Border
-            {
-                Stroke = Color.FromArgb("#cccccc"),
-                StrokeThickness = 1,
-                StrokeShape = new RoundRectangle { CornerRadius = 6 },
-                BackgroundColor = Colors.White,
-                Padding = 0,
-                HeightRequest = 35,
-                WidthRequest = 40,
-                Content = scanImage,
-                VerticalOptions = LayoutOptions.Center,
-                HorizontalOptions = LayoutOptions.Center,
-            };
+            scanButtonBorder = BuildBarcodeIcon();
 
             var tapGesture = new TapGestureRecognizer();
             tapGesture.Tapped += OnScanClicked;
@@ -294,8 +272,19 @@ namespace EvangPL.Views.InventoryInquiry
         /// </summary>
         private async void OnScanClicked(object sender, EventArgs e)
         {
-            // TODO: バーコードスキャナーライブラリ呼び出し
-            await DisplayAlert("スキャン", "バーコードスキャナーを起動します (実装待ち)", "OK");
+            await ScanHelper.ScanAsync(Navigation, (scannedCode) =>
+            {
+                if (string.IsNullOrEmpty(scannedCode)) return;
+
+                Dispatcher.Dispatch(() =>
+                {
+                    if (itemCodeEntry != null)
+                    {
+                        // スキャン結果を商品番号欄にセット
+                        itemCodeEntry.Text = scannedCode;
+                    }
+                });
+            });
         }
 
         /// <summary>
@@ -657,6 +646,45 @@ namespace EvangPL.Views.InventoryInquiry
                         break;
                 }
             }
+        }
+
+        /// <summary>
+        /// 黑白条で描画したバーコードアイコン（他画面と統一）
+        /// </summary>
+        private Border BuildBarcodeIcon()
+        {
+            var barsLayout = new HorizontalStackLayout
+            {
+                Spacing = 2,
+                HorizontalOptions = LayoutOptions.Center,
+                VerticalOptions = LayoutOptions.Center
+            };
+
+            double[] barWidths = { 2, 4, 2, 6, 2, 4, 2 };
+            foreach (var w in barWidths)
+            {
+                barsLayout.Children.Add(new BoxView
+                {
+                    Color = Color.FromArgb("#1e3a5f"),
+                    WidthRequest = w,
+                    HeightRequest = 22,
+                    VerticalOptions = LayoutOptions.Center
+                });
+            }
+
+            return new Border
+            {
+                Stroke = Color.FromArgb("#cdd2dc"),
+                StrokeThickness = 1,
+                StrokeShape = new RoundRectangle { CornerRadius = 6 },
+                BackgroundColor = Colors.White,
+                Padding = new Thickness(8, 6),
+                WidthRequest = 50,
+                HeightRequest = 45,
+                HorizontalOptions = LayoutOptions.End,
+                VerticalOptions = LayoutOptions.Center,
+                Content = barsLayout
+            };
         }
     }
 
