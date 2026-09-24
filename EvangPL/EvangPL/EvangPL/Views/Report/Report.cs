@@ -14,14 +14,14 @@ namespace EvangPL.Views.Report
         public Report() : base("strReportMenu")
         {
             Title = "レポート";
-            // 构造函数里面不要写BuildUI、不要给Content赋值！
+            
         }
 
         public override void BeforeBaseRendering(string caption, object? viewmodel)
         {
             base.BeforeBaseRendering(caption, viewmodel);
 
-            // =========全部UI构建放在这里，框架生命周期回调=========
+           
             BuildUI();
         }
 
@@ -107,13 +107,11 @@ namespace EvangPL.Views.Report
 
             mainGrid.Children.Add(buttonContainer);
 
-            // 赋值Content，框架才会渲染页面
+  
             Content = mainGrid;
         }
 
-        /// <summary>
-        /// 页面跳转方法，复用项目现有ClassMapping反射
-        /// </summary>
+       
         private async Task NavToPage(string viewName)
         {
             try
