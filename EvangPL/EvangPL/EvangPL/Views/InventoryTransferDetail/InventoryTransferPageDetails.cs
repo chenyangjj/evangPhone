@@ -429,6 +429,26 @@ namespace EvangPL.Views.InventoryTransferPageDetails
                 HorizontalOptions = LayoutOptions.End,
                 Content = _lotBarcodeBars
             };
+            var lotBarcodeTap = new TapGestureRecognizer();
+            lotBarcodeTap.Tapped += async (s, e) =>
+            {
+                // スキャン結果を _lotEntry に反映する。
+                // ScanHelper は Navigation を要求するので、現在のページの Navigation をそのまま渡す。
+                await ScanHelper.ScanAsync(Navigation, (scannedCode) =>
+                {
+                    if (string.IsNullOrEmpty(scannedCode)) return;
+
+                    Dispatcher.Dispatch(() =>
+                    {
+                        if (_lotEntry != null)
+                        {
+                            // スキャン結果をロット/シリアル欄へ反映
+                            _lotEntry.Text = scannedCode;
+                        }
+                    });
+                });
+            };
+            _lotBarcodeBorder.GestureRecognizers.Add(lotBarcodeTap);
             lotRow.Add(_lotBarcodeBorder, 1, 0);
             _lotSectionContainer.Children.Add(lotRow);
 
