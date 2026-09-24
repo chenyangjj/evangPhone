@@ -457,7 +457,7 @@ namespace EvangPL.Views.InventoryTransferPageDetails
                 PlaceholderColor = Colors.Gray
             };
 
-            // ★ 修改点⑤: 输入框层面过滤掉 '-' 和其它非数字字符（双重保险）
+        
             _qtyEntry.TextChanged += (s, e) =>
             {
                 if (string.IsNullOrEmpty(e.NewTextValue)) return;
@@ -647,7 +647,7 @@ namespace EvangPL.Views.InventoryTransferPageDetails
                     return;
                 }
 
-                // ★ 修改点②: 非 Lot 品目の数量チェックを細分化（負値・0を明確にエラー化）
+                //  非 Lot 品目の数量チェックを細分化（負値・0を明確にエラー化）
                 int nonLotQty = 0;
                 if (!_currentItemIsLot)
                 {
@@ -1051,7 +1051,7 @@ namespace EvangPL.Views.InventoryTransferPageDetails
                         Qty = x.Qty
                     }).ToList();
 
-                    // ★ 修改点③: 未入力・解析失敗・負値・0 をすべて明示的にエラー化（サイレント破棄を廃止）
+                    //  未入力・解析失敗・負値・0 をすべて明示的にエラー化（サイレント破棄を廃止）
                     if (!_currentItemIsLot && pendingLots.Count == 0)
                     {
                         var qtyText = _qtyEntry?.Text?.Trim();
@@ -1114,7 +1114,7 @@ namespace EvangPL.Views.InventoryTransferPageDetails
                     return;
                 }
 
-                // ★ 修改点④: 保存前の最終チェック（全ロット数量が非負かつ非ゼロであること）
+                //  保存前の最終チェック（全ロット数量が非負かつ非ゼロであること）
                 foreach (var d in validDetails)
                 {
                     foreach (var lot in d.Lots)
@@ -1328,7 +1328,7 @@ namespace EvangPL.Views.InventoryTransferPageDetails
                     return;
                 }
 
-                // ★ 修改点①: パース失敗 / 負値 / 0 を個別にチェック
+                //  パース失敗 / 負値 / 0 を個別にチェック
                 if (!int.TryParse(qtyText, out int qty))
                 {
                     await DisplayAlert("エラー", "移動数量を正しく入力してください。", "OK");
@@ -1600,7 +1600,7 @@ namespace EvangPL.Views.InventoryTransferPageDetails
             };
         }
 
-        // ★ 改造版：接受一个回调 onScanResult，点击图标时打开扫描页
+        
         private Border BuildBarcodeIcon(Action<string> onScanResult)
         {
             var barsLayout = new HorizontalStackLayout
