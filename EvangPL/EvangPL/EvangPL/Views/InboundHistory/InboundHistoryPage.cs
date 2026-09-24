@@ -319,7 +319,7 @@ namespace EvangPL.Views.InboundHistory
                 Stroke = Color.FromArgb("#cccccc"),       // 薄いグレーの枠線
                 StrokeThickness = 1,
                 StrokeShape = new RoundRectangle { CornerRadius = 6 }, // 角丸
-                BackgroundColor = Colors.White,           // 背景色
+                BackgroundColor = Colors.White,           
                 Padding = 0,
                 Content = content,
                 HeightRequest = 40                        // 全体の高さを統一
@@ -475,7 +475,7 @@ namespace EvangPL.Views.InboundHistory
         //            return;
         //        }
 
-        //        // 3. 转换为本地模型
+        //      
         //        List<InboundRecord> orderList = new List<InboundRecord>();
         //        foreach (var item in dynamicList)
         //        {
@@ -488,7 +488,7 @@ namespace EvangPL.Views.InboundHistory
         //            ));
         //        }
 
-        //        // 4. 显示数据
+        //       
         //        ShowData(orderList);
         //    }
         //    catch (Exception ex)
@@ -497,9 +497,7 @@ namespace EvangPL.Views.InboundHistory
         //    }
         //}
 
-        //// ==========================================
-        //// JSON 解析辅助方法 (如果类里没有的话请加上)
-        //// ==========================================
+       
 
         //private string GetJsonStringValue(JsonElement jsonElement, string propertyName)
         //{
@@ -664,7 +662,7 @@ namespace EvangPL.Views.InboundHistory
                 var item = data[i];
                 var rowGrid = new Grid
                 {
-                    BackgroundColor = i % 2 == 0 ? Colors.White : Color.FromArgb("#f9f9f9"), // 斑马纹
+                    BackgroundColor = i % 2 == 0 ? Colors.White : Color.FromArgb("#f9f9f9"), 
                     Padding = new Thickness(5, 8),
                     ColumnDefinitions = headerGrid.ColumnDefinitions // 列定義を共有
                 };
