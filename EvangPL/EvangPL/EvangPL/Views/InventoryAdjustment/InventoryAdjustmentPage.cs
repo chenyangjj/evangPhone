@@ -1,4 +1,5 @@
 ﻿//using Android.Webkit;
+using EvangPL.Components;
 using CommunityToolkit.Mvvm.Messaging;
 using EvangPL.Views.StockAdjust;
 using EvangSol.Mobibrary.DataFeed;
@@ -901,6 +902,32 @@ namespace EvangPL.Views.InventoryAdjustment
             var lotBorder = CreateInputBorder(_lotEntry, Colors.White);
             lotRow.Add(lotBorder, 0, 0);
             var lotScanBorder = BuildBarcodeIcon();
+            var lotScanTap = new TapGestureRecognizer();
+            lotScanTap.Tapped += async (s, e) =>
+            {
+                // ロット対象品目でない場合はスキャンさせない
+                bool isLotItem = _currentItems?.FirstOrDefault()?.IsAnyLotItem ?? false;
+                if (!isLotItem)
+                {
+                    await DisplayAlert("エラー", "ロット管理対象の品目を入力してください。", "OK");
+                    return;
+                }
+
+                await ScanHelper.ScanAsync(Navigation, (scannedCode) =>
+                {
+                    if (string.IsNullOrEmpty(scannedCode)) return;
+
+                    Dispatcher.Dispatch(() =>
+                    {
+                        if (_lotEntry != null)
+                        {
+                            // スキャン結果をロット/シリアル欄へ反映
+                            _lotEntry.Text = scannedCode;
+                        }
+                    });
+                });
+            };
+            lotScanBorder.GestureRecognizers.Add(lotScanTap);
             lotRow.Add(lotScanBorder, 1, 0);
             _lotSectionContainer.Children.Add(lotRow);
 
@@ -1508,7 +1535,21 @@ namespace EvangPL.Views.InventoryAdjustment
         private async void OnScanClicked(object sender, EventArgs e)
         {
             if (!_isNewDetail && IsEditMode) return;
-            await DisplayAlert("スキャン", "バーコードスキャナーを起動します (実装待ち)", "OK");
+
+            // ✅ 品目コードをスキャンしてEntryへ反映
+            await ScanHelper.ScanAsync(Navigation, (scannedCode) =>
+            {
+                if (string.IsNullOrEmpty(scannedCode)) return;
+
+                Dispatcher.Dispatch(() =>
+                {
+                    if (itemEntry != null)
+                    {
+                        // TextChanged(OnItemTextChanged) が自動発火し、品目検索が走る
+                        itemEntry.Text = scannedCode;
+                    }
+                });
+            });
         }
 
         private async Task OnRegisterClicked(object sender, EventArgs e)
