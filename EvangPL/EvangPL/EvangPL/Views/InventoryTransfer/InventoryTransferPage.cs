@@ -1,4 +1,5 @@
-﻿using EvangSol.Mobibrary.DataFeed;
+﻿using EvangPL.Components;
+using EvangSol.Mobibrary.DataFeed;
 using EvangSol.Mobibrary.EvangModel;
 using EvangSol.Mobibrary.EvangViewModel;
 using EvangSol.Mobibrary.Utilities.Common;
@@ -313,7 +314,40 @@ namespace EvangPL.Views.InventoryTransfer
                 }
                 catch (TaskCanceledException) { }
             };
-            kwLayout.Children.Add(CreateInputBorder(itemKeywordEntry));
+            var kwRow = new Grid
+            {
+                ColumnDefinitions =
+                {
+                    new ColumnDefinition { Width = GridLength.Star },   // 入力欄
+                    new ColumnDefinition { Width = 50 }                  // スキャンアイコン幅
+                },
+                ColumnSpacing = 10
+            };
+            kwRow.Add(CreateInputBorder(itemKeywordEntry), 0, 0);
+
+            var itemScanBorder = BuildBarcodeIcon();
+            var itemScanTap = new TapGestureRecognizer();
+            itemScanTap.Tapped += async (s, e) =>
+            {
+                await ScanHelper.ScanAsync(Navigation, (scannedCode) =>
+                {
+                    if (string.IsNullOrEmpty(scannedCode)) return;
+
+                    Dispatcher.Dispatch(() =>
+                    {
+                        if (itemKeywordEntry != null)
+                        {
+                            // スキャン結果を品目キーワード欄へ反映
+                            // TextChanged が発火して 1秒デバウンス後に自動検索が走る
+                            itemKeywordEntry.Text = scannedCode;
+                        }
+                    });
+                });
+            };
+            itemScanBorder.GestureRecognizers.Add(itemScanTap);
+            kwRow.Add(itemScanBorder, 1, 0);
+
+            kwLayout.Children.Add(kwRow);
             row2.Add(kwLayout, 1, 0);
 
             layout.Children.Add(row2);
@@ -748,6 +782,45 @@ namespace EvangPL.Views.InventoryTransfer
                 localist = new List<LocationData>();
                 System.Diagnostics.Debug.WriteLine($"GetLocaData Error: {ex.Message}");
             }
+        }
+
+        /// <summary>
+        /// 白黒のバーコードアイコン（他画面と統一）
+        /// </summary>
+        private Border BuildBarcodeIcon()
+        {
+            var barsLayout = new HorizontalStackLayout
+            {
+                Spacing = 2,
+                HorizontalOptions = LayoutOptions.Center,
+                VerticalOptions = LayoutOptions.Center
+            };
+
+            double[] barWidths = { 2, 4, 2, 6, 2, 4, 2 };
+            foreach (var w in barWidths)
+            {
+                barsLayout.Children.Add(new BoxView
+                {
+                    Color = Color.FromArgb("#1e3a5f"),
+                    WidthRequest = w,
+                    HeightRequest = 22,
+                    VerticalOptions = LayoutOptions.Center
+                });
+            }
+
+            return new Border
+            {
+                Stroke = Color.FromArgb("#cdd2dc"),
+                StrokeThickness = 1,
+                StrokeShape = new RoundRectangle { CornerRadius = 6 },
+                BackgroundColor = Colors.White,
+                Padding = new Thickness(8, 6),
+                WidthRequest = 50,
+                HeightRequest = 45,
+                HorizontalOptions = LayoutOptions.End,
+                VerticalOptions = LayoutOptions.Center,
+                Content = barsLayout
+            };
         }
     }
 
