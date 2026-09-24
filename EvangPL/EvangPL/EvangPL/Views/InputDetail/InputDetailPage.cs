@@ -22,7 +22,7 @@ namespace EvangPL.Views.InputDetail
         private Border? pageHeaderInfo;
         private InputDetailInfo paramInfoToNext;
 
-        // 全局滚动容器引用
+        // 全体スクロールコンテナ参照
         private VerticalStackLayout? _scrollContainer;
         private InputDetailInfo? _detailInfo;
 
@@ -112,6 +112,10 @@ namespace EvangPL.Views.InputDetail
             if (_detailInfo != null)
             {
                 _orderId = _detailInfo.OrderId;
+                if (!string.IsNullOrEmpty(_detailInfo.PoNo))
+                {
+                    Title = _detailInfo.PoNo;
+                }
             }
             BuildUI();
         }
@@ -135,7 +139,7 @@ namespace EvangPL.Views.InputDetail
             await BuildCompleteUI();
         }
 
-        // ✅ 从后端API加载数据（PO头信息 / PO未入库明细行 / 入库实绩 / ロケーション候補 / 会計プリファレンス / 既存ロット/シリアル番号）
+        // ✅ バックエンドAPIからデータを読み込む（POヘッダー情報 / PO未入庫明細行 / 入庫実績 / ロケーション候補 / 会計プリファレンス / 既存ロット/シリアル番号）
         private async Task LoadDataFromApi()
         {
             if (string.IsNullOrEmpty(_orderId))
@@ -285,7 +289,7 @@ namespace EvangPL.Views.InputDetail
             }
         }
 
-        // ✅ 构建完整的UI
+        // ✅ 完全なUIを構築する
         private async Task BuildCompleteUI()
         {
             var mainGrid = new Grid
@@ -1353,7 +1357,7 @@ namespace EvangPL.Views.InputDetail
             public int Qty { get; set; }
         }
 
-        // 入库明细请求参数（検索）
+        // 入庫明細リクエストパラメータ（検索）
         public class StockInDetailParam : EvangJsonModel
         {
             public string? OrderId { get; set; }
@@ -1365,7 +1369,7 @@ namespace EvangPL.Views.InputDetail
             public string? InboundType { get; set; }
         }
 
-        // 入库保存请求参数
+        // 入庫保存リクエストパラメータ
         public class StockInSaveParam : EvangJsonModel
         {
             public string? OrderId { get; set; }
