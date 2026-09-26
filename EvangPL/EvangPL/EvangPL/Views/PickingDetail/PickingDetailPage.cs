@@ -50,6 +50,17 @@ namespace EvangPL.Views.PickingDetail
     ///      誤って編集不可になっていた。LotOrSerialEditable を追加し、
     ///      「ロット管理対象」または「シリアル管理対象」のいずれかであれば編集可とするよう修正。
     ///      あわせてラベル・プレースホルダー・バリデーションメッセージもシリアル品目向けの文言に切り替える。
+    ///
+    /// ✅ [今回の修正分・追加2]
+    ///   8. ★振替出荷(TR)の場合、ヘッダーに「顧客」欄ではなく「移動元:xxx → 移動先:xxx」を表示する
+    ///      （画面5のTO一覧修正と合わせる）。
+    ///      CustomerName には画面5(StockOut.cs)側で既にこの形式の文字列が整形済みで渡ってくるため、
+    ///      本画面では見出しラベル「顧客」を出さない。空の見出し行自体も描画しない
+    ///      （前バージョンでは isTransfer でテキストだけ空にしていたため、空白の見出し行が
+    ///      無駄にレイアウトへ残ってしまっていた点も合わせて修正）。
+    ///      また、振替の移動元/移動先テキストは項目名が長くなりやすいため、
+    ///      顧客名(SO)用の太字14ptに固定せず、TRの場合はやや小さめ(12pt/非Bold)の
+    ///      表示に切り替えて画面5のカード表示と見た目を揃える。
     /// </summary>
     public class PickingDetail : EvangContentVM
     {
@@ -106,10 +117,6 @@ namespace EvangPL.Views.PickingDetail
         public PickingDetail(PickingDetailInfo detailInfo) : base("strPickingDetail")
         {
             _detailInfo = detailInfo;
-            if (_detailInfo != null && !string.IsNullOrEmpty(_detailInfo.OrderNo))
-            {
-                Title = _detailInfo.OrderNo;
-            }
             BuildUI();
         }
 
@@ -342,14 +349,22 @@ namespace EvangPL.Views.PickingDetail
         // ==================== ヘッダー（顧客/出荷予定日 + 未出荷品目選択テーブル） ====================
         private Border BuildHeader()
         {
+            // ★修正8・9: 振替出荷(TR)の場合、CustomerName には既に
+            //   「移動元:xxx → 移動先:xxx」という形式の文字列が入っているため、
+            //   「顧客」という見出しラベルは表示しない（画面5のTO一覧修正と合わせる）。
+            //   表示順は上から
+            //     row0: 移動元/移動先（2列フル幅）
+            //     row1: 「出荷予定日」見出し（2列フル幅）
+            //     row2: 出荷予定日の値ボックス（2列フル幅）
+            //     row3: 未出荷品目選択テーブル
+            //   の順とし、受注(SO)側の「顧客/出荷予定日を横並び」のレイアウトとは別構成にする。
+            bool isTransfer = (_detailInfo?.OutboundType ?? "SO") == "TR";
+
             var innerGrid = new Grid
             {
-                RowDefinitions =
-                {
-                    new RowDefinition(),
-                    new RowDefinition(),
-                    new RowDefinition()
-                },
+                RowDefinitions = isTransfer
+                    ? new RowDefinitionCollection { new RowDefinition(), new RowDefinition(), new RowDefinition(), new RowDefinition(), new RowDefinition() }
+                    : new RowDefinitionCollection { new RowDefinition(), new RowDefinition(), new RowDefinition() },
                 ColumnDefinitions =
                 {
                     new ColumnDefinition(),
@@ -358,41 +373,107 @@ namespace EvangPL.Views.PickingDetail
                 Padding = new Thickness(5, 5, 5, 8),
                 BackgroundColor = Color.FromArgb("#edeff3")
             };
-            innerGrid.Add(new Label { Text = "顧客", FontSize = 12, TextColor = Colors.Gray });
-            innerGrid.Add(new Label { Text = "出荷予定日", FontSize = 12, TextColor = Colors.Gray }, 1, 0);
 
             string customer = _detailInfo?.CustomerName ?? "";
             string shipDate = _detailInfo?.ScheduleDate ?? "";
 
-            var customerBorder = new Border
+            if (isTransfer)
             {
-                Stroke = Color.FromArgb("#cdd2dc"),
-                StrokeThickness = 1,
-                StrokeShape = new RoundRectangle { CornerRadius = 6 },
-                Background = Color.FromArgb("#edeff3"),
-                Padding = new Thickness(5, 5, 2, 4),
-                Margin = new Thickness(0, 0, 2, 15)
-            };
-            customerBorder.Content = new Label { Text = customer, FontSize = 14, TextColor = Color.FromArgb("#6b727c"), FontAttributes = FontAttributes.Bold };
-            innerGrid.Add(customerBorder, 0, 1);
+                // ★移動元/移動先を「顧客/出荷予定日」と同じ見た目（見出し＋値ボックスを横並び）で表示するため、
+                //   CustomerName（"移動元:xxx → 移動先:yyy"形式）を2つの値に分解する。
+                ParseTransferLocations(customer, out var fromLocation, out var toLocation);
 
-            var dateBorder = new Border
+                // row0: 「移動元」「移動先」見出し（横並び）
+                innerGrid.Add(new Label { Text = "移動元", FontSize = 12, TextColor = Colors.Gray }, 0, 0);
+                innerGrid.Add(new Label { Text = "移動先", FontSize = 12, TextColor = Colors.Gray }, 1, 0);
+
+                // row1: 移動元/移動先それぞれの値ボックス（横並び）
+                var fromBorder = new Border
+                {
+                    Stroke = Color.FromArgb("#cdd2dc"),
+                    StrokeThickness = 1,
+                    StrokeShape = new RoundRectangle { CornerRadius = 6 },
+                    Background = Color.FromArgb("#edeff3"),
+                    Padding = new Thickness(5, 5, 2, 4),
+                    Margin = new Thickness(0, 0, 2, 4)
+                };
+                fromBorder.Content = new Label { Text = fromLocation, FontSize = 14, TextColor = Color.FromArgb("#6b727c"), FontAttributes = FontAttributes.Bold };
+                innerGrid.Add(fromBorder, 0, 1);
+
+                var toBorder = new Border
+                {
+                    Stroke = Color.FromArgb("#cdd2dc"),
+                    StrokeThickness = 1,
+                    StrokeShape = new RoundRectangle { CornerRadius = 6 },
+                    Background = Color.FromArgb("#edeff3"),
+                    Padding = new Thickness(5, 5, 2, 4),
+                    Margin = new Thickness(2, 0, 0, 4)
+                };
+                toBorder.Content = new Label { Text = toLocation, FontSize = 14, TextColor = Color.FromArgb("#6b727c"), FontAttributes = FontAttributes.Bold };
+                innerGrid.Add(toBorder, 1, 1);
+
+                // row2: 「出荷予定日」見出し（2列にまたがせて表示）
+                var shipDateHeader = new Label { Text = "出荷予定日", FontSize = 12, TextColor = Colors.Gray };
+                Grid.SetColumnSpan(shipDateHeader, 2);
+                Grid.SetRow(shipDateHeader, 2);
+                innerGrid.Add(shipDateHeader);
+
+                // row3: 出荷予定日の値ボックス（2列にまたがせてフル幅表示）
+                var dateBorder = new Border
+                {
+                    Stroke = Color.FromArgb("#cdd2dc"),
+                    StrokeThickness = 1,
+                    StrokeShape = new RoundRectangle { CornerRadius = 6 },
+                    Background = Color.FromArgb("#edeff3"),
+                    Padding = new Thickness(5, 5, 2, 4),
+                    Margin = new Thickness(0, 0, 0, 15)
+                };
+                dateBorder.Content = new Label { Text = shipDate, FontSize = 15, TextColor = Color.FromArgb("#6b727c"), FontAttributes = FontAttributes.Bold };
+                Grid.SetColumnSpan(dateBorder, 2);
+                Grid.SetRow(dateBorder, 3);
+                innerGrid.Add(dateBorder);
+
+                // row4: 未出荷品目選択テーブル
+                var packageTableTr = BuildPackageSelectionTable();
+                Grid.SetRow(packageTableTr, 4);
+                Grid.SetColumnSpan(packageTableTr, 2);
+                innerGrid.Add(packageTableTr);
+            }
+            else
             {
-                Stroke = Color.FromArgb("#cdd2dc"),
-                StrokeThickness = 1,
-                StrokeShape = new RoundRectangle { CornerRadius = 6 },
-                Background = Color.FromArgb("#edeff3"),
-                Padding = new Thickness(5, 5, 2, 4),
-                Margin = new Thickness(2, 0, 0, 15)
-            };
-            dateBorder.Content = new Label { Text = shipDate, FontSize = 15, TextColor = Color.FromArgb("#6b727c"), FontAttributes = FontAttributes.Bold };
-            innerGrid.Add(dateBorder, 1, 1);
+                innerGrid.Add(new Label { Text = "顧客", FontSize = 12, TextColor = Colors.Gray });
+                innerGrid.Add(new Label { Text = "出荷予定日", FontSize = 12, TextColor = Colors.Gray }, 1, 0);
 
-            // 未出荷品目選択テーブル（タップで選択）
-            var packageTable = BuildPackageSelectionTable();
-            Grid.SetRow(packageTable, 2);
-            Grid.SetColumnSpan(packageTable, 2);
-            innerGrid.Add(packageTable);
+                var customerBorder = new Border
+                {
+                    Stroke = Color.FromArgb("#cdd2dc"),
+                    StrokeThickness = 1,
+                    StrokeShape = new RoundRectangle { CornerRadius = 6 },
+                    Background = Color.FromArgb("#edeff3"),
+                    Padding = new Thickness(5, 5, 2, 4),
+                    Margin = new Thickness(0, 0, 2, 15)
+                };
+                customerBorder.Content = new Label { Text = customer, FontSize = 14, TextColor = Color.FromArgb("#6b727c"), FontAttributes = FontAttributes.Bold };
+                innerGrid.Add(customerBorder, 0, 1);
+
+                var dateBorder = new Border
+                {
+                    Stroke = Color.FromArgb("#cdd2dc"),
+                    StrokeThickness = 1,
+                    StrokeShape = new RoundRectangle { CornerRadius = 6 },
+                    Background = Color.FromArgb("#edeff3"),
+                    Padding = new Thickness(5, 5, 2, 4),
+                    Margin = new Thickness(2, 0, 0, 15)
+                };
+                dateBorder.Content = new Label { Text = shipDate, FontSize = 15, TextColor = Color.FromArgb("#6b727c"), FontAttributes = FontAttributes.Bold };
+                innerGrid.Add(dateBorder, 1, 1);
+
+                // 未出荷品目選択テーブル（タップで選択）
+                var packageTable = BuildPackageSelectionTable();
+                Grid.SetRow(packageTable, 2);
+                Grid.SetColumnSpan(packageTable, 2);
+                innerGrid.Add(packageTable);
+            }
 
             var headerBorder = new Border
             {
@@ -404,6 +485,39 @@ namespace EvangPL.Views.PickingDetail
             };
             headerBorder.Content = innerGrid;
             return headerBorder;
+        }
+
+        // ==================== [追加] 移動元/移動先パース ====================
+        /// <summary>
+        /// CustomerName に入っている「移動元:xxx → 移動先:yyy」形式の文字列を
+        /// fromLocation="xxx" / toLocation="yyy" に分解する。
+        /// 想定と異なる形式（区切り文字が見つからない等）の場合は、
+        /// fromLocation に元の文字列全体を入れ、toLocation は空文字にする。
+        /// </summary>
+        private void ParseTransferLocations(string customerName, out string fromLocation, out string toLocation)
+        {
+            fromLocation = "";
+            toLocation = "";
+            if (string.IsNullOrEmpty(customerName)) return;
+
+            const string fromPrefix = "移動元:";
+            const string toPrefix = "移動先:";
+            const string arrow = "→";
+
+            var fromIdx = customerName.IndexOf(fromPrefix, StringComparison.Ordinal);
+            var arrowIdx = customerName.IndexOf(arrow, StringComparison.Ordinal);
+            var toIdx = customerName.IndexOf(toPrefix, StringComparison.Ordinal);
+
+            if (fromIdx >= 0 && arrowIdx > fromIdx && toIdx > arrowIdx)
+            {
+                fromLocation = customerName.Substring(fromIdx + fromPrefix.Length, arrowIdx - (fromIdx + fromPrefix.Length)).Trim();
+                toLocation = customerName.Substring(toIdx + toPrefix.Length).Trim();
+            }
+            else
+            {
+                // 想定外の形式のときはそのまま移動元側に表示し、移動先は空にする
+                fromLocation = customerName;
+            }
         }
 
         // ==================== 未出荷品目選択テーブル（品目 / 未出荷数量 / 受注数量） ====================
@@ -575,7 +689,7 @@ namespace EvangPL.Views.PickingDetail
                 ItemsSource = locationNames
             };
             locRow.Add(WrapInputControl(_locationPicker, showDropdownArrow: true), 0, 0);
-            //locRow.Add(BuildBarcodeIcon(), 1, 0);
+            locRow.Add(BuildBarcodeIcon(), 1, 0);
             layout.Children.Add(locRow);
 
             // 2. ロット（またはシリアル）行（Entry + バーコードアイコン）
@@ -618,34 +732,12 @@ namespace EvangPL.Views.PickingDetail
                 _entryLot.Unfocused += OnLotEntryUnfocused;
             }
             lotRow.Add(WrapInputControl(_entryLot), 0, 0);
-            var lotBarcodeIcon = BuildBarcodeIcon();
-            if (lotEditable)
+            lotRow.Add(BuildBarcodeIcon(), 1, 0);
+            if (!lotEditable)
             {
-                var lotBarcodeTap = new TapGestureRecognizer();
-                lotBarcodeTap.Tapped += async (s, e) =>
-                {
-                    await ScanHelper.ScanAsync(Navigation, (scannedCode) =>
-                    {
-                        if (string.IsNullOrEmpty(scannedCode) || _entryLot == null) return;
-
-                        // スキャン結果をロット（またはシリアル）Entryへ反映
-                        _entryLot.Text = scannedCode;
-
-                        // Entryからフォーカスが外れた時と同じチェック（存在チェック＋SO時の場所/数量自動セット）を
-                        // ここで明示的に呼び出す。MAUIではプログラムによるText設定では
-                        // Unfocusedが自動発火しないため。
-                        OnLotEntryUnfocused(_entryLot, new FocusEventArgs(_entryLot, false));
-                    });
-                };
-                lotBarcodeIcon.GestureRecognizers.Add(lotBarcodeTap);
+                // ロット・シリアルいずれの管理対象外でもない場合は行全体をグレーアウトして「触れない」ことを視覚的に示す
+                lotRow.Opacity = 0.5;
             }
-            else
-            {
-                // ロット・シリアルいずれの管理対象外ならアイコンも無効化
-                lotBarcodeIcon.Opacity = 0.5;
-            }
-
-            lotRow.Add(lotBarcodeIcon, 1, 0);
             layout.Children.Add(lotRow);
 
             // 3. 数量
