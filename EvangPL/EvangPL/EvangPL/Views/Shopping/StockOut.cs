@@ -12,11 +12,12 @@ namespace EvangPL.Views.StockOut
 {
     /// <summary>
     /// 出荷処理 - 検索結果画面 【文件名 StockOut.cs】
+    /// UI样式参照截图：分页栏置顶、单据卡片、日文标签、状态色
     /// RESTlet①（一覧検索専用）を呼び出し、出荷区分（受注/仕入先返品/振替）を横断した検索結果を表示する
     /// </summary>
     public class StockOut : EvangContentVM
     {
-        
+        // UI控件缓存
         private Grid? mainGrid;
         private Grid? paginationGrid;
         private Label? pageInfoLabel;
@@ -24,15 +25,15 @@ namespace EvangPL.Views.StockOut
         private Button? nextPageBtn;
         private StackLayout? listContainer;
 
-        
+        // 分页参数
         private int _currentPage = 1;
         private int _totalPage = 1;
-        private const int PageSize = 4; 
+        private const int PageSize = 4; // 一页展示4条，和截图效果一致
 
         // [追加] 本番/開発切替：true にすると内蔵のモックデータで動作確認できる
         private const bool UseMockData = false;
 
-        
+        // 查询条件实体（画面5から渡される）
         private StockOutPageInfo SearchCondition;
 
         public StockOut() : base("strStockOutSearch")
@@ -81,12 +82,12 @@ namespace EvangPL.Views.StockOut
                 RowSpacing = 0
             };
 
-            
+            // 1. 顶部分页控件
             paginationGrid = CreatePaginationBar();
             Grid.SetRow(paginationGrid, 0);
             mainGrid.Children.Add(paginationGrid);
 
-            
+            // 2. 列表滚动区域
             listContainer = new StackLayout
             {
                 Spacing = 8,
@@ -103,7 +104,7 @@ namespace EvangPL.Views.StockOut
         }
 
         /// <summary>
-        /// 前へ｜1/2｜次へ  
+        /// 分页栏：前へ｜1/2｜次へ  和截图UI一致
         /// </summary>
         private Grid CreatePaginationBar()
         {
@@ -162,7 +163,7 @@ namespace EvangPL.Views.StockOut
         }
         #endregion
 
-        #region 
+        #region 搜索分页逻辑
         private void CollectSearchCondition()
         {
             SearchCondition.PageIndex = _currentPage;
@@ -398,10 +399,15 @@ namespace EvangPL.Views.StockOut
                 Grid.SetColumn(statusTag, 1);
                 cardGrid.Children.Add(statusTag);
 
-                // 顧客
+                // 顧客 / 移動元・移動先
+                // ★修正: 振替出荷(TR)の場合、CustomerName には既に
+                //   「移動元:xxx → 移動先:xxx」という形式の文字列が入っているため、
+                //   「顧客: 」を重ねて付けると二重表示になってしまう
+                //   （例: "顧客: 移動元: → 移動先:不良品"）。
+                //   → TR の場合は「顧客: 」というラベルを付けず、そのまま表示する。
                 var lblCustomer = new Label
                 {
-                    Text = $"顧客: {item.CustomerName}",
+                    Text = item.OutboundType == "TR" ? item.CustomerName : $"顧客: {item.CustomerName}",
                     FontSize = 12,
                     TextColor = Colors.Gray
                 };
@@ -467,7 +473,7 @@ namespace EvangPL.Views.StockOut
         }
 
         /// <summary>
-        /// 状態ラベル配色 
+        /// 状態ラベル配色 和截图完全一致
         /// 未出荷：オレンジ / 一部出荷：濃青 / 未出庫：グレー
         /// </summary>
         private View CreateStatusTag(string statusText)
