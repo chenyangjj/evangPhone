@@ -48,7 +48,7 @@ namespace EvangPL.Views.OutboundSearch
         private Picker? outboundTypePicker;     // 出荷区分
         private Picker? statusPicker;           // ステータス
         private DatePicker? datePicker;         // 出荷予定日
-        private Entry? keywordEntry;            // 受注番号 / 顧客名
+        private Entry? keywordEntry;            // 受注番号 / 品目コード
         private Button? searchButton;           // 検索ボタン
         private Grid? filterFrame;
         private Grid? mainGrid;
@@ -244,10 +244,10 @@ namespace EvangPL.Views.OutboundSearch
 
             filterLayout.Children.Add(statusDateGrid);
 
-            // === 受注番号 / 顧客名 ===
+            // === 受注番号 / 品目コード ===
             var keywordLabel = new Label
             {
-                Text = "受注番号 / 顧客名",
+                Text = "受注番号 / 品目コード",
                 FontSize = 11,
                 TextColor = Colors.Gray
             };
@@ -265,39 +265,8 @@ namespace EvangPL.Views.OutboundSearch
                 Margin = new Thickness(10, 0)
             };
 
-            var kwRow = new Grid
-            {
-                ColumnDefinitions =
-                {
-                    new ColumnDefinition { Width = GridLength.Star },   // 入力欄
-                    new ColumnDefinition { Width = 50 }                  // スキャンアイコン幅
-                },
-                ColumnSpacing = 8
-            };
-            kwRow.Add(CreateInputBorder(keywordEntry), 0, 0);
-
-            var scanBorder = BuildBarcodeIcon();
-            var scanTap = new TapGestureRecognizer();
-            scanTap.Tapped += async (s, e) =>
-            {
-                await ScanHelper.ScanAsync(Navigation, (scannedCode) =>
-                {
-                    if (string.IsNullOrEmpty(scannedCode)) return;
-
-                    Dispatcher.Dispatch(() =>
-                    {
-                        if (keywordEntry != null)
-                        {
-                            // スキャン結果を受注番号／顧客名欄へ反映
-                            keywordEntry.Text = scannedCode;
-                        }
-                    });
-                });
-            };
-            scanBorder.GestureRecognizers.Add(scanTap);
-            kwRow.Add(scanBorder, 1, 0);
-
-            filterLayout.Children.Add(kwRow);
+            var keywordBorder = CreateInputBorder(keywordEntry);
+            filterLayout.Children.Add(keywordBorder);
 
             // === 検索ボタン ===
             searchButton = new Button
@@ -397,44 +366,5 @@ namespace EvangPL.Views.OutboundSearch
             }
         }
         #endregion
-
-        /// <summary>
-        /// 白黒のバーコードアイコン（他画面と統一）
-        /// </summary>
-        private Border BuildBarcodeIcon()
-        {
-            var barsLayout = new HorizontalStackLayout
-            {
-                Spacing = 2,
-                HorizontalOptions = LayoutOptions.Center,
-                VerticalOptions = LayoutOptions.Center
-            };
-
-            double[] barWidths = { 2, 4, 2, 6, 2, 4, 2 };
-            foreach (var w in barWidths)
-            {
-                barsLayout.Children.Add(new BoxView
-                {
-                    Color = Color.FromArgb("#1e3a5f"),
-                    WidthRequest = w,
-                    HeightRequest = 22,
-                    VerticalOptions = LayoutOptions.Center
-                });
-            }
-
-            return new Border
-            {
-                Stroke = Color.FromArgb("#cdd2dc"),
-                StrokeThickness = 1,
-                StrokeShape = new RoundRectangle { CornerRadius = 6 },
-                BackgroundColor = Colors.White,
-                Padding = new Thickness(8, 6),
-                WidthRequest = 50,
-                HeightRequest = 45,
-                HorizontalOptions = LayoutOptions.End,
-                VerticalOptions = LayoutOptions.Center,
-                Content = barsLayout
-            };
-        }
     }
 }
