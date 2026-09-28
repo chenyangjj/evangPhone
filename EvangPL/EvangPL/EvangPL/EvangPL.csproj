@@ -51,7 +51,7 @@
 
 		<!-- Splash Screen -->
                                 <MauiSplashScreen Include="Resources\Splash\splash.png" 
-                      Color="#245a96" 
+                      Color="#1e3a5f" 
                       BaseSize="400,400" />
 
 		<!-- Images -->
