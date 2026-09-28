@@ -284,7 +284,7 @@ namespace EvangPL.Views.StockIn
                 }
                 else
                 {
-                    // ✅ [修正] モックデータへのフォールバックを廃止。
+                    // ✅ モックデータへのフォールバックを廃止。
                     //    実データが0件（未検索/検索結果なし/再検索で0件）の場合は、
                     //    そのまま空の一覧として扱う（ShowEmptyTip()が表示される）。
                     dataList = new List<StockInItem>();
