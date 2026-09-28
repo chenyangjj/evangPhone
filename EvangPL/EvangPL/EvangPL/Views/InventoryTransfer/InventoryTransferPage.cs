@@ -156,8 +156,8 @@ namespace EvangPL.Views.InventoryTransfer
 
             // 移動元ロケーション
             var srcLayout = new VerticalStackLayout { Spacing = 4 };
-            srcLayout.Children.Add(new Label { Text = "移動元ロケーション", FontSize = 11, TextColor = Colors.Gray });
-            sourceLocationPicker = new Picker { Title = "すべて", BackgroundColor = Colors.Transparent, HeightRequest = 35 };
+            srcLayout.Children.Add(new Label { Text = "移動元ロケーション", FontSize = 11, TextColor = Colors.Black });
+            sourceLocationPicker = new Picker { Title = "すべて", BackgroundColor = Colors.Transparent, HeightRequest = 35, FontSize = 11 };
             for (int i = 0; i < localist.Count; i++)
             {
                 sourceLocationPicker.Items.Add(localist[i].name);
@@ -184,8 +184,8 @@ namespace EvangPL.Views.InventoryTransfer
 
             // 移動先ロケーション
             var dstLayout = new VerticalStackLayout { Spacing = 4 };
-            dstLayout.Children.Add(new Label { Text = "移動先ロケーション", FontSize = 11, TextColor = Colors.Gray });
-            destLocationPicker = new Picker { Title = "すべて", BackgroundColor = Colors.Transparent, HeightRequest = 35 };
+            dstLayout.Children.Add(new Label { Text = "移動先ロケーション", FontSize = 11, TextColor = Colors.Black });
+            destLocationPicker = new Picker { Title = "すべて", BackgroundColor = Colors.Transparent, HeightRequest = 35, FontSize = 11 };
             for (int j = 0; j < localist.Count; j++)
             {
                 destLocationPicker.Items.Add(localist[j].name);
@@ -221,7 +221,7 @@ namespace EvangPL.Views.InventoryTransfer
 
             // 対象期間
             var dateLayout = new VerticalStackLayout { Spacing = 4 };
-            dateLayout.Children.Add(new Label { Text = "対象期間:", FontSize = 11, TextColor = Colors.Gray });
+            dateLayout.Children.Add(new Label { Text = "対象期間:", FontSize = 11, TextColor = Colors.Black });
 
             var dateRangeGrid = new Grid
             {
@@ -289,14 +289,14 @@ namespace EvangPL.Views.InventoryTransfer
 
             // 品目キーワード
             var kwLayout = new VerticalStackLayout { Spacing = 4 };
-            kwLayout.Children.Add(new Label { Text = "品目キーワード", FontSize = 11, TextColor = Colors.Gray });
+            kwLayout.Children.Add(new Label { Text = "品目キーワード", FontSize = 11, TextColor = Colors.Black });
             itemKeywordEntry = new Entry
             {
                 Placeholder = "検索キーワード",
                 BackgroundColor = Colors.Transparent,
                 HeightRequest = 35,
                 TextColor = Colors.Black,
-                FontSize = 13,
+                FontSize = 11,
                 PlaceholderColor = Colors.Gray
             };
             itemKeywordEntry.TextChanged += async (s, e) =>
@@ -318,14 +318,17 @@ namespace EvangPL.Views.InventoryTransfer
             {
                 ColumnDefinitions =
                 {
-                    new ColumnDefinition { Width = GridLength.Star },   // 入力欄
-                    new ColumnDefinition { Width = 50 }                  // スキャンアイコン幅
+                    new ColumnDefinition { Width = GridLength.Star },
+                    new ColumnDefinition { Width = 38 }
                 },
-                ColumnSpacing = 10
+                ColumnSpacing = 4
             };
             kwRow.Add(CreateInputBorder(itemKeywordEntry), 0, 0);
 
             var itemScanBorder = BuildBarcodeIcon();
+            itemScanBorder.HeightRequest = 38;
+            itemScanBorder.WidthRequest = 38;
+            itemScanBorder.Padding = new Thickness(6, 4);
             var itemScanTap = new TapGestureRecognizer();
             itemScanTap.Tapped += async (s, e) =>
             {
@@ -337,8 +340,6 @@ namespace EvangPL.Views.InventoryTransfer
                     {
                         if (itemKeywordEntry != null)
                         {
-                            // スキャン結果を品目キーワード欄へ反映
-                            // TextChanged が発火して 1秒デバウンス後に自動検索が走る
                             itemKeywordEntry.Text = scannedCode;
                         }
                     });
