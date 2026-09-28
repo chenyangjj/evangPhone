@@ -724,22 +724,21 @@ namespace EvangPL.Views.InventoryAdjustment
                 Margin = new Thickness(0, 4, 0, 8)
             });
 
-            var itemLabel = new Label { Text = "品目(スキャン可)", FontSize = 12, TextColor = Colors.Gray };
+            var itemLabel = new Label { Text = "品目(スキャン可)", FontSize = 12, TextColor = Colors.Black };
             var itemRow = new Grid
             {
                 ColumnDefinitions =
                 {
                     new ColumnDefinition { Width = GridLength.Star },
-                    new ColumnDefinition { Width = 50 }
+                    new ColumnDefinition { Width = 38 }
                 },
-                ColumnSpacing = 10
+                ColumnSpacing = 4
             };
             itemEntry = new Entry
             {
                 Placeholder = "品目コードを入力またはスキャン",
                 BackgroundColor = Colors.Transparent,
                 TextColor = Colors.Black,
-                HeightRequest = 35,
                 FontSize = 13,
                 Margin = new Thickness(10, 0),
                 VerticalOptions = LayoutOptions.Center
@@ -748,6 +747,9 @@ namespace EvangPL.Views.InventoryAdjustment
 
             _itemBorder = CreateInputBorder(itemEntry, Colors.White);
             scanButtonBorder = BuildBarcodeIcon();
+            scanButtonBorder.HeightRequest = 35;
+            scanButtonBorder.WidthRequest = 38;
+            scanButtonBorder.Padding = new Thickness(6, 4);
 
             var tapGesture = new TapGestureRecognizer();
             tapGesture.Tapped += OnScanClicked;
@@ -769,7 +771,7 @@ namespace EvangPL.Views.InventoryAdjustment
                 Margin = new Thickness(0, 5, 0, 0)
             };
             var locLayout = new VerticalStackLayout { Spacing = 2 };
-            locLayout.Children.Add(new Label { Text = "ロケーション", FontSize = 11, TextColor = Colors.Gray });
+            locLayout.Children.Add(new Label { Text = "ロケーション", FontSize = 11, TextColor = Colors.Black });
             locationPicker = new Picker
             {
                 Title = "ロケーションを選択",
@@ -785,7 +787,7 @@ namespace EvangPL.Views.InventoryAdjustment
             locLayout.Children.Add(_locBorder);
 
             var stockLayout = new VerticalStackLayout { Spacing = 2 };
-            stockLayout.Children.Add(new Label { Text = "現在庫数", FontSize = 11, TextColor = Colors.Gray });
+            stockLayout.Children.Add(new Label { Text = "現在庫数", FontSize = 11, TextColor = Colors.Black });
             currentStockEntry = new Entry
             {
                 Text = "0",
@@ -814,7 +816,7 @@ namespace EvangPL.Views.InventoryAdjustment
                 Margin = new Thickness(0, 5, 0, 0)
             };
             var diffLayout = new VerticalStackLayout { Spacing = 2 };
-            diffLayout.Children.Add(new Label { Text = "差異", FontSize = 11, TextColor = Colors.Gray });
+            diffLayout.Children.Add(new Label { Text = "差異", FontSize = 11, TextColor = Colors.Black });
             differenceEntry = new Entry
             {
                 Text = "0",
@@ -830,7 +832,7 @@ namespace EvangPL.Views.InventoryAdjustment
             _diffBorder = CreateInputBorder(differenceEntry, DiffEnabledBg);
             diffLayout.Children.Add(_diffBorder);
             var adjLayout = new VerticalStackLayout { Spacing = 2 };
-            adjLayout.Children.Add(new Label { Text = "調整後数量", FontSize = 11, TextColor = Colors.Gray });
+            adjLayout.Children.Add(new Label { Text = "調整後数量", FontSize = 11, TextColor = Colors.Black });
             adjustedStockEntry = new Entry
             {
                 Text = "0",
@@ -848,7 +850,7 @@ namespace EvangPL.Views.InventoryAdjustment
             diffAdjGrid.Add(adjLayout, 2, 0);
             formContainer.Children.Add(diffAdjGrid);
 
-            var reasonLabel = new Label { Text = "調整理由", FontSize = 12, TextColor = Colors.Gray, Margin = new Thickness(0, 5, 0, 0) };
+            var reasonLabel = new Label { Text = "調整理由", FontSize = 12, TextColor = Colors.Black, Margin = new Thickness(0, 5, 0, 0) };
             reasonPicker = new Picker
             {
                 Title = "調整理由を選択",
@@ -877,7 +879,7 @@ namespace EvangPL.Views.InventoryAdjustment
             {
                 Text = "ロット / シリアル (スキャン可)",
                 FontSize = 12,
-                TextColor = Colors.Gray,
+                TextColor = Colors.Black,
                 Margin = new Thickness(0, 5, 0, 0)
             });
 
@@ -886,15 +888,14 @@ namespace EvangPL.Views.InventoryAdjustment
                 ColumnDefinitions =
                 {
                     new ColumnDefinition { Width = GridLength.Star },
-                    new ColumnDefinition { Width = 50 }
+                    new ColumnDefinition { Width = 38 }
                 },
-                ColumnSpacing = 10
+                ColumnSpacing = 4
             };
             _lotEntry = new Entry
             {
                 Placeholder = "ロット/シリアルをスキャンまたは入力",
                 BackgroundColor = Colors.Transparent,
-                HeightRequest = 35,
                 FontSize = 13,
                 Margin = new Thickness(10, 0),
                 VerticalOptions = LayoutOptions.Center
@@ -902,10 +903,12 @@ namespace EvangPL.Views.InventoryAdjustment
             var lotBorder = CreateInputBorder(_lotEntry, Colors.White);
             lotRow.Add(lotBorder, 0, 0);
             var lotScanBorder = BuildBarcodeIcon();
+            lotScanBorder.HeightRequest = 35;
+            lotScanBorder.WidthRequest = 38;
+            lotScanBorder.Padding = new Thickness(6, 4);
             var lotScanTap = new TapGestureRecognizer();
             lotScanTap.Tapped += async (s, e) =>
             {
-                // ロット対象品目でない場合はスキャンさせない
                 bool isLotItem = _currentItems?.FirstOrDefault()?.IsAnyLotItem ?? false;
                 if (!isLotItem)
                 {
@@ -921,7 +924,6 @@ namespace EvangPL.Views.InventoryAdjustment
                     {
                         if (_lotEntry != null)
                         {
-                            // スキャン結果をロット/シリアル欄へ反映
                             _lotEntry.Text = scannedCode;
                         }
                     });
@@ -935,7 +937,7 @@ namespace EvangPL.Views.InventoryAdjustment
             {
                 Text = "移動数量（マイナス入力可）",
                 FontSize = 12,
-                TextColor = Colors.Gray,
+                TextColor = Colors.Black,
                 Margin = new Thickness(0, 5, 0, 0)
             });
 
