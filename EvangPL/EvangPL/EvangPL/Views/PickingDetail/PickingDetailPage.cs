@@ -383,15 +383,11 @@ namespace EvangPL.Views.PickingDetail
 
             if (isTransfer)
             {
-                // ★移動元/移動先を「顧客/出荷予定日」と同じ見た目（見出し＋値ボックスを横並び）で表示するため、
-                //   CustomerName（"移動元:xxx → 移動先:yyy"形式）を2つの値に分解する。
                 ParseTransferLocations(customer, out var fromLocation, out var toLocation);
 
-                // row0: 「移動元」「移動先」見出し（横並び）
-                innerGrid.Add(new Label { Text = "移動元", FontSize = 12, TextColor = Colors.Gray }, 0, 0);
-                innerGrid.Add(new Label { Text = "移動先", FontSize = 12, TextColor = Colors.Gray }, 1, 0);
+                innerGrid.Add(new Label { Text = "移動元", FontSize = 11, TextColor = Colors.Black, Padding = new Thickness(4, 0, 0, 0) }, 0, 0);
+                innerGrid.Add(new Label { Text = "移動先", FontSize = 11, TextColor = Colors.Black, Padding = new Thickness(6, 0, 0, 0) }, 1, 0);
 
-                // row1: 移動元/移動先それぞれの値ボックス（横並び）
                 var fromBorder = new Border
                 {
                     Stroke = Color.FromArgb("#cdd2dc"),
@@ -399,9 +395,9 @@ namespace EvangPL.Views.PickingDetail
                     StrokeShape = new RoundRectangle { CornerRadius = 6 },
                     Background = Color.FromArgb("#edeff3"),
                     Padding = new Thickness(5, 5, 2, 4),
-                    Margin = new Thickness(0, 0, 2, 4)
+                    Margin = new Thickness(0, 4, 2, 4)
                 };
-                fromBorder.Content = new Label { Text = fromLocation, FontSize = 14, TextColor = Color.FromArgb("#6b727c"), FontAttributes = FontAttributes.Bold };
+                fromBorder.Content = new Label { Text = fromLocation, FontSize = 11, TextColor = Color.FromArgb("#6b727c"), FontAttributes = FontAttributes.Bold };
                 innerGrid.Add(fromBorder, 0, 1);
 
                 var toBorder = new Border
@@ -411,18 +407,16 @@ namespace EvangPL.Views.PickingDetail
                     StrokeShape = new RoundRectangle { CornerRadius = 6 },
                     Background = Color.FromArgb("#edeff3"),
                     Padding = new Thickness(5, 5, 2, 4),
-                    Margin = new Thickness(2, 0, 0, 4)
+                    Margin = new Thickness(2, 4, 0, 4)
                 };
-                toBorder.Content = new Label { Text = toLocation, FontSize = 14, TextColor = Color.FromArgb("#6b727c"), FontAttributes = FontAttributes.Bold };
+                toBorder.Content = new Label { Text = toLocation, FontSize = 12, TextColor = Color.FromArgb("#6b727c"), FontAttributes = FontAttributes.Bold };
                 innerGrid.Add(toBorder, 1, 1);
 
-                // row2: 「出荷予定日」見出し（2列にまたがせて表示）
-                var shipDateHeader = new Label { Text = "出荷予定日", FontSize = 12, TextColor = Colors.Gray };
+                var shipDateHeader = new Label { Text = "出荷予定日", FontSize = 12, TextColor = Colors.Black, Padding = new Thickness(4, 0, 0, 0) };
                 Grid.SetColumnSpan(shipDateHeader, 2);
                 Grid.SetRow(shipDateHeader, 2);
                 innerGrid.Add(shipDateHeader);
 
-                // row3: 出荷予定日の値ボックス（2列にまたがせてフル幅表示）
                 var dateBorder = new Border
                 {
                     Stroke = Color.FromArgb("#cdd2dc"),
@@ -430,14 +424,13 @@ namespace EvangPL.Views.PickingDetail
                     StrokeShape = new RoundRectangle { CornerRadius = 6 },
                     Background = Color.FromArgb("#edeff3"),
                     Padding = new Thickness(5, 5, 2, 4),
-                    Margin = new Thickness(0, 0, 0, 15)
+                    Margin = new Thickness(0, 4, 0, 15)
                 };
-                dateBorder.Content = new Label { Text = shipDate, FontSize = 15, TextColor = Color.FromArgb("#6b727c"), FontAttributes = FontAttributes.Bold };
+                dateBorder.Content = new Label { Text = shipDate, FontSize = 12, TextColor = Color.FromArgb("#6b727c"), FontAttributes = FontAttributes.Bold };
                 Grid.SetColumnSpan(dateBorder, 2);
                 Grid.SetRow(dateBorder, 3);
                 innerGrid.Add(dateBorder);
 
-                // row4: 未出荷品目選択テーブル
                 var packageTableTr = BuildPackageSelectionTable();
                 Grid.SetRow(packageTableTr, 4);
                 Grid.SetColumnSpan(packageTableTr, 2);
@@ -445,8 +438,8 @@ namespace EvangPL.Views.PickingDetail
             }
             else
             {
-                innerGrid.Add(new Label { Text = "顧客", FontSize = 12, TextColor = Colors.Gray });
-                innerGrid.Add(new Label { Text = "出荷予定日", FontSize = 12, TextColor = Colors.Gray }, 1, 0);
+                innerGrid.Add(new Label { Text = "顧客", FontSize = 11, TextColor = Colors.Black, Padding = new Thickness(4, 0, 0, 0) }, 0, 0);
+                innerGrid.Add(new Label { Text = "出荷予定日", FontSize = 11, TextColor = Colors.Black, Padding = new Thickness(6, 0, 0, 0) }, 1, 0);
 
                 var customerBorder = new Border
                 {
@@ -455,9 +448,9 @@ namespace EvangPL.Views.PickingDetail
                     StrokeShape = new RoundRectangle { CornerRadius = 6 },
                     Background = Color.FromArgb("#edeff3"),
                     Padding = new Thickness(5, 5, 2, 4),
-                    Margin = new Thickness(0, 0, 2, 15)
+                    Margin = new Thickness(0, 4, 2, 15)
                 };
-                customerBorder.Content = new Label { Text = customer, FontSize = 14, TextColor = Color.FromArgb("#6b727c"), FontAttributes = FontAttributes.Bold };
+                customerBorder.Content = new Label { Text = customer, FontSize = 12, TextColor = Color.FromArgb("#6b727c"), FontAttributes = FontAttributes.Bold };
                 innerGrid.Add(customerBorder, 0, 1);
 
                 var dateBorder = new Border
@@ -467,12 +460,11 @@ namespace EvangPL.Views.PickingDetail
                     StrokeShape = new RoundRectangle { CornerRadius = 6 },
                     Background = Color.FromArgb("#edeff3"),
                     Padding = new Thickness(5, 5, 2, 4),
-                    Margin = new Thickness(2, 0, 0, 15)
+                    Margin = new Thickness(2, 4, 0, 15)
                 };
-                dateBorder.Content = new Label { Text = shipDate, FontSize = 15, TextColor = Color.FromArgb("#6b727c"), FontAttributes = FontAttributes.Bold };
+                dateBorder.Content = new Label { Text = shipDate, FontSize = 12, TextColor = Color.FromArgb("#6b727c"), FontAttributes = FontAttributes.Bold };
                 innerGrid.Add(dateBorder, 1, 1);
 
-                // 未出荷品目選択テーブル（タップで選択）
                 var packageTable = BuildPackageSelectionTable();
                 Grid.SetRow(packageTable, 2);
                 Grid.SetColumnSpan(packageTable, 2);
@@ -658,7 +650,7 @@ namespace EvangPL.Views.PickingDetail
             layout.Children.Add(new Label
             {
                 Text = $"明細登録（{currentPackage.ItemCode}）",
-                FontSize = 15,
+                FontSize = 13,
                 FontAttributes = FontAttributes.Bold
             });
 
@@ -670,7 +662,7 @@ namespace EvangPL.Views.PickingDetail
             });
 
             // 1. 出荷元ロケーション行（Picker + バーコードアイコン。InputDetail.cs の入庫先ロケーションと同一の流儀）
-            layout.Children.Add(new Label { Text = "出荷元ロケーション (スキャン可)", FontSize = 12, TextColor = Colors.Gray });
+            layout.Children.Add(new Label { Text = "出荷元ロケーション (スキャン可)", FontSize = 12, TextColor = Colors.Black });
             var locRow = new Grid
             {
                 ColumnDefinitions =
@@ -711,7 +703,7 @@ namespace EvangPL.Views.PickingDetail
             {
                 lotLabelText = lotEditable ? "ロット (スキャン可)" : "ロット (この品目はロット管理対象外)";
             }
-            layout.Children.Add(new Label { Text = lotLabelText, FontSize = 12, TextColor = Colors.Gray });
+            layout.Children.Add(new Label { Text = lotLabelText, FontSize = 12, TextColor = isSerial || lotEditable ? Colors.Black : Color.FromArgb("#a3a9b3") });
 
             var lotRow = new Grid
             {
@@ -745,7 +737,7 @@ namespace EvangPL.Views.PickingDetail
             layout.Children.Add(lotRow);
 
             // 3. 数量
-            layout.Children.Add(new Label { Text = "数量", FontSize = 12, TextColor = Colors.Gray });
+            layout.Children.Add(new Label { Text = "数量", FontSize = 12, TextColor = Colors.Black });
             var qtyRow = new Grid
             {
                 ColumnDefinitions =

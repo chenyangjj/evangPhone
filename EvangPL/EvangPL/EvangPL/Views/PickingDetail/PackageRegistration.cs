@@ -83,7 +83,7 @@ namespace EvangPL.Views.PickingDetail
                 .Where(p => p.Details != null && p.Details.Count > 0)
                 .GroupBy(p => p.ItemCode)
                 .ToDictionary(g => g.Key, g => g.Sum(p => p.Details.Sum(d => d.DetailQty)));
-
+            Title = "梱包情報を追加";
             BuildUI();
         }
 
@@ -93,16 +93,16 @@ namespace EvangPL.Views.PickingDetail
             var root = new VerticalStackLayout { Spacing = 15, Padding = new Thickness(20), BackgroundColor = Colors.White };
 
             // ---- ヘッダー行（← 戻る + 伝票番号） ----
-            var backBtn = new Button
-            {
-                Text = "←",
-                BackgroundColor = Colors.Transparent,
-                TextColor = Color.FromArgb("#333333"),
-                FontSize = 20,
-                WidthRequest = 40,
-                HorizontalOptions = LayoutOptions.Start
-            };
-            backBtn.Clicked += async (s, e) => await Navigation.PopAsync();
+            //var backBtn = new Button
+            //{
+            //    Text = "←",
+            //    BackgroundColor = Colors.Transparent,
+            //    TextColor = Color.FromArgb("#333333"),
+            //    FontSize = 20,
+            //    WidthRequest = 40,
+            //    HorizontalOptions = LayoutOptions.Start
+            //};
+            //backBtn.Clicked += async (s, e) => await Navigation.PopAsync();
 
             //var orderNoLabel = new Label
             //{
@@ -113,20 +113,20 @@ namespace EvangPL.Views.PickingDetail
             //};
 
             //var headerRow = new HorizontalStackLayout { Spacing = 10, Children = { backBtn, orderNoLabel } };
-            var headerRow = new HorizontalStackLayout { Spacing = 10, Children = { backBtn } };
-            root.Children.Add(headerRow);
+            //var headerRow = new HorizontalStackLayout { Spacing = 10, Children = { backBtn } };
+            //root.Children.Add(headerRow);
 
             // ---- タイトル行（梱包を追加） ----
-            var titleLabel = new Label
-            {
-                Text = "梱包情報を追加",
-                FontSize = 20,
-                FontAttributes = FontAttributes.Bold
-            };
-            root.Children.Add(titleLabel);
+            //var titleLabel = new Label
+            //{
+            //    Text = "梱包情報を追加",
+            //    FontSize = 20,
+            //    FontAttributes = FontAttributes.Bold
+            //};
+            //root.Children.Add(titleLabel);
 
             // ---- 梱包No. 行（Entry + バーコードアイコン） ----
-            root.Children.Add(new Label { Text = "梱包No.(スキャン可)", FontSize = 12, TextColor = Colors.Gray });
+            root.Children.Add(new Label { Text = "梱包No.(スキャン可)", FontSize = 12, TextColor = Colors.Black });
             _entryPackageNo = new Entry { };
             var packageRow = new Grid
             {
@@ -155,7 +155,7 @@ namespace EvangPL.Views.PickingDetail
             root.Children.Add(packageRow);
 
             // ✅ 【修正】品目 行（Entry + バーコードアイコン。Pickerからテキスト入力に変更）----
-            root.Children.Add(new Label { Text = "品目 (スキャン可)", FontSize = 12, TextColor = Colors.Gray });
+            root.Children.Add(new Label { Text = "品目 (スキャン可)", FontSize = 12, TextColor = Colors.Black });
             _entryItemCode = new Entry { };
 
             // ✅ [追加] 選択中品目の内部ID（非表示）。品目Entryの入力に連動して更新する。
@@ -193,7 +193,7 @@ namespace EvangPL.Views.PickingDetail
             root.Children.Add(_hiddenItemInternalIdLabel); // ✅ [追加] 非表示の内部IDラベルをツリーに追加
 
             // ---- 数量 ----
-            root.Children.Add(new Label { Text = "数量", FontSize = 12, TextColor = Colors.Gray });
+            root.Children.Add(new Label { Text = "数量", FontSize = 12, TextColor = Colors.Black });
             _entryQty = new Entry { Keyboard = Keyboard.Numeric };
             _entryQty.TextChanged += (s, e) =>
             {
