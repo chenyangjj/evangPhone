@@ -62,7 +62,7 @@ namespace EvangPL.Views.StockAdjust
             }
         }
 
-        #region 页面布局构建
+        #region 
         private void BuildUI()
         {
             
@@ -300,7 +300,7 @@ namespace EvangPL.Views.StockAdjust
                 Stroke = Color.FromArgb("#cccccc"),       // 薄いグレーの枠線
                 StrokeThickness = 1,
                 StrokeShape = new RoundRectangle { CornerRadius = 6 }, // 角丸
-                BackgroundColor = Colors.White,           // 背景色
+                BackgroundColor = Colors.White,           
                 Padding = 0,
                 Content = content,
                 HeightRequest = 40                        // 全体の高さを統一
@@ -308,7 +308,7 @@ namespace EvangPL.Views.StockAdjust
         }
 
         /// <summary>
-        /// 分页栏：前へ｜1/2｜次へ
+        /// 前へ｜1/2｜次へ
         /// </summary>
         private Grid CreatePaginationBar()
         {
@@ -366,7 +366,7 @@ namespace EvangPL.Views.StockAdjust
         }
         #endregion
 
-        #region 搜索分页逻辑
+        #region 
         private void CollectSearchCondition()
         {
             SearchCondition.PageIndex = _currentPage;
@@ -519,7 +519,7 @@ namespace EvangPL.Views.StockAdjust
         }
         #endregion
 
-        #region Json工具函数
+        #region 
         private string GetJsonStringValue(JsonElement jsonElement, string propertyName)
         {
             try
@@ -616,7 +616,7 @@ namespace EvangPL.Views.StockAdjust
                 headerGrid.Children.Add(lblDate);
                 mainStack.Children.Add(headerGrid);
 
-                // 分隔线
+                
                 mainStack.Children.Add(new BoxView
                 {
                     HeightRequest = 1,
