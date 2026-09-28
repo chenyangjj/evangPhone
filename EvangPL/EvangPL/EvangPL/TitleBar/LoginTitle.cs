@@ -27,7 +27,7 @@ public class LoginTitle : EvangTitleBar
                 new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) },
                 new ColumnDefinition { Width = new GridLength(64, GridUnitType.Absolute) },
             },
-            BackgroundColor = GetColor("Primary")
+            BackgroundColor = GetColor("HeaderBlue")
         };
 #if WINDOWS
         GridLayout.ColumnDefinitions[1].Width = width - 128;
