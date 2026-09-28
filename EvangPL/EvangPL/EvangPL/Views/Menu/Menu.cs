@@ -17,7 +17,9 @@ public class Menu : EvangContentVM
 
     public Label? version;
     public Button? btnlogout;
-    public Label? headerCompanyInfo;
+    private VerticalStackLayout? headerUserInfoContainer;
+    private Label? headerUserNameLabel;
+    private Label? headerUserCompanyLabel;
 
     private VerticalStackLayout? gridstack;
 
@@ -32,7 +34,7 @@ public class Menu : EvangContentVM
         var headerBar = new Grid
         {
             BackgroundColor = HeaderColor,
-            HeightRequest = 50,
+            HeightRequest = 56,
             Padding = new Thickness(15, 0),
             ColumnDefinitions =
             {
@@ -51,17 +53,34 @@ public class Menu : EvangContentVM
         };
         headerGrid_Add(headerBar, headerTitle, 0);
 
-        headerCompanyInfo = new Label
+        headerUserInfoContainer = new VerticalStackLayout
+        {
+            HorizontalOptions = LayoutOptions.End,
+            VerticalOptions = LayoutOptions.Center,
+            Spacing = 2
+        };
+
+        headerUserNameLabel = new Label
         {
             Text = "",
             TextColor = Colors.White,
-            FontSize = 12,
-            VerticalOptions = LayoutOptions.Center,
-            HorizontalOptions = LayoutOptions.End
+            FontSize = 13,
+            //FontAttributes = FontAttributes.Bold,
+            HorizontalTextAlignment = TextAlignment.End
         };
 
-        // 把 Label 加到 Grid 的第 1 列（最右侧）
-        headerGrid_Add(headerBar, headerCompanyInfo, 1);
+        headerUserCompanyLabel = new Label
+        {
+            Text = "",
+            TextColor = Color.FromArgb("#ccffffff"),
+            FontSize = 11,
+            HorizontalTextAlignment = TextAlignment.End
+        };
+
+        headerUserInfoContainer.Children.Add(headerUserNameLabel);
+        headerUserInfoContainer.Children.Add(headerUserCompanyLabel);
+
+        headerGrid_Add(headerBar, headerUserInfoContainer, 1);
 
         NavigationPage.SetHasNavigationBar(this, true);
         NavigationPage.SetTitleView(this, headerBar);
@@ -131,7 +150,15 @@ public class Menu : EvangContentVM
             {
                 if (sub.SubName == "PH_COMPANY" && !string.IsNullOrEmpty(sub.SubJson))
                 {
-                    headerCompanyInfo.Text = sub.SubJson;
+                    var parts = sub.SubJson.Split("%split%");
+                    var userName = parts.Length > 0 ? parts[0].Trim() : "";
+                    var companyName = parts.Length > 1 ? parts[1].Trim() : "";
+
+                    MainThread.BeginInvokeOnMainThread(() =>
+                    {
+                        if (headerUserNameLabel != null) headerUserNameLabel.Text = userName;
+                        if (headerUserCompanyLabel != null) headerUserCompanyLabel.Text = companyName;
+                    });
                     break;
                 }
             }
@@ -305,7 +332,6 @@ public class Menu : EvangContentVM
         }
         catch (Exception ex)
         {
-            //Debug.WriteLine($"[Logout Error] {ex.Message}");
             ShowError($"ログアウト処理中にエラーが発生しました:\n{ex.Message}");
         }
     }
@@ -383,7 +409,6 @@ public class Menu : EvangContentVM
             }
         }
 
-        //test code
         LocalMemory.restlets.Clear();
         LocalMemory.restlets.Add("GetItemrecept", "https://9323639-sb1.restlets.api.netsuite.com/app/site/hosting/restlet.nl?script=2063&deploy=1");
         LocalMemory.restlets.Add("Getitemfulfill", "https://9323639-sb1.restlets.api.netsuite.com/app/site/hosting/restlet.nl?script=2065&deploy=1");
@@ -396,7 +421,7 @@ public class Menu : EvangContentVM
         LocalMemory.restlets.Add("GetStockInDetail", "https://9323639-sb1.restlets.api.netsuite.com/app/site/hosting/restlet.nl?script=2061&deploy=1");
         LocalMemory.restlets.Add("SaveStockIn", "https://9323639-sb1.restlets.api.netsuite.com/app/site/hosting/restlet.nl?script=2061&deploy=1");
         LocalMemory.restlets.Add("GetOrderList", "https://9323639-sb1.restlets.api.netsuite.com/app/site/hosting/restlet.nl?script=2056&deploy=1");
-        
+
         LocalMemory.restlets.Add("GetStockOutList", "https://9323639-sb1.restlets.api.netsuite.com/app/site/hosting/restlet.nl?script=2069&deploy=1");
         LocalMemory.restlets.Add("GetPickingDetail", "https://9323639-sb1.restlets.api.netsuite.com/app/site/hosting/restlet.nl?script=2070&deploy=1");
     }
