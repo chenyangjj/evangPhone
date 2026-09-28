@@ -225,7 +225,7 @@ namespace EvangPL.Views.InventoryTransferPageDetails
             {
                 Text = "移動元",
                 FontSize = 11,
-                TextColor = Colors.Gray
+                TextColor = Colors.Black
             });
 
             fromPicker = new Picker
@@ -234,7 +234,8 @@ namespace EvangPL.Views.InventoryTransferPageDetails
                 SelectedIndex = -1,
                 BackgroundColor = Colors.White,
                 ItemsSource = localist,
-                ItemDisplayBinding = new Binding("name")
+                ItemDisplayBinding = new Binding("name"),
+                FontSize = 12
             };
             if (IsEditMode && _editRecord != null && localist != null)
             {
@@ -274,7 +275,7 @@ namespace EvangPL.Views.InventoryTransferPageDetails
             {
                 Text = "移動先",
                 FontSize = 11,
-                TextColor = Colors.Gray
+                TextColor = Colors.Black
             });
 
             toPicker = new Picker
@@ -283,7 +284,8 @@ namespace EvangPL.Views.InventoryTransferPageDetails
                 SelectedIndex = -1,
                 BackgroundColor = Colors.White,
                 ItemsSource = localist,
-                ItemDisplayBinding = new Binding("name")
+                ItemDisplayBinding = new Binding("name"),
+                FontSize = 12
             };
             if (IsEditMode && _editRecord != null && localist != null)
             {
@@ -332,9 +334,23 @@ namespace EvangPL.Views.InventoryTransferPageDetails
             };
 
             var layout = new VerticalStackLayout { Spacing = 10 };
-            layout.Children.Add(new Label { Text = "明細登録", FontSize = 15, FontAttributes = FontAttributes.Bold });
+            var titleRow = new HorizontalStackLayout { Spacing = 8 };
 
-            layout.Children.Add(new Label { Text = "品目(スキャン可)", FontSize = 12, TextColor = Colors.Gray });
+            titleRow.Children.Add(new BoxView
+            {
+                Color = PrimaryBlue,
+                WidthRequest = 3,
+                HeightRequest = 16,
+                VerticalOptions = LayoutOptions.Center
+            });
+            titleRow.Children.Add(new Label { 
+                Text = "明細登録",
+                FontSize = 13,
+                FontAttributes = FontAttributes.Bold
+            });
+            layout.Children.Add(titleRow);
+
+            layout.Children.Add(new Label { Text = "品目(スキャン可)", FontSize = 12, TextColor = Colors.Black });
 
             var itemRow = new Grid
             {
@@ -378,7 +394,7 @@ namespace EvangPL.Views.InventoryTransferPageDetails
             {
                 Text = "ロット / シリアル (スキャン可)",
                 FontSize = 12,
-                TextColor = Colors.Gray
+                TextColor = Colors.Black
             });
 
             var lotRow = new Grid
@@ -456,7 +472,7 @@ namespace EvangPL.Views.InventoryTransferPageDetails
             {
                 Text = "移動数量",
                 FontSize = 12,
-                TextColor = Colors.Gray
+                TextColor = Colors.Black
             });
 
             var qtyRow = new Grid
