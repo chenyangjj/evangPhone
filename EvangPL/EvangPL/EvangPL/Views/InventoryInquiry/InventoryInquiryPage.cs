@@ -141,24 +141,24 @@ namespace EvangPL.Views.InventoryInquiry
             };
 
             // === 1. 商品番号 (スキャン可) ===
-            var itemLabel = new Label { Text = "商品番号(スキャン可)", FontSize = 12, TextColor = Colors.Gray };
+            var itemLabel = new Label { Text = "商品番号(スキャン可)", FontSize = 12, TextColor = Colors.Black };
 
             var itemRow = new Grid
             {
                 ColumnDefinitions =
                 {
                     new ColumnDefinition { Width = GridLength.Star },
-                    new ColumnDefinition { Width = 50 } // ボタン幅
+                    new ColumnDefinition { Width = 50 }
                 },
                 ColumnSpacing = 10,
-                //HeightRequest = 40 // 行全体の高さを固定
+                VerticalOptions = LayoutOptions.Center
             };
 
             itemCodeEntry = new Entry
             {
-                Text = "", // 仮データ
+                Text = "",
                 BackgroundColor = Colors.Transparent,
-                HeightRequest = 35, // Borderの高さと合わせる
+                HeightRequest = 35,
                 FontSize = 13,
                 IsReadOnly = false,
                 Margin = new Thickness(10, 0),
@@ -180,7 +180,7 @@ namespace EvangPL.Views.InventoryInquiry
             filterLayout.Children.Add(itemRow);
 
             // === 2. 倉庫 (ロケーション) ===
-            var locLabel = new Label { Text = "倉庫", FontSize = 12, TextColor = Colors.Gray, Margin = new Thickness(0, 5, 0, 0) };
+            var locLabel = new Label { Text = "倉庫", FontSize = 12, TextColor = Colors.Black, Margin = new Thickness(0, 5, 0, 0) };
 
             locationPicker = new Picker
             {
@@ -680,7 +680,7 @@ namespace EvangPL.Views.InventoryInquiry
                 BackgroundColor = Colors.White,
                 Padding = new Thickness(8, 6),
                 WidthRequest = 50,
-                HeightRequest = 45,
+                HeightRequest = 35,
                 HorizontalOptions = LayoutOptions.End,
                 VerticalOptions = LayoutOptions.Center,
                 Content = barsLayout
