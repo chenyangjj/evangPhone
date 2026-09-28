@@ -700,14 +700,14 @@ namespace EvangPL.Views.InputDetail
             };
 
             var layout = new VerticalStackLayout { Spacing = 10 };
-            layout.Children.Add(new Label { Text = "明細登録", FontSize = 15, FontAttributes = FontAttributes.Bold });
+            layout.Children.Add(new Label { Text = "明細登録", FontSize = 13, FontAttributes = FontAttributes.Bold });
 
             var locRow = new Grid
             {
                 ColumnDefinitions = { new ColumnDefinition { Width = GridLength.Star }, new ColumnDefinition { Width = 50 } }
             };
             locRow.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            layout.Children.Add(new Label { Text = "入庫先ロケーション (スキャン可)", FontSize = 12, TextColor = Colors.Gray });
+            layout.Children.Add(new Label { Text = "入庫先ロケーション (スキャン可)", FontSize = 12, TextColor = Colors.Black });
 
             var locationNames = _locationList
                 .Select(l => l.Name)
@@ -763,7 +763,7 @@ namespace EvangPL.Views.InputDetail
             {
                 Text = lotLabelText,
                 FontSize = 12,
-                TextColor = requiresLot ? Colors.Gray : Color.FromArgb("#a3a9b3")
+                TextColor = requiresLot ? Colors.Black : Color.FromArgb("#a3a9b3")
             });
 
             var lotRow = new Grid
@@ -854,7 +854,7 @@ namespace EvangPL.Views.InputDetail
             };
             qtyRow.Add(WrapInputControl(_qtyEntry), 0, 0);
             qtyRow.Add(new Label { Text = "個", VerticalOptions = LayoutOptions.Center, HorizontalTextAlignment = TextAlignment.Center }, 1, 0);
-            layout.Children.Add(new Label { Text = "入庫数量", FontSize = 12, TextColor = Colors.Gray });
+            layout.Children.Add(new Label { Text = "入庫数量", FontSize = 12, TextColor = Colors.Black });
             layout.Children.Add(qtyRow);
 
             // ✅ 選択中品目に絞った、未保存分のプレビュー表（ロット/数量のみ、品目列なし）
