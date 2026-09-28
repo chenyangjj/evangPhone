@@ -128,7 +128,7 @@ namespace EvangPL.Views.OutboundSearch
             filterLayout.Children.Add(outboundTypeTitle);
 
             // === 出荷区分 (ピッカー) ===
-            // [修正] PickerをBorderで包んで角丸・下線なしにする
+            //  PickerをBorderで包んで角丸・下線なしにする
             outboundTypePicker = new Picker
             {
                 BackgroundColor = Colors.Transparent,
@@ -184,7 +184,7 @@ namespace EvangPL.Views.OutboundSearch
             };
             statusLayout.Children.Add(statusLabel);
 
-            // [修正] PickerをBorderで包む
+            //  PickerをBorderで包む
             statusPicker = new Picker
             {
                 BackgroundColor = Colors.Transparent,
@@ -228,7 +228,7 @@ namespace EvangPL.Views.OutboundSearch
             };
             dateLayout.Children.Add(dateLabel);
 
-            // [修正] DatePickerをBorderで包む
+            // DatePickerをBorderで包む
             datePicker = new DatePicker
             {
                 BackgroundColor = Colors.Transparent, // 背景を透明に
@@ -253,7 +253,7 @@ namespace EvangPL.Views.OutboundSearch
             };
             filterLayout.Children.Add(keywordLabel);
 
-            // [修正] EntryをBorderで包む
+            //  EntryをBorderで包む
             keywordEntry = new Entry
             {
                 Placeholder = "検索キーワードを入力",
@@ -366,7 +366,7 @@ namespace EvangPL.Views.OutboundSearch
                     PageIndex = 1
                 };
 
-                // 和菜单完全一致，用框架工厂，禁止手动 new StockIn()
+               
                 var pageObj = ClassMapping.CreatePageInstance(viewName);
                 if (pageObj == null)
                 {
