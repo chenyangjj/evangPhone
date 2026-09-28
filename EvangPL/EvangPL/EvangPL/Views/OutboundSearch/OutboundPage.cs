@@ -179,8 +179,8 @@ namespace EvangPL.Views.OutboundSearch
             var statusLabel = new Label
             {
                 Text = "ステータス",
-                FontSize = 11,
-                TextColor = Colors.Gray
+                FontSize = 12,
+                TextColor = Colors.Black
             };
             statusLayout.Children.Add(statusLabel);
 
@@ -223,8 +223,8 @@ namespace EvangPL.Views.OutboundSearch
             var dateLabel = new Label
             {
                 Text = "出荷予定日",
-                FontSize = 11,
-                TextColor = Colors.Gray
+                FontSize = 12,
+                TextColor = Colors.Black
             };
             dateLayout.Children.Add(dateLabel);
 
@@ -248,8 +248,8 @@ namespace EvangPL.Views.OutboundSearch
             var keywordLabel = new Label
             {
                 Text = "受注番号 / 品目コード",
-                FontSize = 11,
-                TextColor = Colors.Gray
+                FontSize = 12,
+                TextColor = Colors.Black
             };
             filterLayout.Children.Add(keywordLabel);
 
