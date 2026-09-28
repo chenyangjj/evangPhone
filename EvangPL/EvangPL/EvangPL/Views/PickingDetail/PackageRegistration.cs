@@ -104,15 +104,16 @@ namespace EvangPL.Views.PickingDetail
             };
             backBtn.Clicked += async (s, e) => await Navigation.PopAsync();
 
-            var orderNoLabel = new Label
-            {
-                Text = _detailInfo?.OrderNo ?? "",
-                FontSize = 16,
-                FontAttributes = FontAttributes.Bold,
-                VerticalOptions = LayoutOptions.Center
-            };
+            //var orderNoLabel = new Label
+            //{
+            //    Text = _detailInfo?.OrderNo ?? "",
+            //    FontSize = 16,
+            //    FontAttributes = FontAttributes.Bold,
+            //    VerticalOptions = LayoutOptions.Center
+            //};
 
-            var headerRow = new HorizontalStackLayout { Spacing = 10, Children = { backBtn, orderNoLabel } };
+            //var headerRow = new HorizontalStackLayout { Spacing = 10, Children = { backBtn, orderNoLabel } };
+            var headerRow = new HorizontalStackLayout { Spacing = 10, Children = { backBtn } };
             root.Children.Add(headerRow);
 
             // ---- タイトル行（梱包を追加） ----
