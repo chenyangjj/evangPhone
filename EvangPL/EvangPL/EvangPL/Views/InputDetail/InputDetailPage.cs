@@ -430,8 +430,8 @@ namespace EvangPL.Views.InputDetail
             bool isReturnReceipt = _detailInfo?.InboundType != null && _detailInfo.InboundType.IndexOf("返品") >= 0;
             string partnerLabelText = isReturnReceipt ? "顧客" : "仕入先";
 
-            innerGrid.Add(new Label { Text = partnerLabelText, FontSize = 12, TextColor = Colors.Gray });
-            innerGrid.Add(new Label { Text = "入荷予定日", FontSize = 12, TextColor = Colors.Gray }, 1, 0);
+            innerGrid.Add(new Label { Text = partnerLabelText, FontSize = 11, TextColor = Colors.Black, Padding = new Thickness(4, 0, 0, 0) }, 0, 0);
+            innerGrid.Add(new Label { Text = "入荷予定日", FontSize = 11, TextColor = Colors.Black, Padding = new Thickness(6, 0, 0, 0) }, 1, 0);
 
             string supplier = _detailInfo?.SupplierName ?? "";
             string planDate = _detailInfo?.ArrivalPlanDate ?? "";
@@ -443,11 +443,11 @@ namespace EvangPL.Views.InputDetail
                 StrokeShape = new RoundRectangle { CornerRadius = 6 },
                 Background = Color.FromArgb("#edeff3"),
                 Padding = new Thickness(5, 5, 2, 4),
-                Margin = new Thickness(0, 0, 2, 15)
+                Margin = new Thickness(0, 4, 2, 15)
             };
-            var vendorLabel = new Label { Text = supplier, FontSize = 14, TextColor = Color.FromArgb("#6b727c"), FontAttributes = FontAttributes.Bold };
-            vendorBorder.Content = vendorLabel;
+            vendorBorder.Content = new Label { Text = supplier, FontSize = 12, TextColor = Color.FromArgb("#6b727c"), FontAttributes = FontAttributes.Bold };
             innerGrid.Add(vendorBorder, 0, 1);
+
             var dateBorder = new Border
             {
                 Stroke = Color.FromArgb("#cdd2dc"),
@@ -455,10 +455,9 @@ namespace EvangPL.Views.InputDetail
                 StrokeShape = new RoundRectangle { CornerRadius = 6 },
                 Background = Color.FromArgb("#edeff3"),
                 Padding = new Thickness(5, 5, 2, 4),
-                Margin = new Thickness(2, 0, 0, 15)
+                Margin = new Thickness(2, 4, 0, 15)
             };
-            var dateLabel = new Label { Text = planDate, FontSize = 15, TextColor = Color.FromArgb("#6b727c"), FontAttributes = FontAttributes.Bold };
-            dateBorder.Content = dateLabel;
+            dateBorder.Content = new Label { Text = planDate, FontSize = 12, TextColor = Color.FromArgb("#6b727c"), FontAttributes = FontAttributes.Bold };
             innerGrid.Add(dateBorder, 1, 1);
 
             // ✅ 修正：「入庫済みロット」実績表 → タップで選択できる「未受領PO明細」テーブルに変更
