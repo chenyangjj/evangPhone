@@ -164,7 +164,7 @@ namespace EvangPL.Views.OutboundHistory
             };
 
             var dateLayout = new VerticalStackLayout { Spacing = 4 };
-            dateLayout.Children.Add(new Label { Text = "対象期間:", FontSize = 13, TextColor = Colors.Gray });
+            dateLayout.Children.Add(new Label { Text = "対象期間", FontSize = 12, TextColor = Colors.Black });
 
             var dateRangeGrid = new Grid
             {
@@ -185,7 +185,8 @@ namespace EvangPL.Views.OutboundHistory
                 HeightRequest = 36,
                 Format = "MM/dd",
                 TextColor = Colors.Black,
-                Margin = new Thickness(8, 0)
+                Margin = new Thickness(8, 0),
+                FontSize = 12
             };
             var startBorder = CreateInputBorder(startDatePicker);
             Grid.SetColumn(startBorder, 0);
@@ -209,7 +210,8 @@ namespace EvangPL.Views.OutboundHistory
                 HeightRequest = 36,
                 Format = "MM/dd",
                 TextColor = Colors.Black,
-                Margin = new Thickness(8, 0)
+                Margin = new Thickness(8, 0),
+                FontSize = 12
             };
             var endBorder = CreateInputBorder(endDatePicker);
             Grid.SetColumn(endBorder, 2);
@@ -220,7 +222,7 @@ namespace EvangPL.Views.OutboundHistory
             Grid.SetColumn(dateLayout, 0);
 
             var locLayout = new VerticalStackLayout { Spacing = 4 };
-            locLayout.Children.Add(new Label { Text = "ロケーション:", FontSize = 13, TextColor = Colors.Gray });
+            locLayout.Children.Add(new Label { Text = "ロケーション:", FontSize = 12, TextColor = Colors.Black });
 
             locationPicker = new Picker
             {
@@ -228,7 +230,8 @@ namespace EvangPL.Views.OutboundHistory
                 TextColor = Colors.Black,
                 HeightRequest = 36,
                 Title = "WH1",
-                Margin = new Thickness(8, 0)
+                Margin = new Thickness(8, 0),
+                FontSize = 12
             };
             for (int i = 0; i < localist.Count; i++)
             {
@@ -265,7 +268,7 @@ namespace EvangPL.Views.OutboundHistory
             // --- 品目 (キーワード) ---
             // --- 品目 (キーワード) ---
             var itemLayout = new VerticalStackLayout { Spacing = 4 };
-            itemLayout.Children.Add(new Label { Text = "品目 (スキャン可):", FontSize = 13, TextColor = Colors.Gray });
+            itemLayout.Children.Add(new Label { Text = "品目 (スキャン可):", FontSize = 12, TextColor = Colors.Black });
 
             itemKeywordEntry = new Entry
             {
@@ -274,7 +277,8 @@ namespace EvangPL.Views.OutboundHistory
                 HeightRequest = 36,
                 TextColor = Colors.Black,
                 PlaceholderColor = Colors.Gray,
-                Margin = new Thickness(10, 0)
+                Margin = new Thickness(10, 0),
+                FontSize = 12
             };
             var itemBorder = CreateInputBorder(itemKeywordEntry);
 
@@ -285,7 +289,8 @@ namespace EvangPL.Views.OutboundHistory
                     new ColumnDefinition { Width = GridLength.Star },   // 入力欄
                     new ColumnDefinition { Width = 50 }                  // スキャンアイコン幅
                 },
-                ColumnSpacing = 10
+                ColumnSpacing = 10,
+                VerticalOptions = LayoutOptions.Center
             };
             itemRow.Add(itemBorder, 0, 0);
 
@@ -849,7 +854,7 @@ namespace EvangPL.Views.OutboundHistory
                 BackgroundColor = Colors.White,
                 Padding = new Thickness(8, 6),
                 WidthRequest = 50,
-                HeightRequest = 45,
+                HeightRequest = 40,
                 HorizontalOptions = LayoutOptions.End,
                 VerticalOptions = LayoutOptions.Center,
                 Content = barsLayout
