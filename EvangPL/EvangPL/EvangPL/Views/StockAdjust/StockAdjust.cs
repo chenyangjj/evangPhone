@@ -17,7 +17,33 @@ namespace EvangPL.Views.StockAdjust
     /// </summary>
     public class StockAdjust : EvangContentVM
     {
-        
+        // ==========================================
+        // Androidネイティブの下線消去用Handler登録
+        // ==========================================
+        static StockAdjust()
+        {
+            Microsoft.Maui.Handlers.EntryHandler.Mapper.AppendToMapping("NoUnderline", (handler, view) =>
+            {
+#if ANDROID
+                handler.PlatformView.BackgroundTintList = Android.Content.Res.ColorStateList.ValueOf(Android.Graphics.Color.Transparent);
+#endif
+            });
+
+            Microsoft.Maui.Handlers.PickerHandler.Mapper.AppendToMapping("NoUnderline", (handler, view) =>
+            {
+#if ANDROID
+                handler.PlatformView.BackgroundTintList = Android.Content.Res.ColorStateList.ValueOf(Android.Graphics.Color.Transparent);
+#endif
+            });
+
+            Microsoft.Maui.Handlers.DatePickerHandler.Mapper.AppendToMapping("NoUnderline", (handler, view) =>
+            {
+#if ANDROID
+                handler.PlatformView.BackgroundTintList = Android.Content.Res.ColorStateList.ValueOf(Android.Graphics.Color.Transparent);
+#endif
+            });
+        }
+
         private Grid? mainGrid;
         private Grid? filterGrid;
         private Button? btnCreateNew;
@@ -154,7 +180,7 @@ namespace EvangPL.Views.StockAdjust
             };
 
             // --- 対象期間 ---
-            var lblDateTitle = new Label { Text = "対象期間", FontSize = 12, TextColor = Colors.Gray };
+            var lblDateTitle = new Label { Text = "対象期間", FontSize = 11, TextColor = Colors.Black };
 
             var dateRangeGrid = new Grid
             {
@@ -175,7 +201,8 @@ namespace EvangPL.Views.StockAdjust
                 HeightRequest = 36,
                 Format = "MM/dd",
                 TextColor = Colors.Black,
-                Margin = new Thickness(8, 0)
+                Margin = new Thickness(8, 0),
+                FontSize = 10,
             };
             var startBorder = CreateInputBorder(startDatePicker);
             Grid.SetColumn(startBorder, 0);
@@ -199,7 +226,8 @@ namespace EvangPL.Views.StockAdjust
                 HeightRequest = 36,
                 Format = "MM/dd",
                 TextColor = Colors.Black,
-                Margin = new Thickness(8, 0)
+                Margin = new Thickness(8, 0),
+                FontSize = 10,
             };
             var endBorder = CreateInputBorder(endDatePicker);
             Grid.SetColumn(endBorder, 2);
@@ -218,14 +246,15 @@ namespace EvangPL.Views.StockAdjust
             UpdateDateRange(); // 初期値セット
 
             // --- 品目キーワード ---
-            var lblKeywordTitle = new Label { Text = "品目キーワード", FontSize = 12, TextColor = Colors.Gray };
+            var lblKeywordTitle = new Label { Text = "品目キーワード", FontSize = 11, TextColor = Colors.Black };
             keywordEntry = new Entry
             {
                 Placeholder = "検索キーワード",
                 Text = SearchCondition.Keyword,
                 BackgroundColor = Colors.Transparent,
-                HeightRequest = 42,
+                HeightRequest = 35,
                 TextColor = Colors.Black,
+                FontSize = 10,
             };
             keywordEntry.TextChanged += async (s, e) =>
             {
@@ -252,14 +281,17 @@ namespace EvangPL.Views.StockAdjust
             {
                 ColumnDefinitions =
                 {
-                    new ColumnDefinition { Width = GridLength.Star },   // 入力欄
-                    new ColumnDefinition { Width = 50 }                  // スキャンアイコン幅
+                    new ColumnDefinition { Width = GridLength.Star },
+                    new ColumnDefinition { Width = 38 }
                 },
-                ColumnSpacing = 8
+                ColumnSpacing = 4
             };
             kwRow.Add(CreateInputBorder(keywordEntry), 0, 0);
 
             var itemScanBorder = BuildBarcodeIcon();
+            itemScanBorder.HeightRequest = 40;
+            itemScanBorder.WidthRequest = 38;
+            itemScanBorder.Padding = new Thickness(6, 4);
             var itemScanTap = new TapGestureRecognizer();
             itemScanTap.Tapped += async (s, e) =>
             {
@@ -271,7 +303,6 @@ namespace EvangPL.Views.StockAdjust
                     {
                         if (keywordEntry != null)
                         {
-                            // スキャン結果を品目キーワード欄へ反映（TextChangedで自動検索が走る）
                             keywordEntry.Text = scannedCode;
                         }
                     });
