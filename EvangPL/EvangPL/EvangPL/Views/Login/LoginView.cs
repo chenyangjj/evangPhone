@@ -29,7 +29,7 @@ namespace EvangPL.Views.Login
             Label = "strLogin",
             Width = 300,
             TextColor = "White",
-            BackgroundColor = "#1e3a5f"
+            BackgroundColor = "#245a96"
             )]
         public EvangElement<Button>? login { get; set; }
 
