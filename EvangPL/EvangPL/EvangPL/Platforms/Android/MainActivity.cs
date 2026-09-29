@@ -2,6 +2,7 @@
 using Android.Content;
 using Android.Content.PM;
 using Android.OS;
+using Android.Views;
 using EvangSol.Mobibrary.DataFeed;
 
 namespace EvangPL
@@ -17,7 +18,27 @@ namespace EvangPL
         protected override void OnCreate(Bundle? savedInstanceState)
         {
             base.OnCreate(savedInstanceState);
+            var targetColor = Android.Graphics.Color.ParseColor("#000000");
 
+            if (Build.VERSION.SdkInt >= BuildVersionCodes.Lollipop)
+            {
+                Window?.SetStatusBarColor(targetColor);
+
+                double luminance = (0.299 * targetColor.R + 0.587 * targetColor.G + 0.114 * targetColor.B) / 255;
+
+                var decorView = Window?.DecorView;
+                if (decorView != null)
+                {
+                    if (luminance > 0.5)
+                    {
+                        decorView.SystemUiVisibility = (StatusBarVisibility)SystemUiFlags.LightStatusBar;
+                    }
+                    else
+                    {
+                        decorView.SystemUiVisibility = (StatusBarVisibility)0;
+                    }
+                }
+            }
             // Handle cold start (app was closed)
             HandleOAuthRedirect(Intent);
         }
