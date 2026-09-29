@@ -83,7 +83,7 @@ namespace EvangPL.Views.PickingDetail
                 .Where(p => p.Details != null && p.Details.Count > 0)
                 .GroupBy(p => p.ItemCode)
                 .ToDictionary(g => g.Key, g => g.Sum(p => p.Details.Sum(d => d.DetailQty)));
-            Title = "梱包情報を追加";
+            Title = string.IsNullOrEmpty(_detailInfo?.OrderNo) ? "梱包情報を追加" : _detailInfo!.OrderNo;
             BuildUI();
         }
 
