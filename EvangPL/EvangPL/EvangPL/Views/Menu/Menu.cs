@@ -9,6 +9,7 @@ namespace EvangPL.Views.Menu;
 public class Menu : EvangContentVM
 {
     private static readonly Color HeaderColor = Color.FromArgb("#1e3a5f");
+    private static readonly Color BtnColor = Color.FromArgb("#245a96");
     private static readonly Color BgColor = Color.FromArgb("#f5f5f5");
     private static readonly Color CardBgColor = Colors.White;
     private static readonly Color IconBgColor = Color.FromArgb("#1e3a5f");
@@ -98,7 +99,7 @@ public class Menu : EvangContentVM
         {
             FontSize = CommonViewSetting.LABEL_FONTSIZE,
             TextColor = Colors.White,
-            BackgroundColor = HeaderColor,
+            BackgroundColor = BtnColor,
             Text = GetCustomString("strLogout") ?? "Logout",
             WidthRequest = 200,
         };
