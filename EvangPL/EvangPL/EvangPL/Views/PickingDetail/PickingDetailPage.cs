@@ -662,7 +662,7 @@ namespace EvangPL.Views.PickingDetail
             });
 
             // 1. 出荷元ロケーション行（Picker + バーコードアイコン。InputDetail.cs の入庫先ロケーションと同一の流儀）
-            layout.Children.Add(new Label { Text = "出荷元ロケーション (スキャン可)", FontSize = 12, TextColor = Colors.Black });
+            layout.Children.Add(new Label { Text = "出荷元ロケーション", FontSize = 12, TextColor = Colors.Black });
             var locRow = new Grid
             {
                 ColumnDefinitions =
@@ -685,7 +685,7 @@ namespace EvangPL.Views.PickingDetail
                 ItemsSource = locationNames
             };
             locRow.Add(WrapInputControl(_locationPicker, showDropdownArrow: true), 0, 0);
-            locRow.Add(BuildBarcodeIcon(), 1, 0);
+            //locRow.Add(BuildBarcodeIcon(), 1, 0);
             layout.Children.Add(locRow);
 
             // 2. ロット（またはシリアル）行（Entry + バーコードアイコン）
@@ -728,7 +728,36 @@ namespace EvangPL.Views.PickingDetail
                 _entryLot.Unfocused += OnLotEntryUnfocused;
             }
             lotRow.Add(WrapInputControl(_entryLot), 0, 0);
-            lotRow.Add(BuildBarcodeIcon(), 1, 0);
+            var lotScanBorder = BuildBarcodeIcon();
+            if (lotEditable)
+            {
+                var lotScanTap = new TapGestureRecognizer();
+                lotScanTap.Tapped += async (s, e) =>
+                {
+                    await ScanHelper.ScanAsync(Navigation, (scannedCode) =>
+                    {
+                        if (string.IsNullOrEmpty(scannedCode) || _entryLot == null) return;
+
+                        Dispatcher.Dispatch(() =>
+                        {
+                            // Entryへスキャン結果を反映
+                            _entryLot.Text = scannedCode;
+
+                            // Entryへのプログラム代入では Unfocused が自動発火しないため、手動で呼んで
+                            // 在庫存在チェック＋SO時の場所・数量自動セットを走らせる。
+                            OnLotEntryUnfocused(_entryLot, new FocusEventArgs(_entryLot, false));
+                        });
+                    });
+                };
+                lotScanBorder.GestureRecognizers.Add(lotScanTap);
+            }
+            else
+            {
+                // ロット・シリアル管理対象外の品目ではアイコンを無効化
+                lotScanBorder.Opacity = 0.5;
+                lotScanBorder.InputTransparent = true;
+            }
+            lotRow.Add(lotScanBorder, 1, 0);
             if (!lotEditable)
             {
                 // ロット・シリアルいずれの管理対象外でもない場合は行全体をグレーアウトして「触れない」ことを視覚的に示す
