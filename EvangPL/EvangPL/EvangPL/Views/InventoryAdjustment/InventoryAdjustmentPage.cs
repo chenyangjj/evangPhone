@@ -587,11 +587,11 @@ namespace EvangPL.Views.InventoryAdjustment
                 }
             }
 
-            if (reasonPicker?.SelectedItem == null)
-            {
-                await DisplayAlert("エラー", "調整理由を選択してください。", "OK");
-                return;
-            }
+            //if (reasonPicker?.SelectedItem == null)
+            //{
+            //    await DisplayAlert("エラー", "調整理由を選択してください。", "OK");
+            //    return;
+            //}
 
             var checkItemCode = itemEntry?.Text?.Trim() ?? "";
             if (!string.IsNullOrEmpty(checkItemCode))
@@ -1566,14 +1566,14 @@ namespace EvangPL.Views.InventoryAdjustment
                 return;
             }
 
-            foreach (var item in validItems)
-            {
-                if (string.IsNullOrWhiteSpace(item.AdjustReason))
-                {
-                    await DisplayAlert("エラー", $"調整理由が未選択の明細があります（{item.ItemCode}）。", "OK");
-                    return;
-                }
-            }
+            //foreach (var item in validItems)
+            //{
+            //    if (string.IsNullOrWhiteSpace(item.AdjustReason))
+            //    {
+            //        await DisplayAlert("エラー", $"調整理由が未選択の明細があります（{item.ItemCode}）。", "OK");
+            //        return;
+            //    }
+            //}
 
             if (registerButton != null) registerButton.IsEnabled = false;
 
@@ -1686,14 +1686,14 @@ namespace EvangPL.Views.InventoryAdjustment
                 return;
             }
 
-            // ★ 修改点2: 負数を許可（0のみ除外）
+            //  負数を許可（0のみ除外）
             if (!int.TryParse(qtyText, out int qty) || qty == 0)
             {
                 await DisplayAlert("エラー", "数量を正しく入力してください（0以外、マイナス可）。", "OK");
                 return;
             }
 
-            // ★ 修改点3: シリアルLotの場合は ±1 のみ許可
+            // シリアルLotの場合は ±1 のみ許可
             bool isSerialLot = _currentItems?.FirstOrDefault()?.IsSerialLotItem ?? false;
             if (isSerialLot && Math.Abs(qty) != 1)
             {
