@@ -118,7 +118,7 @@ namespace EvangPL.Views.StockAdjust
             btnCreateNew = new Button
             {
                 Text = "+ 新規登録",
-                BackgroundColor = Color.FromArgb("#1954aa"),
+                BackgroundColor = Color.FromArgb("#245a96"),
                 TextColor = Colors.White,
                 HeightRequest = 50,
                 FontSize = 15,
@@ -346,46 +346,50 @@ namespace EvangPL.Views.StockAdjust
             paginationGrid = new Grid
             {
                 ColumnDefinitions =
-                {
-                    new ColumnDefinition { Width = GridLength.Auto },
-                    new ColumnDefinition { Width = GridLength.Star },
-                    new ColumnDefinition { Width = GridLength.Auto }
-                },
-                ColumnSpacing = 15,
-                Padding = new Thickness(0, 10),
+        {
+            new ColumnDefinition { Width = GridLength.Star },   
+            new ColumnDefinition { Width = GridLength.Auto },   
+            new ColumnDefinition { Width = GridLength.Star }    
+        },
+                ColumnSpacing = 10,                                      
+                Margin = new Thickness(0, 5, 0, 0),                      
                 VerticalOptions = LayoutOptions.Center
             };
 
             prevPageBtn = new Button
             {
                 Text = "◀ 前へ",
-                WidthRequest = 110,
-                HeightRequest = 40,
-                BackgroundColor = Color.FromArgb("#e6e6e6"),
+                FontSize = 12,
+                BackgroundColor = Color.FromArgb("#e0e0e0"),
                 TextColor = Colors.Gray,
-                BorderWidth = 0,
+                CornerRadius = 5,
+                HeightRequest = 35,
+                IsEnabled = false,
                 VerticalOptions = LayoutOptions.Center
             };
             prevPageBtn.Clicked += async (s, e) => await PrevPage();
 
             pageInfoLabel = new Label
             {
-                Text = "1/1",
+                Text = "1 / 1",                                          
+                FontSize = 13,                                            
+                TextColor = Colors.Black,                                 
+                HorizontalTextAlignment = TextAlignment.Center,           
+                VerticalTextAlignment = TextAlignment.Center,             
                 HorizontalOptions = LayoutOptions.Center,
-                VerticalOptions = LayoutOptions.Center,
-                FontSize = 12,
-                FontAttributes = FontAttributes.Bold
+                VerticalOptions = LayoutOptions.Center
             };
 
             nextPageBtn = new Button
             {
                 Text = "次へ ▶",
-                WidthRequest = 110,
-                HeightRequest = 40,
-                BackgroundColor = Colors.Transparent,
-                BorderColor = Colors.DarkBlue,
+                FontSize = 12,
+                BackgroundColor = Colors.White,
+                TextColor = Color.FromArgb("#1f3854"),
+                BorderColor = Color.FromArgb("#1f3854"),
                 BorderWidth = 1,
-                TextColor = Colors.DarkBlue,
+                CornerRadius = 5,
+                HeightRequest = 35,
                 VerticalOptions = LayoutOptions.Center
             };
             nextPageBtn.Clicked += async (s, e) => await NextPage();
@@ -519,19 +523,24 @@ namespace EvangPL.Views.StockAdjust
         private void RefreshPageUI()
         {
             if (pageInfoLabel != null)
-                pageInfoLabel.Text = $"{_currentPage}/{_totalPage}";
+                pageInfoLabel.Text = $"{_currentPage} / {_totalPage}";   // 可选：加空格与 IT 一致
 
             if (prevPageBtn != null)
             {
                 prevPageBtn.IsEnabled = _currentPage > 1;
-                prevPageBtn.BackgroundColor = _currentPage > 1 ? Colors.LightGray : Color.FromArgb("#e6e6e6");
-                prevPageBtn.TextColor = _currentPage > 1 ? Colors.Black : Colors.Gray;
+                prevPageBtn.BackgroundColor = prevPageBtn.IsEnabled ? Colors.White : Color.FromArgb("#e0e0e0");
+                prevPageBtn.TextColor = prevPageBtn.IsEnabled ? Color.FromArgb("#1f3854") : Colors.Gray;
+                prevPageBtn.BorderColor = prevPageBtn.IsEnabled ? Color.FromArgb("#1f3854") : Colors.Transparent;
+                prevPageBtn.BorderWidth = prevPageBtn.IsEnabled ? 1 : 0;
             }
+
             if (nextPageBtn != null)
             {
                 nextPageBtn.IsEnabled = _currentPage < _totalPage;
-                nextPageBtn.BorderColor = _currentPage < _totalPage ? Colors.DarkBlue : Colors.LightGray;
-                nextPageBtn.TextColor = _currentPage < _totalPage ? Colors.DarkBlue : Colors.Gray;
+                nextPageBtn.BackgroundColor = nextPageBtn.IsEnabled ? Colors.White : Color.FromArgb("#e0e0e0");
+                nextPageBtn.TextColor = nextPageBtn.IsEnabled ? Color.FromArgb("#1f3854") : Colors.Gray;
+                nextPageBtn.BorderColor = nextPageBtn.IsEnabled ? Color.FromArgb("#1f3854") : Colors.Transparent;
+                nextPageBtn.BorderWidth = nextPageBtn.IsEnabled ? 1 : 0;
             }
         }
 
