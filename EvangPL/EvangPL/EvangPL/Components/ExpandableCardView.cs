@@ -25,13 +25,13 @@ namespace EvangPL.Components
         private bool _isExpanded;
         private ObservableCollection<Product> _subProducts;
 
-        // 1. 无参构造函数（与ProcessInfoItem风格一致）
+        
         public Product()
         {
             _subProducts = new ObservableCollection<Product>();
         }
 
-        // 2. 带参数的构造函数（与ProcessInfoItem风格一致）
+        
         public Product(
             int id,
             string itemId,
@@ -56,7 +56,7 @@ namespace EvangPL.Components
             _subProducts = new ObservableCollection<Product>();
         }
 
-        #region 数据属性
+        #region 
         public int Id
         {
             get => _id;
@@ -175,7 +175,7 @@ namespace EvangPL.Components
         }
         #endregion
 
-        #region UI控制属性
+        #region 
         public bool IsExpanded
         {
             get => _isExpanded;
@@ -206,7 +206,7 @@ namespace EvangPL.Components
         }
         #endregion
 
-        #region INotifyPropertyChanged 实现
+        #region INotifyPropertyChanged 
         public event PropertyChangedEventHandler PropertyChanged;
 
         protected virtual void OnPropertyChanged([CallerMemberName] string propertyName = "")
@@ -215,7 +215,7 @@ namespace EvangPL.Components
         }
         #endregion
 
-        // 实用方法
+        
         public void AddSubProduct(Product subProduct)
         {
             _subProducts.Add(subProduct);
@@ -235,13 +235,13 @@ namespace EvangPL.Components
 
         private void BuildUI()
         {
-            // 主容器
+           
             var mainStack = new VerticalStackLayout
             {
                 Spacing = 0
             };
 
-            // 父卡片容器
+            
             var parentCard = new Border
             {
                 BackgroundColor = Colors.White,
