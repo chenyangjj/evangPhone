@@ -403,8 +403,8 @@ namespace EvangPL.Views.InboundHistory
                 Text = "◀ 前へ",
                 FontSize = 12,
                 BackgroundColor = Colors.White,
-                TextColor = Color.FromArgb("#2196F3"),
-                BorderColor = Color.FromArgb("#2196F3"),
+                TextColor = Color.FromArgb("#1f3854"),
+                BorderColor = Color.FromArgb("#1f3854"),
                 BorderWidth = 1,
                 CornerRadius = 5,
                 HeightRequest = 35,
@@ -435,8 +435,8 @@ namespace EvangPL.Views.InboundHistory
                 Text = "次へ ▶",
                 FontSize = 12,
                 BackgroundColor = Colors.White,
-                TextColor = Color.FromArgb("#2196F3"),
-                BorderColor = Color.FromArgb("#2196F3"),
+                TextColor = Color.FromArgb("#1f3854"),
+                BorderColor = Color.FromArgb("#1f3854"),
                 BorderWidth = 1,
                 CornerRadius = 5,
                 HeightRequest = 35,
@@ -796,10 +796,10 @@ namespace EvangPL.Views.InboundHistory
             prevButton.IsEnabled = currentPage > 0;
             nextButton.IsEnabled = currentPage < totalPages - 1;
 
-            prevButton.TextColor = prevButton.IsEnabled ? Color.FromArgb("#2196F3") : Colors.Gray;
-            nextButton.TextColor = nextButton.IsEnabled ? Color.FromArgb("#2196F3") : Colors.Gray;
-            prevButton.BorderColor = prevButton.IsEnabled ? Color.FromArgb("#2196F3") : Colors.Gray;
-            nextButton.BorderColor = nextButton.IsEnabled ? Color.FromArgb("#2196F3") : Colors.Gray;
+            prevButton.TextColor = prevButton.IsEnabled ? Color.FromArgb("#1f3854") : Colors.Gray;
+            nextButton.TextColor = nextButton.IsEnabled ? Color.FromArgb("#1f3854") : Colors.Gray;
+            prevButton.BorderColor = prevButton.IsEnabled ? Color.FromArgb("#1f3854") : Colors.Gray;
+            nextButton.BorderColor = nextButton.IsEnabled ? Color.FromArgb("#1f3854") : Colors.Gray;
         }
 
         private void ShowPagination()
