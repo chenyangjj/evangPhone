@@ -196,8 +196,9 @@ namespace EvangPL.Views.StockIn
                 Text = "◀ 前へ",
                 WidthRequest = 110,
                 HeightRequest = 40,
-                BackgroundColor = Color.FromArgb("#e6e6e6"),
+                BackgroundColor = Color.FromArgb("#e0e0e0"),
                 TextColor = Colors.Gray,
+                BorderColor = Colors.Transparent,
                 BorderWidth = 0,
                 VerticalOptions = LayoutOptions.Center
             };
@@ -217,10 +218,10 @@ namespace EvangPL.Views.StockIn
                 Text = "次へ ▶",
                 WidthRequest = 110,
                 HeightRequest = 40,
-                BackgroundColor = Colors.Transparent,
-                BorderColor = Colors.DarkBlue,
+                BackgroundColor = Colors.White,                 
+                BorderColor = Color.FromArgb("#1f3854"),        
                 BorderWidth = 1,
-                TextColor = Colors.DarkBlue,
+                TextColor = Color.FromArgb("#1f3854"),          
                 VerticalOptions = LayoutOptions.Center
             };
             nextPageBtn.Clicked += async (s, e) => await NextPage();
@@ -411,7 +412,7 @@ namespace EvangPL.Views.StockIn
             Grid.SetColumn(statusTag, 1);
             cardGrid.Children.Add(statusTag);
 
-            // ✅ 第1行：仕入先（RMA/POによる分岐判断は廃止し、統一表示）
+            // ✅ 仕入先（RMA/POによる分岐判断は廃止し、統一表示）
             bool isReturnReceipt = item.InboundType != null && item.InboundType.IndexOf("返品") >= 0;
             string partnerLabelText = isReturnReceipt ? "顧客" : "仕入先";
 
@@ -625,7 +626,7 @@ namespace EvangPL.Views.StockIn
         #endregion
     }
 
-    #region 入庫用Model
+    #region 
     public class StockInPageInfo : EvangJsonModel
     {
         public string Keyword { get; set; } = "";
