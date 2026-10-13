@@ -313,15 +313,20 @@ namespace EvangPL.Views.StockIn
             if (prevPageBtn != null)
             {
                 prevPageBtn.IsEnabled = _currentPage > 1;
-                prevPageBtn.BackgroundColor = _currentPage > 1 ? Colors.LightGray : Color.FromArgb("#e6e6e6");
-                prevPageBtn.TextColor = _currentPage > 1 ? Colors.Black : Colors.Gray;
+
+                prevPageBtn.BackgroundColor = prevPageBtn.IsEnabled ? Colors.White : Color.FromArgb("#e0e0e0");
+                prevPageBtn.TextColor = prevPageBtn.IsEnabled ? Color.FromArgb("#1f3854") : Colors.Gray;
+                prevPageBtn.BorderColor = prevPageBtn.IsEnabled ? Color.FromArgb("#1f3854") : Colors.Transparent;
+                prevPageBtn.BorderWidth = prevPageBtn.IsEnabled ? 1 : 0;
             }
             if (nextPageBtn != null)
             {
                 nextPageBtn.IsEnabled = _currentPage < _totalPage;
-                nextPageBtn.BorderColor = _currentPage < _totalPage ? Colors.DarkBlue : Colors.LightGray;
-                nextPageBtn.TextColor = _currentPage < _totalPage ? Colors.DarkBlue : Colors.Gray;
-                nextPageBtn.BackgroundColor = _currentPage < _totalPage ? Colors.Transparent : Color.FromArgb("#e6e6e6");
+
+                nextPageBtn.BackgroundColor = nextPageBtn.IsEnabled ? Colors.White : Color.FromArgb("#e0e0e0");
+                nextPageBtn.TextColor = nextPageBtn.IsEnabled ? Color.FromArgb("#1f3854") : Colors.Gray;
+                nextPageBtn.BorderColor = nextPageBtn.IsEnabled ? Color.FromArgb("#1f3854") : Colors.Transparent;
+                nextPageBtn.BorderWidth = nextPageBtn.IsEnabled ? 1 : 0;
             }
         }
 
