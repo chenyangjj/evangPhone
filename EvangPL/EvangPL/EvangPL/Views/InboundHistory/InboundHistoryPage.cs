@@ -69,7 +69,7 @@ namespace EvangPL.Views.InboundHistory
         // ==========================================
         private List<InboundRecord>? allInboundData;
         private int currentPage = 0;
-        private int pageSize = 5;
+        private int pageSize = 10;
         private int totalPages = 0;
 
         private VerticalStackLayout? tableContainer;
