@@ -266,6 +266,8 @@ namespace EvangPL.Views.StockIn
                         ItemCount = (int)(order.itemCount ?? 0),       // ✅ RESTletの集計値を直接使用
                         TotalQty = (int)(order.totalQuantity ?? 0),    // ✅ RESTletの集計値を直接使用
                         InboundType = order.inboundType,
+                        FromLocation = order.transferFrom,             // ✅ 修正：RESTletの返却キー transferFrom に合わせる
+                        ToLocation = order.transferTo,                 // ✅ 修正：RESTletの返却キー transferTo に合わせる
                         ItemCode = order.itemCode,
                         ItemName = order.itemName
                     }).ToList();
@@ -285,7 +287,7 @@ namespace EvangPL.Views.StockIn
                 }
                 else
                 {
-                    // ✅ モックデータへのフォールバックを廃止。
+                    // ✅ [修正] モックデータへのフォールバックを廃止。
                     //    実データが0件（未検索/検索結果なし/再検索で0件）の場合は、
                     //    そのまま空の一覧として扱う（ShowEmptyTip()が表示される）。
                     dataList = new List<StockInItem>();
@@ -412,13 +414,19 @@ namespace EvangPL.Views.StockIn
             Grid.SetColumn(statusTag, 1);
             cardGrid.Children.Add(statusTag);
 
-            // ✅ 仕入先（RMA/POによる分岐判断は廃止し、統一表示）
+            // ✅ 第1行：仕入先（RMA/POによる分岐判断は廃止し、統一表示）
             bool isReturnReceipt = item.InboundType != null && item.InboundType.IndexOf("返品") >= 0;
+            // ✅ 追加：移動伝票の判定（InboundType の実際の値に合わせて調整してください）
+            bool isTransfer = item.InboundType != null &&
+                              (item.InboundType.IndexOf("移動") >= 0 || item.InboundType.IndexOf("振替") >= 0);
             string partnerLabelText = isReturnReceipt ? "顧客" : "仕入先";
 
             var lblSupplier = new Label
             {
-                Text = $"{partnerLabelText}: {item.SupplierName}",
+                // ✅ 変更：移動伝票は「移動元 / 移動先」を改行で2行表示、それ以外は従来どおり
+                Text = isTransfer
+                ? $"移動元: {item.FromLocation} - 移動先: {item.ToLocation}"
+                    : $"{partnerLabelText}: {item.SupplierName}",
                 FontSize = 12,
                 TextColor = Colors.Gray
             };
@@ -650,6 +658,10 @@ namespace EvangPL.Views.StockIn
         public string? InboundType { get; set; }
         public string? ItemCode { get; set; }
         public string? ItemName { get; set; }
+        public string? FromLocation { get; set; }
+        public string? ToLocation { get; set; }
+
+
     }
 
     public class StockInApiWrap
