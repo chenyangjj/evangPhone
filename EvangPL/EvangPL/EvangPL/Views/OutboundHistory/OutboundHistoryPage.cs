@@ -4,6 +4,7 @@ using EvangSol.Mobibrary.DataFeed;
 using EvangSol.Mobibrary.EvangModel;
 using EvangSol.Mobibrary.EvangViewModel;
 using EvangSol.Mobibrary.Utilities.Common;
+using Kotlin.Jvm;
 using Microsoft.Maui.Controls.Shapes;
 using System;
 using System.Collections.Generic;
@@ -73,7 +74,7 @@ namespace EvangPL.Views.OutboundHistory
         // ==========================================
         private List<OutboundRecord>? allOutboundData;
         private int currentPage = 0;
-        private int pageSize = 5;
+        private int pageSize = 10;
         private int totalPages = 0;
 
         private VerticalStackLayout? tableContainer;
@@ -593,6 +594,7 @@ namespace EvangPL.Views.OutboundHistory
                 ColumnDefinitions =
                 {
                     new ColumnDefinition { Width = new GridLength(1.2, GridUnitType.Star) }, // 伝票No
+                    new ColumnDefinition { Width = new GridLength(1.5, GridUnitType.Star) }, // 品目
                     new ColumnDefinition { Width = new GridLength(1.5, GridUnitType.Star) }, // 取引先
                     new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) },   // 状態
                     new ColumnDefinition { Width = new GridLength(0.8, GridUnitType.Star) }  // 数量
@@ -600,9 +602,10 @@ namespace EvangPL.Views.OutboundHistory
             };
 
             headerGrid.Children.Add(CreateHeaderLabel("伝票No.", 0));
-            headerGrid.Children.Add(CreateHeaderLabel("取引先", 1));
-            headerGrid.Children.Add(CreateHeaderLabel("状態", 2));
-            headerGrid.Children.Add(CreateHeaderLabel("数量", 3));
+            headerGrid.Children.Add(CreateHeaderLabel("品目", 1));
+            headerGrid.Children.Add(CreateHeaderLabel("取引先", 2));
+            headerGrid.Children.Add(CreateHeaderLabel("状態", 3));
+            headerGrid.Children.Add(CreateHeaderLabel("数量", 4));
 
             tableContainer.Children.Add(headerGrid);
 
@@ -619,16 +622,17 @@ namespace EvangPL.Views.OutboundHistory
 
                 // 伝票No
                 rowGrid.Children.Add(CreateCellLabel(item.SlipNo, 0, Colors.Black));
-
+                // 品目
+                rowGrid.Children.Add(CreateCellLabel(item.ItemName, 1, Colors.Black));
                 // 取引先
-                rowGrid.Children.Add(CreateCellLabel(item.Customer, 1, Colors.Black));
+                rowGrid.Children.Add(CreateCellLabel(item.Customer, 2, Colors.Black));
 
                 // 状態 (色分け)
                 var statusColor = GetStatusColor(item.Status);
-                rowGrid.Children.Add(CreateCellLabel(item.Status, 2, statusColor));
+                rowGrid.Children.Add(CreateCellLabel(item.Status, 3, statusColor));
 
                 // 数量
-                rowGrid.Children.Add(CreateCellLabel(item.Quantity.ToString(), 3, Colors.Black, TextAlignment.End));
+                rowGrid.Children.Add(CreateCellLabel(item.Quantity.ToString(), 4, Colors.Black, TextAlignment.End));
 
                 tableContainer.Children.Add(rowGrid);
 
@@ -767,14 +771,14 @@ namespace EvangPL.Views.OutboundHistory
         {
             return new List<OutboundRecord>
             {
-                new OutboundRecord("SO-0987", "山田工業", "出荷済み", 210),
-                new OutboundRecord("SO-0988", "中央物流", "一部出荷", 60),
-                new OutboundRecord("TR-0021", "社内移動", "未出荷", 300),
-                new OutboundRecord("SO-0989", "松本電機", "一部出荷", 95),
-                new OutboundRecord("SO-0990", "大和精密工業", "出荷済み", 45),
-                // ページング確認用の追加データ
-                new OutboundRecord("SO-0991", "関東マテリアル", "出荷済み", 120),
-                new OutboundRecord("SO-0992", "北陸金属工業", "未出荷", 80)
+                //new OutboundRecord("SO-0987", "山田工業", "出荷済み", 210),
+                //new OutboundRecord("SO-0988", "中央物流", "一部出荷", 60),
+                //new OutboundRecord("TR-0021", "社内移動", "未出荷", 300),
+                //new OutboundRecord("SO-0989", "松本電機", "一部出荷", 95),
+                //new OutboundRecord("SO-0990", "大和精密工業", "出荷済み", 45),
+                //// ページング確認用の追加データ
+                //new OutboundRecord("SO-0991", "関東マテリアル", "出荷済み", 120),
+                //new OutboundRecord("SO-0992", "北陸金属工業", "未出荷", 80)
             };
         }
 
@@ -872,13 +876,15 @@ namespace EvangPL.Views.OutboundHistory
     public class OutboundRecord
     {
         public string SlipNo { get; set; }      // 伝票No.
+        public string ItemName { get; set; }    // 品目
         public string Customer { get; set; }    // 取引先
         public string Status { get; set; }      // 状態
         public double Quantity { get; set; }       // 数量
 
-        public OutboundRecord(string slipNo, string customer, string status, double quantity)
+        public OutboundRecord(string slipNo, string itemName, string customer, string status, double quantity)
         {
             SlipNo = slipNo;
+            ItemName = itemName;
             Customer = customer;
             Status = status;
             Quantity = quantity;
