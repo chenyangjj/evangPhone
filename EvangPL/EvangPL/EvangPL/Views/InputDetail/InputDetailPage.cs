@@ -521,10 +521,19 @@ namespace EvangPL.Views.InputDetail
                 tableGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
                 var line = _poLines[r];
-                bool isSelected = _selectedPoLine != null && _selectedPoLine.itemId == line.itemId;
+                // ✅ [変更] 同一品目が複数行ある場合に全て選択状態にならないよう、itemId ではなく lineId で判定する
+                bool isSelected = _selectedPoLine != null && _selectedPoLine.lineId == line.lineId;
                 var rowBg = isSelected ? SelectedRowColor : Colors.White;
 
-                var itemLabel = new Label { Text = line.itemCode, FontSize = 11, Padding = new Thickness(4), BackgroundColor = rowBg };
+                // ✅ [変更] Kit 親品目がある場合のみ「親 : 子」形式（例: kit_package_test : 114988K）で表示。
+                //    親品目が無い通常品目は従来どおり itemCode を表示する。
+                var itemLabel = new Label
+                {
+                    Text = string.IsNullOrEmpty(line.parentItemCode) ? line.itemCode : line.itemDisplayName,
+                    FontSize = 11,
+                    Padding = new Thickness(4),
+                    BackgroundColor = rowBg
+                };
                 var remainLabel = new Label { Text = line.remainingQty.ToString(), FontSize = 11, Padding = new Thickness(4), BackgroundColor = rowBg };
                 var orderedLabel = new Label { Text = line.orderedQty.ToString(), FontSize = 11, Padding = new Thickness(4), BackgroundColor = rowBg };
 
@@ -966,8 +975,9 @@ namespace EvangPL.Views.InputDetail
             //    ②会計プリファレンス「受領書での超過を許可」(OVERRECEIPTS)がtrueの場合はこのチェックをスキップする
             if (!_allowOverReceipt)
             {
+                // ✅ [変更] 同一品目が複数行ある場合に備え、itemId ではなく lineId（PO明細行）単位で合算する
                 var alreadyPendingQty = _pendingLots
-                    .Where(p => p.ItemId == currentItem.itemId)
+                    .Where(p => p.LineId == currentItem.lineId)
                     .Sum(p => p.Qty);
                 var totalQty = alreadyPendingQty + qty;
 
@@ -985,6 +995,7 @@ namespace EvangPL.Views.InputDetail
 
             _pendingLots.Add(new PendingLotItem
             {
+                LineId = currentItem.lineId, // ✅ [追加] PO明細行ID（同一品目が複数行ある場合の識別用）
                 ItemId = currentItem.itemId,
                 ItemCode = currentItem.itemCode,
                 LocationId = matchedLocation?.Id ?? "",
@@ -1070,7 +1081,7 @@ namespace EvangPL.Views.InputDetail
             var currentItem = _selectedPoLine;
             var itemsForCurrent = currentItem == null
                 ? new List<PendingLotItem>()
-                : _pendingLots.Where(p => p.ItemId == currentItem.itemId).ToList();
+                : _pendingLots.Where(p => p.LineId == currentItem.lineId).ToList(); // ✅ [変更] itemId → lineId
 
             return BuildEditableLotTableInternal(itemsForCurrent, showItemColumn: false);
         }
@@ -1229,14 +1240,16 @@ namespace EvangPL.Views.InputDetail
                 //    といったケースに備えた保険的チェック。
                 if (!_allowOverReceipt)
                 {
+                    // ✅ [変更] 同一品目が複数行ある場合に備え、ItemId ではなく LineId（PO明細行）単位でグルーピングし、
+                    //    残数量も lineId で突合する
                     var overLimitGroups = _pendingLots
-                        .GroupBy(p => p.ItemId)
+                        .GroupBy(p => p.LineId)
                         .Select(g => new
                         {
-                            ItemId = g.Key,
+                            ItemId = g.First().ItemId,
                             ItemCode = g.First().ItemCode,
                             TotalQty = g.Sum(x => x.Qty),
-                            RemainingQty = _poLines.FirstOrDefault(l => l.itemId == g.Key)?.remainingQty
+                            RemainingQty = _poLines.FirstOrDefault(l => l.lineId == g.Key)?.remainingQty
                         })
                         .Where(x => x.RemainingQty.HasValue && x.TotalQty > x.RemainingQty.Value)
                         .ToList();
@@ -1273,6 +1286,7 @@ namespace EvangPL.Views.InputDetail
 
                 var lotsToSave = _pendingLots.Select(p => new LotSaveItem
                 {
+                    LineId = p.LineId, // ✅ [追加] RESTlet側で受領行(orderline)と1対1に紐付けるために送る
                     ItemId = p.ItemId,
                     ItemCode = p.ItemCode,
                     LotNumber = p.LotNo,
@@ -1371,6 +1385,8 @@ namespace EvangPL.Views.InputDetail
         // ✅ 入力中（未保存）の1行分の明細（どの品目向けかを保持する）
         public class PendingLotItem
         {
+            // ✅ [追加] PO明細行ID（PoLineItem.lineId）。同一品目が複数行ある場合の識別に使用する
+            public string LineId { get; set; } = "";
             public string ItemId { get; set; } = "";
             public string ItemCode { get; set; } = "";
             public string LocationId { get; set; } = "";
@@ -1408,6 +1424,9 @@ namespace EvangPL.Views.InputDetail
         //    ItemId(内部ID)で行うため、これが無いと複数品目のPOでロットが誤った行に設定される。
         public class LotSaveItem
         {
+            // ✅ [追加] PO明細行ID。RESTlet側で受領行(orderline)と1対1に紐付ける
+            //    （同一品目が複数行あっても、ロットが他の行に重複設定されないようにするため）
+            public string? LineId { get; set; }
             public string? ItemId { get; set; }
             public string? ItemCode { get; set; }
             public string? LotNumber { get; set; }
@@ -1427,6 +1446,10 @@ namespace EvangPL.Views.InputDetail
             public string itemId { get; set; } = "";
             public string itemCode { get; set; } = "";
             public string itemName { get; set; } = "";
+            // ✅ [追加] Kit 親品目コード（Kit 成員行のみ値あり。通常品目は空）
+            public string parentItemCode { get; set; } = "";
+            // ✅ [追加] 表示名。Kit 成員は「親 : 子」（例: kit_package_test : 114988K）、通常品目は品目名
+            public string itemDisplayName { get; set; } = "";
             // ✅ NetSuiteのitemtype値（例: InvtPart / LotNumberedInventoryItem /
             //    SerializedInventoryItem / NonInvtPart / Discount / Assembly 等）。
             //    現状はロット/シリアル要否の判定には使用していない（isLotItem/isSerialItemを使用）。
