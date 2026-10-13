@@ -42,6 +42,8 @@ namespace EvangPL.Views.InboundSearch
         public string? itemCode { get; set; }          // 品目コード
         public string? itemName { get; set; }          // 品目名称
         public double? itemCount { get; set; }
+        public string? transferFrom { get; set; }
+        public string? transferTo { get; set; }
 
     }
 
