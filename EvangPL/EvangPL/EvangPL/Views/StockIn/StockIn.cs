@@ -430,7 +430,7 @@ namespace EvangPL.Views.StockIn
             {
                 // ✅ 変更：移動伝票は「移動元 / 移動先」を改行で2行表示、それ以外は従来どおり
                 Text = isTransfer
-                ? $"移動元: {item.FromLocation} - 移動先: {item.ToLocation}"
+                ? $"移動元: {item.FromLocation} → 移動先: {item.ToLocation}"
                     : $"{partnerLabelText}: {item.SupplierName}",
                 FontSize = 12,
                 TextColor = Colors.Gray
