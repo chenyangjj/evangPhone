@@ -4,7 +4,6 @@ using EvangSol.Mobibrary.DataFeed;
 using EvangSol.Mobibrary.EvangModel;
 using EvangSol.Mobibrary.EvangViewModel;
 using EvangSol.Mobibrary.Utilities.Common;
-using Kotlin.Jvm;
 using Microsoft.Maui.Controls.Shapes;
 using System;
 using System.Collections.Generic;
