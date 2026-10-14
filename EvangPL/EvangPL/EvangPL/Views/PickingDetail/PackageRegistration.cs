@@ -9,6 +9,10 @@ using System.Collections.ObjectModel;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
+using CommunityToolkit.Mvvm.Messaging;
+using EvangSol.Mobibrary.Dialog;
+using EvangSol.Mobibrary.Utilities.Message;
+using System.Text;
 using PickingDetailInfo = EvangPL.Utils.PickingDetailInfo;
 
 namespace EvangPL.Views.PickingDetail
@@ -31,6 +35,10 @@ namespace EvangPL.Views.PickingDetail
     {
         private const string RESTLET_PICKING_DETAIL = "GetPickingDetail";
         private const string ACTION_SAVE = "SAVE";
+
+        // ✅ [追加] SafePostAsync 用のローディング表示とOAuth2クライアント
+        public static LoadingDialog? loading;
+        public static OAuth2Client oauth2_client = new();
 
         private readonly PickingDetailInfo? _detailInfo;
         private readonly List<PickingDetail.PackageItem> _packageItems;
@@ -328,7 +336,13 @@ namespace EvangPL.Views.PickingDetail
                 CornerRadius = 8,
                 Margin = new Thickness(0, 10, 0, 0)
             };
-            finishBtn.Clicked += async (s, e) => await OnFinishAndSaveAsync();
+            // ✅ [変更] 保存中は無効化して二重タップを防ぐ（finally で必ず元に戻す）
+            finishBtn.Clicked += async (s, e) =>
+            {
+                finishBtn.IsEnabled = false;
+                try { await OnFinishAndSaveAsync(); }
+                finally { finishBtn.IsEnabled = true; }
+            };
             root.Children.Add(finishBtn);
 
             var scrollView = new ScrollView
@@ -449,7 +463,7 @@ namespace EvangPL.Views.PickingDetail
             // ✅ 品目はクリアせず現在の入力を維持（連続登録の利便性向上）
 
             // ✅ [修正] 数量欄はクリアではなく、追加後の新しい残数量を再セットする
-            RefreshQtyForCurrentItem();
+            if (_entryItemCode != null) _entryItemCode.Text = string.Empty;
 
             RefreshAddedCount();
 
@@ -464,6 +478,85 @@ namespace EvangPL.Views.PickingDetail
             if (_addedCountLabel != null)
             {
                 _addedCountLabel.Text = $"追加済みの梱包({AddedPackageList.Count}件)";
+            }
+        }
+
+        // ==================== 通信（this.Post を使わない安全な実装） ====================
+
+        // ✅ [追加] RESTlet呼び出し共通処理（InputDetail.SafePostAsync と同じ方式）。
+        //    this.Post()（EvangContentVM共通処理）は、RESTletが Success=false を返した場合や
+        //    例外が発生した場合に、共通のエラーページを出したままローディングが閉じず、
+        //    以後ずっと転圈（無応答）になる問題があるため、本画面では使用しない。
+        //    ・LoadingDialog は try/finally で必ず閉じる（成功/失敗/例外/タイムアウトのいずれでも）
+        //    ・Success=false でも共通エラーページは出さず、エラーメッセージを戻り値で返す
+        //      （呼び出し側が DisplayAlert で表示する）
+        //    ・ErrorMessage が空の場合も、必ず空でないメッセージを返す
+        private async Task<(bool Success, string? ErrorMessage, ResponseData<EvangJsonModel, EvangJsonModel>? Data)> SafePostAsync(string restletName, object request)
+        {
+            if (loading == null) loading = new LoadingDialog();
+            await MainThread.InvokeOnMainThreadAsync(() => loading?.LoadingShow(this));
+
+            try
+            {
+                var (token, errMsg) = await oauth2_client.GetValidAccessTokenAsync().ConfigureAwait(false);
+                if (string.IsNullOrEmpty(token))
+                    return (false, errMsg ?? "認証トークンの取得に失敗しました。", null);
+
+                var json = System.Text.Json.JsonSerializer.Serialize(request, request.GetType());
+
+                using var client = new HttpClient();
+                client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+
+                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(60));
+                var response = await client.PostAsync(
+                    LocalMemory.restlets[restletName],
+                    new StringContent(json, Encoding.UTF8, "application/json"),
+                    cts.Token).ConfigureAwait(false);
+
+                var content = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+
+                if (!response.IsSuccessStatusCode)
+                    return (false, $"サーバーエラー ({(int)response.StatusCode}): {content}", null);
+
+                ResponseData<EvangJsonModel, EvangJsonModel>? result;
+                try
+                {
+                    result = System.Text.Json.JsonSerializer.Deserialize<ResponseData<EvangJsonModel, EvangJsonModel>>(content);
+                }
+                catch (Exception parseEx)
+                {
+                    return (false, $"サーバー応答の解析に失敗しました。\n{parseEx.Message}", null);
+                }
+
+                if (result == null)
+                    return (false, "サーバーからの応答がありません。", null);
+
+                if (!result.Success)
+                {
+                    var msg = string.IsNullOrWhiteSpace(result.ErrorMessage)
+                        ? "サーバー側で処理に失敗しました。詳細はNetSuiteのスクリプト実行ログを確認してください。"
+                        : result.ErrorMessage;
+                    return (false, msg, result);
+                }
+
+                return (true, null, result);
+            }
+            catch (OperationCanceledException)
+            {
+                WeakReferenceMessenger.Default.Send(new NetsuiteTimeoutMessage(oauth2_client.ClientId, LocalMemory.restlets[restletName]));
+                return (false, "リクエストがタイムアウトしました。ネットワーク接続を確認してください。", null);
+            }
+            catch (Exception ex)
+            {
+                return (false, ex.Message, null);
+            }
+            finally
+            {
+                await MainThread.InvokeOnMainThreadAsync(() =>
+                {
+                    if (loading != null && loading.LoadingClose())
+                        loading = null;
+                });
             }
         }
 
@@ -483,6 +576,7 @@ namespace EvangPL.Views.PickingDetail
                 {
                     allDetails.Add(new PickingDetailSaveLine
                     {
+                        LineId = item.LineId, // ✅ [追加] RESTlet側で出荷行と1対1に紐付けるために送る
                         PackageNo = packageNo,
                         ItemCode = item.ItemCode,
                         ItemInternalId = !string.IsNullOrEmpty(item.ItemInternalId)
@@ -525,27 +619,15 @@ namespace EvangPL.Views.PickingDetail
                 var request = new RequestData<PickingDetailRequest, EvangJsonModel>(RESTLET_PICKING_DETAIL);
                 request.Info = reqInfo;
 
-                ResponseData<EvangJsonModel, EvangJsonModel>? saveResult = null;
-                try
-                {
-                    saveResult = await this.Post<PickingDetailRequest, EvangJsonModel, EvangJsonModel, EvangJsonModel>(request);
-                }
-                finally
-                {
-                    // ⚠️ TODO: ローディング遮罩を確実に閉じる
-                }
+                // ✅ [変更] this.Post() をやめ、SafePostAsync を使用。
+                //    RESTlet側でエラー（Success=false）になっても、ローディングは必ず閉じ、
+                //    エラーメッセージを自前の DisplayAlert で表示する（共通エラーページ＋転圈を防ぐ）。
+                var (success, errorMessage, saveResult) = await SafePostAsync(RESTLET_PICKING_DETAIL, request);
 
-                if (saveResult == null)
+                if (!success || saveResult == null)
                 {
                     await MainThread.InvokeOnMainThreadAsync(() =>
-                        DisplayAlert("エラー", "サーバーからの応答がありません。", "OK"));
-                    return;
-                }
-
-                if (!saveResult.Success)
-                {
-                    await MainThread.InvokeOnMainThreadAsync(() =>
-                        DisplayAlert("エラー", saveResult.ErrorMessage ?? "保存に失敗しました", "OK"));
+                        DisplayAlert("エラー", errorMessage ?? "保存に失敗しました", "OK"));
                     return;
                 }
 
