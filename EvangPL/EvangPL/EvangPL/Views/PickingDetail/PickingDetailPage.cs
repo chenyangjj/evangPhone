@@ -11,6 +11,10 @@ using System;
 using System.Collections.ObjectModel;
 using System.Collections.Generic;
 using System.Linq;
+using CommunityToolkit.Mvvm.Messaging;
+using EvangSol.Mobibrary.Dialog;
+using EvangSol.Mobibrary.Utilities.Message;
+using System.Text;
 using PickingDetailInfo = EvangPL.Utils.PickingDetailInfo;
 
 namespace EvangPL.Views.PickingDetail
@@ -74,6 +78,10 @@ namespace EvangPL.Views.PickingDetail
         // ✅ RESTlet名・ActionType（InputDetail.cs と同じ流儀で定数化）
         private const string RESTLET_PICKING_DETAIL = "GetPickingDetail";
         private const string ACTION_SEARCH = "SEARCH";
+
+        // ✅ [追加] SafePostAsync 用のローディング表示とOAuth2クライアント
+        public static LoadingDialog? loading;
+        public static OAuth2Client oauth2_client = new();
 
         // ==================== データソース ====================
         // ① 未出荷品目一覧（ヘッダー上部の選択テーブルの対象。品目/未出荷数量/受注数量）
@@ -142,33 +150,14 @@ namespace EvangPL.Views.PickingDetail
                 var request = new RequestData<PickingDetailRequest, EvangJsonModel>(RESTLET_PICKING_DETAIL);
                 request.Info = reqInfo;
 
-                ResponseData<EvangJsonModel, EvangJsonModel>? apiResult = null;
-                try
-                {
-                    apiResult = await this.Post<PickingDetailRequest, EvangJsonModel, EvangJsonModel, EvangJsonModel>(request);
-                }
-                finally
-                {
-                    // ⚠️ TODO: ここでローディング遮罩(オーバーレイ)を確実に閉じる。
-                    // 例: HideLoading();  もしくは  await HideLoadingAsync();
-                    // ※ EvangContentVM / Post 内部で ShowLoading() が呼ばれているかを確認のうえ対応すること。
-                    //   InputDetail.cs 側でも同様のTODOが未対応のまま正常動作しているため、
-                    //   通常のSEARCH/SAVEフローにおいてはPost内部で正しく遮罩が閉じられている可能性が高い。
-                }
+                // ✅ [変更] this.Post() をやめ、SafePostAsync（ローディングは内部の finally で必ず閉じる）を使用
+                var (success, errorMessage, apiResult) = await SafePostAsync(RESTLET_PICKING_DETAIL, request);
 
-                if (apiResult == null)
+                if (!success || apiResult == null)
                 {
                     _packageItems = new List<PackageItem>();
                     await MainThread.InvokeOnMainThreadAsync(() =>
-                        DisplayAlert("エラー", "サーバーからの応答がありません。", "OK"));
-                    return;
-                }
-
-                if (!apiResult.Success)
-                {
-                    _packageItems = new List<PackageItem>();
-                    await MainThread.InvokeOnMainThreadAsync(() =>
-                        DisplayAlert("エラー", apiResult.ErrorMessage ?? "明細の取得に失敗しました", "OK"));
+                        DisplayAlert("エラー", errorMessage ?? "明細の取得に失敗しました", "OK"));
                     return;
                 }
 
@@ -283,6 +272,85 @@ namespace EvangPL.Views.PickingDetail
             }
 
             return newList;
+        }
+
+        // ==================== 通信（this.Post を使わない安全な実装） ====================
+
+        // ✅ [追加] RESTlet呼び出し共通処理（InputDetail.SafePostAsync と同じ方式）。
+        //    this.Post()（EvangContentVM共通処理）は、RESTletが Success=false を返した場合や
+        //    例外が発生した場合に、共通のエラーページを出したままローディングが閉じず、
+        //    以後ずっと転圈（無応答）になる問題があるため、本画面では使用しない。
+        //    ・LoadingDialog は try/finally で必ず閉じる（成功/失敗/例外/タイムアウトのいずれでも）
+        //    ・Success=false でも共通エラーページは出さず、エラーメッセージを戻り値で返す
+        //      （呼び出し側が DisplayAlert で表示する）
+        //    ・ErrorMessage が空の場合も、必ず空でないメッセージを返す
+        private async Task<(bool Success, string? ErrorMessage, ResponseData<EvangJsonModel, EvangJsonModel>? Data)> SafePostAsync(string restletName, object request)
+        {
+            if (loading == null) loading = new LoadingDialog();
+            await MainThread.InvokeOnMainThreadAsync(() => loading?.LoadingShow(this));
+
+            try
+            {
+                var (token, errMsg) = await oauth2_client.GetValidAccessTokenAsync().ConfigureAwait(false);
+                if (string.IsNullOrEmpty(token))
+                    return (false, errMsg ?? "認証トークンの取得に失敗しました。", null);
+
+                var json = System.Text.Json.JsonSerializer.Serialize(request, request.GetType());
+
+                using var client = new HttpClient();
+                client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+
+                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(60));
+                var response = await client.PostAsync(
+                    LocalMemory.restlets[restletName],
+                    new StringContent(json, Encoding.UTF8, "application/json"),
+                    cts.Token).ConfigureAwait(false);
+
+                var content = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+
+                if (!response.IsSuccessStatusCode)
+                    return (false, $"サーバーエラー ({(int)response.StatusCode}): {content}", null);
+
+                ResponseData<EvangJsonModel, EvangJsonModel>? result;
+                try
+                {
+                    result = System.Text.Json.JsonSerializer.Deserialize<ResponseData<EvangJsonModel, EvangJsonModel>>(content);
+                }
+                catch (Exception parseEx)
+                {
+                    return (false, $"サーバー応答の解析に失敗しました。\n{parseEx.Message}", null);
+                }
+
+                if (result == null)
+                    return (false, "サーバーからの応答がありません。", null);
+
+                if (!result.Success)
+                {
+                    var msg = string.IsNullOrWhiteSpace(result.ErrorMessage)
+                        ? "サーバー側で処理に失敗しました。詳細はNetSuiteのスクリプト実行ログを確認してください。"
+                        : result.ErrorMessage;
+                    return (false, msg, result);
+                }
+
+                return (true, null, result);
+            }
+            catch (OperationCanceledException)
+            {
+                WeakReferenceMessenger.Default.Send(new NetsuiteTimeoutMessage(oauth2_client.ClientId, LocalMemory.restlets[restletName]));
+                return (false, "リクエストがタイムアウトしました。ネットワーク接続を確認してください。", null);
+            }
+            catch (Exception ex)
+            {
+                return (false, ex.Message, null);
+            }
+            finally
+            {
+                await MainThread.InvokeOnMainThreadAsync(() =>
+                {
+                    if (loading != null && loading.LoadingClose())
+                        loading = null;
+                });
+            }
         }
 
         // ==================== UI構築 ====================
@@ -556,7 +624,9 @@ namespace EvangPL.Views.PickingDetail
                 tableGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
                 var item = _packageItems[r];
-                bool isSelected = _selectedPackage != null && _selectedPackage.ItemCode == item.ItemCode;
+                // ✅ [変更] 同一品目が複数行ある場合に全て選択状態にならないよう、ItemCode ではなく
+                //    行そのもの（同一インスタンス）で判定する
+                bool isSelected = _selectedPackage != null && ReferenceEquals(_selectedPackage, item);
                 var rowBg = isSelected ? SelectedRowColor : Colors.White;
 
                 // 列0=品目 / 列1=未出荷数量 / 列2=受注数量
@@ -1299,6 +1369,10 @@ namespace EvangPL.Views.PickingDetail
         /// </summary>
         public class PackageItem
         {
+            // ✅ [追加] 受注/振替/返品オーダーの明細行ID。同一品目が複数行ある場合に
+            //    RESTlet側で出荷行(fulfillment line)と1対1に紐付けるために使用する。
+            //    ※ RESTlet(GetPickingDetail)の PACKAGE_ITEMS が "LineId" を返す必要がある。
+            public string LineId { get; set; } = string.Empty;
             public string ItemCode { get; set; } = string.Empty;
             // 品目の内部ID（NetSuiteのitem内部ID）。
             // RL保存時にItemCode(表示テキスト)ではなくこちらでラインを照合するために使用する。
@@ -1371,6 +1445,8 @@ namespace EvangPL.Views.PickingDetail
     public class PickingDetailSaveLine
     {
         public string PackageNo { get; set; } = "";
+        // ✅ [追加] 明細行ID（PackageItem.LineId）。RESTlet側で出荷行と1対1に紐付ける
+        public string LineId { get; set; } = "";
         public string ItemCode { get; set; } = "";
         // RL側で fulfillment の各行(sublist item)を照合するためのキー。
         // ItemCode(表示テキスト)は表記ゆれで一致しない可能性があるため、こちらを正として使用する。
