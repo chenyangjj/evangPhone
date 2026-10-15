@@ -65,6 +65,17 @@ namespace EvangPL.Views.PickingDetail
     ///      また、振替の移動元/移動先テキストは項目名が長くなりやすいため、
     ///      顧客名(SO)用の太字14ptに固定せず、TRの場合はやや小さめ(12pt/非Bold)の
     ///      表示に切り替えて画面5のカード表示と見た目を揃える。
+    ///
+    /// ✅ [今回の修正分・追加3・単位表示]
+    ///   9. 入庫詳細画面(InputDetail.cs)と同じ流儀で、RESTlet②(SEARCH)の PACKAGE_ITEMS が返す
+    ///      Units（単位文字列。空の場合あり）を、以下の全箇所で数量に付けて表示する：
+    ///        ・未出荷品目選択テーブルの「未出荷数量」「受注数量」
+    ///        ・明細登録エリアの数量欄の単位ラベル
+    ///        ・選択中品目の登録済み明細プレビュー表の「数量」
+    ///        ・底部の全品目分の登録済み明細一覧の「数量」
+    ///      Units が空/未取得の場合は GetUnitDisplay() が「個」を返す（既存表示と同じ）。
+    ///      ※ RESTlet②の PACKAGE_ITEMS に Units フィールドを追加してもらう必要がある
+    ///        （RESTlet側は Units: stringformat(r.units) の形で返却する想定）。
     /// </summary>
     public class PickingDetail : EvangContentVM
     {
@@ -234,7 +245,7 @@ namespace EvangPL.Views.PickingDetail
         }
 
         // ✅ SubData の中から SubName="PACKAGE_ITEMS" を取り出してパースする
-        //    RESTlet側は {ItemCode, ItemInternalId, IsLotItem, IsSerialItem, LocationId, LocationName, OrderedQty, UnshippedQty} を返す
+        //    RESTlet側は {LineId, ItemCode, ItemInternalId, IsLotItem, IsSerialItem, Units, LocationId, LocationName, OrderedQty, UnshippedQty} を返す
         //    （未出荷数量が0以下の行は含まれない）
         private List<PackageItem> ParsePackageItems(ResponseData<EvangJsonModel, EvangJsonModel> apiResult)
         {
@@ -261,6 +272,7 @@ namespace EvangPL.Views.PickingDetail
                         p.ItemInternalId ??= ""; // RESTletが未返却の場合の保険
                         p.LocationId ??= "";
                         p.LocationName ??= "";
+                        p.Units ??= "";          // ✅ [追加] RESTletが Units を未返却の場合の保険
                         p.Details ??= new List<PackageDetail>();
                         newList.Add(p);
                     }
@@ -351,6 +363,16 @@ namespace EvangPL.Views.PickingDetail
                         loading = null;
                 });
             }
+        }
+
+        // ==================== 単位表示ヘルパー ====================
+
+        // ✅ [追加] 単位表示の統一ヘルパー（InputDetail.cs と同一実装）。
+        //    RESTlet② の PACKAGE_ITEMS から返る Units が空/未取得の場合は「個」を表示する。
+        //    テーブル・数量欄など、全ての単位表示箇所でこのメソッドを通す。
+        private static string GetUnitDisplay(string? unit)
+        {
+            return string.IsNullOrWhiteSpace(unit) ? "個" : unit!;
         }
 
         // ==================== UI構築 ====================
@@ -648,8 +670,10 @@ namespace EvangPL.Views.PickingDetail
                     Children = { itemCodeLabel, itemInternalIdHiddenLabel }
                 };
 
-                var unshippedLabel = new Label { Text = item.UnshippedQty.ToString(), FontSize = 11, Padding = new Thickness(4), BackgroundColor = rowBg };
-                var orderedLabel = new Label { Text = item.OrderedQty.ToString(), FontSize = 11, Padding = new Thickness(4), BackgroundColor = rowBg };
+                // ✅ [変更] 未出荷数量・受注数量：単位（item.Units）を付ける。空なら「個」。
+                var unitText = GetUnitDisplay(item.Units);
+                var unshippedLabel = new Label { Text = $"{item.UnshippedQty}{unitText}", FontSize = 11, Padding = new Thickness(4), BackgroundColor = rowBg };
+                var orderedLabel = new Label { Text = $"{item.OrderedQty}{unitText}", FontSize = 11, Padding = new Thickness(4), BackgroundColor = rowBg };
 
                 tableGrid.Add(itemCodeCell, 0, dataRowIndex);
                 tableGrid.Add(unshippedLabel, 1, dataRowIndex);
@@ -837,12 +861,13 @@ namespace EvangPL.Views.PickingDetail
 
             // 3. 数量
             layout.Children.Add(new Label { Text = "数量", FontSize = 12, TextColor = Colors.Black });
+            // ✅ [変更] 数量欄：単位表示を品目単位に合わせるため、2列目の幅を Auto に変更
             var qtyRow = new Grid
             {
                 ColumnDefinitions =
                 {
                     new ColumnDefinition { Width = GridLength.Star },
-                    new ColumnDefinition { Width = 60 }
+                    new ColumnDefinition { Width = GridLength.Auto }   // ✅ [変更] 単位文字列の長さに追従
                 }
             };
             _entryQty = new Entry { Placeholder = "数量を入力", Keyboard = Keyboard.Numeric, BackgroundColor = Colors.Transparent };
@@ -856,7 +881,16 @@ namespace EvangPL.Views.PickingDetail
                 }
             };
             qtyRow.Add(WrapInputControl(_entryQty), 0, 0);
-            qtyRow.Add(new Label { Text = "個", VerticalOptions = LayoutOptions.Center, HorizontalTextAlignment = TextAlignment.Center }, 1, 0);
+
+            // ✅ [変更] 数量欄の単位：PO明細行の Units を優先。空なら「個」。
+            var currentUnitText = GetUnitDisplay(currentPackage.Units);
+            qtyRow.Add(new Label
+            {
+                Text = currentUnitText,
+                VerticalOptions = LayoutOptions.Center,
+                HorizontalTextAlignment = TextAlignment.Center,
+                Padding = new Thickness(6, 0, 0, 0)
+            }, 1, 0);
             layout.Children.Add(qtyRow);
 
             // ✅ [追加] シリアル管理品目の場合は「数量は1のみ」の注記を表示する
@@ -1057,7 +1091,10 @@ namespace EvangPL.Views.PickingDetail
 
                 var detail = items[r];
                 tableGrid.Add(new Label { Text = detail.DetailNo, FontSize = 11, Padding = new Thickness(4) }, 0, dataRowIndex);
-                tableGrid.Add(new Label { Text = $"{detail.DetailQty}個", FontSize = 11, Padding = new Thickness(4) }, 1, dataRowIndex);
+
+                // ✅ [変更] 数量表示：単位（detail.Unit）を付ける。空なら「個」。
+                var qtyText = $"{detail.DetailQty}{GetUnitDisplay(detail.Unit)}";
+                tableGrid.Add(new Label { Text = qtyText, FontSize = 11, Padding = new Thickness(4) }, 1, dataRowIndex);
 
                 var deleteLabel = new Label
                 {
@@ -1164,6 +1201,8 @@ namespace EvangPL.Views.PickingDetail
             {
                 DetailNo = detailNo ?? string.Empty,
                 DetailQty = qty,
+                // ✅ [追加] この明細行の単位（表示用。空なら GetUnitDisplay 側で「個」にフォールバック）
+                Unit = _selectedPackage.Units,
                 Location = matchedLocation?.Id ?? "",
                 LocationName = selectedLocationName
             });
@@ -1247,7 +1286,10 @@ namespace EvangPL.Views.PickingDetail
                 var item = allDetails[r];
                 tableGrid.Add(new Label { Text = item.Package.ItemCode, FontSize = 11, Padding = new Thickness(4) }, 0, dataRowIndex);
                 tableGrid.Add(new Label { Text = item.Detail.DetailNo, FontSize = 11, Padding = new Thickness(4) }, 1, dataRowIndex);
-                tableGrid.Add(new Label { Text = $"{item.Detail.DetailQty}個", FontSize = 11, Padding = new Thickness(4) }, 2, dataRowIndex);
+
+                // ✅ [変更] 数量表示：単位（item.Detail.Unit）を付ける。空なら「個」。
+                var qtyText = $"{item.Detail.DetailQty}{GetUnitDisplay(item.Detail.Unit)}";
+                tableGrid.Add(new Label { Text = qtyText, FontSize = 11, Padding = new Thickness(4) }, 2, dataRowIndex);
             }
 
             var tableBorder = new Border
@@ -1355,6 +1397,9 @@ namespace EvangPL.Views.PickingDetail
         {
             public string DetailNo { get; set; } = string.Empty;   // ロット番号（シリアル管理品目の場合はシリアル番号）
             public int DetailQty { get; set; }
+            // ✅ [追加] この明細行の単位（RESTlet② の PACKAGE_ITEMS.Units から取得した値をそのまま保持）。
+            //    表示用。空/未取得の場合は表示側 GetUnitDisplay() が「個」を返す。
+            public string Unit { get; set; } = string.Empty;
             // ✅ Location はNetSuiteの内部ID（SAVE時にそのままRESTletへ渡し、select項目の設定に使う）
             //    LocationName は画面表示専用（プルダウンで選んだテキスト）
             public string Location { get; set; } = string.Empty;
@@ -1363,7 +1408,7 @@ namespace EvangPL.Views.PickingDetail
 
         /// <summary>
         /// 未出荷品目1行分。RESTlet②(SEARCH)のPACKAGE_ITEMSと1:1対応
-        /// （ItemCode/ItemInternalId/IsLotItem/IsSerialItem/LocationId/LocationName/OrderedQty/UnshippedQty）。
+        /// （ItemCode/ItemInternalId/IsLotItem/IsSerialItem/Units/LocationId/LocationName/OrderedQty/UnshippedQty）。
         /// Details は画面7-1でユーザーが入力したロット/ロケーション/数量の登録済み明細で、サーバーには送らず
         /// クライアント側で保持したまま画面7-2へ引き渡す。
         /// </summary>
@@ -1377,6 +1422,11 @@ namespace EvangPL.Views.PickingDetail
             // 品目の内部ID（NetSuiteのitem内部ID）。
             // RL保存時にItemCode(表示テキスト)ではなくこちらでラインを照合するために使用する。
             public string ItemInternalId { get; set; } = string.Empty;
+
+            // ✅ [追加] 単位（RESTlet② の PACKAGE_ITEMS が返す Units。空文字の場合あり）。
+            //    数量表示の単位ラベルとして使用する。空の場合は GetUnitDisplay() が「個」を返す。
+            //    ※ RESTlet側 JSON のキーは "Units"（先頭大文字）。入庫 RESTlet の "units" とは異なる点に注意。
+            public string Units { get; set; } = string.Empty;
 
             // ✅ [修正] ロット管理対象品目かどうか。
             //    null  = RESTletが未返却（編集可として扱う）
