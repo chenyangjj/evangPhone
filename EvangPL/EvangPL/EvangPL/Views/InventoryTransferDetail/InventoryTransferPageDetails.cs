@@ -16,7 +16,6 @@ namespace EvangPL.Views.InventoryTransferPageDetails
 {
     public class InventoryTransferPageDetails : EvangContentVM
     {
-        // UI コントロール参照
         private VerticalStackLayout? _scrollContainer;
         private Entry? _itemEntry;
         private VerticalStackLayout? _lotSectionContainer;
@@ -32,7 +31,6 @@ namespace EvangPL.Views.InventoryTransferPageDetails
         private HorizontalStackLayout? _lotBarcodeBars;
         private Button? _addLotButton;
 
-        // 状態フィールド
         private readonly List<PendingLotItem> _pendingLots = new List<PendingLotItem>();
         private readonly List<TransferDetailItem> _details = new List<TransferDetailItem>();
         private int _editingDetailIndex = -1;
@@ -52,8 +50,9 @@ namespace EvangPL.Views.InventoryTransferPageDetails
         private string? _currentItemCode;
         private bool _currentItemIsLot;
         private bool _currentItemIsSerial;
+        private Label? _qtyUnitLabel;
+        private string _currentItemUnit = "個";
 
-        // 色定数
         private static readonly Color InputBorderColor = Color.FromArgb("#cdd2dc");
         private static readonly Color InputBackgroundColor = Colors.White;
         private const int InputCornerRadius = 6;
@@ -69,17 +68,11 @@ namespace EvangPL.Views.InventoryTransferPageDetails
         private const int ButtonHeight = 35;
         private const int ButtonCornerRadius = 5;
 
-        // ==========================================
-        // ★ リスト内の未保存空白行（新規入力用）を取得するヘルパー
-        // ==========================================
         private TransferDetailItem? GetExistingBlankDetail()
         {
             return _details.FirstOrDefault(d => string.IsNullOrWhiteSpace(d.ItemCode));
         }
 
-        // ==========================================
-        // コンストラクタ
-        // ==========================================
         public InventoryTransferPageDetails() : this(null)
         {
         }
@@ -105,9 +98,6 @@ namespace EvangPL.Views.InventoryTransferPageDetails
             BuildUI();
         }
 
-        // ==========================================
-        // 画面構築
-        // ==========================================
         private async void BuildUI()
         {
             await GetLocaData("locadata");
@@ -133,7 +123,6 @@ namespace EvangPL.Views.InventoryTransferPageDetails
 
             _topTableHost = new ContentView { IsVisible = true };
 
-            // ★ 「現在の明細を保存」ボタン（保存ボタンの上に配置）
             var saveDetailBtn = new Button
             {
                 Text = "現在の明細を保存",
@@ -146,7 +135,6 @@ namespace EvangPL.Views.InventoryTransferPageDetails
             };
             saveDetailBtn.Clicked += OnSaveDetailClicked;
 
-            // 保存ボタン
             var saveBtn = new Button
             {
                 Text = "保存",
@@ -164,8 +152,8 @@ namespace EvangPL.Views.InventoryTransferPageDetails
             _scrollContainer.Children.Add(_topTableHost);
             _scrollContainer.Children.Add(detailInputArea);
             _scrollContainer.Children.Add(_bottomPendingTableHost);
-            _scrollContainer.Children.Add(saveDetailBtn);   // ★ 上
-            _scrollContainer.Children.Add(saveBtn);         // ★ 下
+            _scrollContainer.Children.Add(saveDetailBtn);
+            _scrollContainer.Children.Add(saveBtn);
 
             var scrollView = new ScrollView
             {
@@ -183,9 +171,6 @@ namespace EvangPL.Views.InventoryTransferPageDetails
             RefreshBottomPendingTable();
         }
 
-        // ==========================================
-        // ページ最上部：移動元 / 移動先エリア
-        // ==========================================
         private Border BuildLocationArea()
         {
             var outerLayout = new VerticalStackLayout { Spacing = 10 };
@@ -219,7 +204,6 @@ namespace EvangPL.Views.InventoryTransferPageDetails
                 ColumnSpacing = 8
             };
 
-            // 左：移動元
             var fromLayout = new VerticalStackLayout { Spacing = 4 };
             fromLayout.Children.Add(new Label
             {
@@ -256,7 +240,6 @@ namespace EvangPL.Views.InventoryTransferPageDetails
             fromLayout.Children.Add(fromBorder);
             innerGrid.Add(fromLayout, 0, 0);
 
-            // 中央：矢印
             var arrowLabel = new Label
             {
                 Text = "→",
@@ -269,7 +252,6 @@ namespace EvangPL.Views.InventoryTransferPageDetails
             };
             innerGrid.Add(arrowLabel, 1, 0);
 
-            // 右：移動先
             var toLayout = new VerticalStackLayout { Spacing = 4 };
             toLayout.Children.Add(new Label
             {
@@ -319,9 +301,6 @@ namespace EvangPL.Views.InventoryTransferPageDetails
             };
         }
 
-        // ==========================================
-        // 明細登録エリア
-        // ==========================================
         private Border BuildDetailInputArea()
         {
             var border = new Border
@@ -343,7 +322,8 @@ namespace EvangPL.Views.InventoryTransferPageDetails
                 HeightRequest = 16,
                 VerticalOptions = LayoutOptions.Center
             });
-            titleRow.Children.Add(new Label { 
+            titleRow.Children.Add(new Label
+            {
                 Text = "明細登録",
                 FontSize = 13,
                 FontAttributes = FontAttributes.Bold
@@ -375,7 +355,6 @@ namespace EvangPL.Views.InventoryTransferPageDetails
             itemRow.Add(WrapInputControl(_itemEntry), 0, 0);
             itemRow.Add(BuildBarcodeIcon((scannedCode) =>
             {
-                // ★ 品目入力欄に反映（TextChanged が自動で検索をトリガー）
                 if (_itemEntry != null)
                 {
                     _itemEntry.Text = scannedCode;
@@ -383,7 +362,6 @@ namespace EvangPL.Views.InventoryTransferPageDetails
             }), 1, 0);
             layout.Children.Add(itemRow);
 
-            // ロット関連
             _lotSectionContainer = new VerticalStackLayout
             {
                 Spacing = 10,
@@ -448,8 +426,6 @@ namespace EvangPL.Views.InventoryTransferPageDetails
             var lotBarcodeTap = new TapGestureRecognizer();
             lotBarcodeTap.Tapped += async (s, e) =>
             {
-                // スキャン結果を _lotEntry に反映する。
-                // ScanHelper は Navigation を要求するので、現在のページの Navigation をそのまま渡す。
                 await ScanHelper.ScanAsync(Navigation, (scannedCode) =>
                 {
                     if (string.IsNullOrEmpty(scannedCode)) return;
@@ -458,7 +434,6 @@ namespace EvangPL.Views.InventoryTransferPageDetails
                     {
                         if (_lotEntry != null)
                         {
-                            // スキャン結果をロット/シリアル欄へ反映
                             _lotEntry.Text = scannedCode;
                         }
                     });
@@ -493,7 +468,6 @@ namespace EvangPL.Views.InventoryTransferPageDetails
                 PlaceholderColor = Colors.Gray
             };
 
-        
             _qtyEntry.TextChanged += (s, e) =>
             {
                 if (string.IsNullOrEmpty(e.NewTextValue)) return;
@@ -506,12 +480,13 @@ namespace EvangPL.Views.InventoryTransferPageDetails
 
             _qtyEntryBorder = WrapInputControl(_qtyEntry);
             qtyRow.Add(_qtyEntryBorder, 0, 0);
-            qtyRow.Add(new Label
+            _qtyUnitLabel = new Label
             {
                 Text = "個",
                 VerticalOptions = LayoutOptions.Center,
                 HorizontalTextAlignment = TextAlignment.Center
-            }, 1, 0);
+            };
+            qtyRow.Add(_qtyUnitLabel, 1, 0);
             _lotSectionContainer.Children.Add(qtyRow);
 
             _pendingLotTableHost = new ContentView { Content = BuildEditableLotTableForPending() };
@@ -537,9 +512,6 @@ namespace EvangPL.Views.InventoryTransferPageDetails
             return border;
         }
 
-        // ==========================================
-        // lot 入力関連の有効/無効切替
-        // ==========================================
         private void SetLotInputEnabled(bool enabled)
         {
             if (_lotEntry != null)
@@ -590,9 +562,6 @@ namespace EvangPL.Views.InventoryTransferPageDetails
             }
         }
 
-        // ==========================================
-        // 明細保存前に品目タイプをチェック
-        // ==========================================
         private async Task<(bool Success, string? ErrorMessage)> CheckItemTypeAsync(string itemCode, List<PendingLotItem>? lots, int? fromLocationId, string? fromLocationName)
         {
             try
@@ -637,37 +606,33 @@ namespace EvangPL.Views.InventoryTransferPageDetails
             }
         }
 
-        // ==========================================
-        // ★ 明細保存ボタン押下時
-        // ==========================================
         private async void OnSaveDetailClicked(object? sender, EventArgs e)
         {
-            
-                try
+            try
+            {
+                var selectedLocation = fromPicker?.SelectedItem as LocationData;
+                if (selectedLocation == null || selectedLocation.id == null)
                 {
-                    var selectedLocation = fromPicker?.SelectedItem as LocationData;
-                    if (selectedLocation == null || selectedLocation.id == null)
-                    {
-                        await DisplayAlert("エラー", "移動元ロケーションを選択してください。", "OK");
-                        return;
-                    }
-                    int? fromlocationId = selectedLocation.id;
+                    await DisplayAlert("エラー", "移動元ロケーションを選択してください。", "OK");
+                    return;
+                }
+                int? fromlocationId = selectedLocation.id;
 
-                    var selectedLocationto = toPicker?.SelectedItem as LocationData;
-                    if (selectedLocationto == null || selectedLocationto.id == null)
-                    {
-                        await DisplayAlert("エラー", "移動先ロケーションを選択してください。", "OK");
-                        return;
-                    }
-                    int? tolocationId = selectedLocationto.id;
+                var selectedLocationto = toPicker?.SelectedItem as LocationData;
+                if (selectedLocationto == null || selectedLocationto.id == null)
+                {
+                    await DisplayAlert("エラー", "移動先ロケーションを選択してください。", "OK");
+                    return;
+                }
+                int? tolocationId = selectedLocationto.id;
 
-                    if (fromlocationId.Value == tolocationId.Value)
-                    {
-                        await DisplayAlert("エラー", "移動元と移動先に同じロケーションは選択できません。", "OK");
-                        return;
-                    }
+                if (fromlocationId.Value == tolocationId.Value)
+                {
+                    await DisplayAlert("エラー", "移動元と移動先に同じロケーションは選択できません。", "OK");
+                    return;
+                }
 
-                    var itemCode = _itemEntry?.Text?.Trim();
+                var itemCode = _itemEntry?.Text?.Trim();
                 if (string.IsNullOrEmpty(itemCode))
                 {
                     await DisplayAlert("エラー", "品目を入力してください。", "OK");
@@ -683,7 +648,6 @@ namespace EvangPL.Views.InventoryTransferPageDetails
                     return;
                 }
 
-                //  非 Lot 品目の数量チェックを細分化（負値・0を明確にエラー化）
                 int nonLotQty = 0;
                 if (!_currentItemIsLot)
                 {
@@ -706,7 +670,6 @@ namespace EvangPL.Views.InventoryTransferPageDetails
                     }
                 }
 
-                // 全ての前台チェック通過後、保存前に品目タイプチェック
                 var checkLots = _pendingLots.Select(x => new PendingLotItem { ItemCode = x.ItemCode, LotNo = x.LotNo, Qty = x.Qty }).ToList();
                 var (checkSuccess, checkError) = await CheckItemTypeAsync(itemCode, checkLots, fromLoc?.id, fromLoc?.name);
                 if (!checkSuccess)
@@ -719,7 +682,8 @@ namespace EvangPL.Views.InventoryTransferPageDetails
                 {
                     ItemCode = x.ItemCode,
                     LotNo = x.LotNo,
-                    Qty = x.Qty
+                    Qty = x.Qty,
+                    Unit = x.Unit
                 }).ToList();
 
                 if (!_currentItemIsLot && detailLots.Count == 0)
@@ -728,7 +692,8 @@ namespace EvangPL.Views.InventoryTransferPageDetails
                     {
                         ItemCode = itemCode,
                         LotNo = "",
-                        Qty = nonLotQty
+                        Qty = nonLotQty,
+                        Unit = string.IsNullOrEmpty(_currentItemUnit) ? "個" : _currentItemUnit
                     });
                 }
 
@@ -781,9 +746,6 @@ namespace EvangPL.Views.InventoryTransferPageDetails
             }
         }
 
-        // ==========================================
-        // ★ フォームを初期状態に戻す
-        // ==========================================
         private void ClearForm()
         {
             _suppressItemSearch = true;
@@ -799,6 +761,9 @@ namespace EvangPL.Views.InventoryTransferPageDetails
             _currentItemIsSerial = false;
             islotflag = false;
 
+            _currentItemUnit = "個";
+            if (_qtyUnitLabel != null) _qtyUnitLabel.Text = "個";
+
             if (_lotSectionContainer != null)
                 _lotSectionContainer.IsVisible = true;
             SetLotInputEnabled(false);
@@ -808,9 +773,6 @@ namespace EvangPL.Views.InventoryTransferPageDetails
             RefreshBottomPendingTable();
         }
 
-        // ==========================================
-        // 顶部表格 再描画
-        // ==========================================
         private void RefreshTopTable()
         {
             if (_topTableHost == null) return;
@@ -819,9 +781,6 @@ namespace EvangPL.Views.InventoryTransferPageDetails
             _topTableHost.IsVisible = true;
         }
 
-        // ==========================================
-        // 顶部表格 ビルド
-        // ==========================================
         private Border BuildTopTable()
         {
             var headers = new List<string> { "品目", "数量", "" };
@@ -880,7 +839,7 @@ namespace EvangPL.Views.InventoryTransferPageDetails
                 };
                 var qtyLabel = new Label
                 {
-                    Text = $"{detail.TotalQty}個",
+                    Text = $"{detail.TotalQty}{detail.Unit ?? "個"}",
                     FontSize = 11,
                     Padding = new Thickness(4),
                     BackgroundColor = rowBg,
@@ -931,9 +890,6 @@ namespace EvangPL.Views.InventoryTransferPageDetails
             return tableBorder;
         }
 
-        // ==========================================
-        // 行タップ → フォームへ回显
-        // ==========================================
         private void OnTopTableRowSelected(int index)
         {
             if (index < 0 || index >= _details.Count) return;
@@ -945,9 +901,6 @@ namespace EvangPL.Views.InventoryTransferPageDetails
             RefreshBottomPendingTable();
         }
 
-        // ==========================================
-        // 明細をフォームへ展開
-        // ==========================================
         private void LoadDetailToForm(TransferDetailItem detail)
         {
             _suppressItemSearch = true;
@@ -975,7 +928,8 @@ namespace EvangPL.Views.InventoryTransferPageDetails
                     {
                         ItemCode = l.ItemCode,
                         LotNo = l.LotNo,
-                        Qty = l.Qty
+                        Qty = l.Qty,
+                        Unit = l.Unit
                     });
                 }
                 if (_qtyEntry != null) _qtyEntry.Text = "";
@@ -987,9 +941,12 @@ namespace EvangPL.Views.InventoryTransferPageDetails
 
             _currentItemCode = detail.ItemCode;
             _currentItemIsLot = detail.IsLotItem;
-            // 編集時はシリアルフラグも復元（IsLotItem=true の場合のみ）
             _currentItemIsSerial = false;
             islotflag = detail.IsLotItem;
+
+            _currentItemUnit = string.IsNullOrEmpty(detail.Unit) ? "個" : detail.Unit;
+            if (_qtyUnitLabel != null)
+                _qtyUnitLabel.Text = _currentItemUnit;
 
             if (_lotSectionContainer != null)
                 _lotSectionContainer.IsVisible = true;
@@ -998,9 +955,6 @@ namespace EvangPL.Views.InventoryTransferPageDetails
             RefreshPendingLotTable();
         }
 
-        // ==========================================
-        // ★ 明細削除（確認ダイアログ付き）
-        // ==========================================
         private async Task OnDeleteDetailAsync(int index)
         {
             if (index < 0 || index >= _details.Count) return;
@@ -1048,9 +1002,6 @@ namespace EvangPL.Views.InventoryTransferPageDetails
             RefreshBottomPendingTable();
         }
 
-        // ==========================================
-        // 保存ボタン押下時
-        // ==========================================
         private async void OnSaveClicked(object? sender, EventArgs e)
         {
             try
@@ -1084,10 +1035,10 @@ namespace EvangPL.Views.InventoryTransferPageDetails
                     {
                         ItemCode = x.ItemCode,
                         LotNo = x.LotNo,
-                        Qty = x.Qty
+                        Qty = x.Qty,
+                        Unit = x.Unit
                     }).ToList();
 
-                    //  未入力・解析失敗・負値・0 をすべて明示的にエラー化（サイレント破棄を廃止）
                     if (!_currentItemIsLot && pendingLots.Count == 0)
                     {
                         var qtyText = _qtyEntry?.Text?.Trim();
@@ -1117,7 +1068,8 @@ namespace EvangPL.Views.InventoryTransferPageDetails
                         {
                             ItemCode = currentItemCode,
                             LotNo = "",
-                            Qty = qtyVal
+                            Qty = qtyVal,
+                            Unit = string.IsNullOrEmpty(_currentItemUnit) ? "個" : _currentItemUnit
                         });
                     }
 
@@ -1150,7 +1102,6 @@ namespace EvangPL.Views.InventoryTransferPageDetails
                     return;
                 }
 
-                //  保存前の最終チェック（全ロット数量が非負かつ非ゼロであること）
                 foreach (var d in validDetails)
                 {
                     foreach (var lot in d.Lots)
@@ -1230,9 +1181,6 @@ namespace EvangPL.Views.InventoryTransferPageDetails
             }
         }
 
-        // ==========================================
-        // 品目入力変化時
-        // ==========================================
         private async void OnItemTextChanged(object? sender, TextChangedEventArgs e)
         {
             if (_suppressItemSearch) return;
@@ -1252,7 +1200,6 @@ namespace EvangPL.Views.InventoryTransferPageDetails
             }
         }
 
-        // IsLotItem返回值变成 "1"(Lot) / "2"(Serial) / "3"(Other)
         private async Task SearchItemByKeywordAsync(string? keyword)
         {
             _itemSearchCts?.Cancel();
@@ -1263,6 +1210,7 @@ namespace EvangPL.Views.InventoryTransferPageDetails
 
             if (string.IsNullOrEmpty(text))
             {
+                _currentItemUnit = "個";
                 ApplyItemDetail(false, false);
                 return;
             }
@@ -1294,15 +1242,22 @@ namespace EvangPL.Views.InventoryTransferPageDetails
                     {
                         if (item?.SubName == "PH_ISLOT")
                         {
-                            // ★ "1"=通常Lot, "2"=シリアルLot
-                            if (item.SubJson == "1")
+                            var rawJson = item.SubJson;
+
+                            var islotInfo = BaseUtils.JsonToClass<IslotInfo>(rawJson);
+                            if (islotInfo != null)
                             {
-                                islotflag = true;
-                            }
-                            else if (item.SubJson == "2")
-                            {
-                                islotflag = true;
-                                isSerial = true;
+                                if (islotInfo.islot == "1")
+                                {
+                                    islotflag = true;
+                                }
+                                else if (islotInfo.islot == "2")
+                                {
+                                    islotflag = true;
+                                    isSerial = true;
+                                }
+
+                                _currentItemUnit = string.IsNullOrEmpty(islotInfo.unit) ? "個" : islotInfo.unit;
                             }
                             break;
                         }
@@ -1323,7 +1278,6 @@ namespace EvangPL.Views.InventoryTransferPageDetails
             }
         }
 
-        // isSerial パラメータ追加
         private void ApplyItemDetail(bool isLotItem, bool isSerial)
         {
             _currentItemCode = _itemEntry?.Text?.Trim();
@@ -1339,12 +1293,14 @@ namespace EvangPL.Views.InventoryTransferPageDetails
                 _pendingLots.Clear();
             }
 
+            if (_qtyUnitLabel != null)
+            {
+                _qtyUnitLabel.Text = string.IsNullOrEmpty(_currentItemUnit) ? "個" : _currentItemUnit;
+            }
+
             RefreshPendingLotTable();
         }
 
-        // ==========================================
-        // +ロットを追加
-        // ==========================================
         private async void OnAddLotButtonClicked(object? sender, EventArgs e)
         {
             try
@@ -1364,7 +1320,6 @@ namespace EvangPL.Views.InventoryTransferPageDetails
                     return;
                 }
 
-                //  パース失敗 / 負値 / 0 を個別にチェック
                 if (!int.TryParse(qtyText, out int qty))
                 {
                     await DisplayAlert("エラー", "移動数量を正しく入力してください。", "OK");
@@ -1381,7 +1336,6 @@ namespace EvangPL.Views.InventoryTransferPageDetails
                     return;
                 }
 
-                // シリアルLotの場合、数量は1のみ許可
                 if (_currentItemIsSerial && qty > 1)
                 {
                     await DisplayAlert("エラー", "シリアル番号管理品目の場合、数量は1のみ入力可能です。", "OK");
@@ -1398,7 +1352,8 @@ namespace EvangPL.Views.InventoryTransferPageDetails
                 {
                     ItemCode = _currentItemCode,
                     LotNo = lotNo,
-                    Qty = qty
+                    Qty = qty,
+                    Unit = string.IsNullOrEmpty(_currentItemUnit) ? "個" : _currentItemUnit
                 });
 
                 if (_lotEntry != null) _lotEntry.Text = string.Empty;
@@ -1413,9 +1368,6 @@ namespace EvangPL.Views.InventoryTransferPageDetails
             }
         }
 
-        // ==========================================
-        // 中間表
-        // ==========================================
         private Border BuildEditableLotTableForPending()
         {
             return BuildEditableLotTableInternal(_pendingLots, showItemColumn: false, onDelete: OnDeletePendingLot);
@@ -1435,9 +1387,6 @@ namespace EvangPL.Views.InventoryTransferPageDetails
             }
         }
 
-        // ==========================================
-        // 底部表
-        // ==========================================
         private List<PendingLotItem> CollectBottomLots()
         {
             var result = new List<PendingLotItem>();
@@ -1489,9 +1438,6 @@ namespace EvangPL.Views.InventoryTransferPageDetails
             return container;
         }
 
-        // ==========================================
-        // 削除ボタン付き一覧テーブル
-        // ==========================================
         private Border BuildEditableLotTableInternal(
             List<PendingLotItem> items,
             bool showItemColumn,
@@ -1580,7 +1526,7 @@ namespace EvangPL.Views.InventoryTransferPageDetails
 
                 tableGrid.Add(new Label
                 {
-                    Text = $"{item.Qty}個",
+                    Text = $"{item.Qty}{item.Unit ?? "個"}",
                     FontSize = 11,
                     Padding = new Thickness(4),
                     HorizontalOptions = LayoutOptions.Fill,
@@ -1620,9 +1566,6 @@ namespace EvangPL.Views.InventoryTransferPageDetails
             return tableBorder;
         }
 
-        // ==========================================
-        // ヘルパー
-        // ==========================================
         private Border WrapInputControl(View control)
         {
             return new Border
@@ -1636,7 +1579,6 @@ namespace EvangPL.Views.InventoryTransferPageDetails
             };
         }
 
-        
         private Border BuildBarcodeIcon(Action<string> onScanResult)
         {
             var barsLayout = new HorizontalStackLayout
@@ -1671,13 +1613,11 @@ namespace EvangPL.Views.InventoryTransferPageDetails
                 Content = barsLayout
             };
 
-            // ★ 追加：タップでスキャンページを開く
             var tap = new TapGestureRecognizer();
             tap.Tapped += async (s, e) =>
             {
                 await ScanHelper.ScanAsync(Navigation, (code) =>
                 {
-                    // 結果をメインスレッドで処理
                     Dispatcher.Dispatch(() => onScanResult(code));
                 });
             };
@@ -1714,9 +1654,6 @@ namespace EvangPL.Views.InventoryTransferPageDetails
             }
         }
 
-        // ==========================================
-        // 保存用パラメータ
-        // ==========================================
         public class StockTransferSaveParam : EvangJsonModel
         {
             public string Kbn { get; set; } = "savedata";
@@ -1735,14 +1672,12 @@ namespace EvangPL.Views.InventoryTransferPageDetails
             public List<PendingLotItem> Lots { get; set; } = new();
         }
 
-        // ==========================================
-        // データモデル
-        // ==========================================
         public class PendingLotItem
         {
             public string ItemCode { get; set; } = "";
             public string LotNo { get; set; } = "";
             public int Qty { get; set; }
+            public string Unit { get; set; } = "個";
         }
 
         public class TransferDetailItem
@@ -1754,6 +1689,8 @@ namespace EvangPL.Views.InventoryTransferPageDetails
             public List<PendingLotItem> Lots { get; set; } = new List<PendingLotItem>();
 
             public int TotalQty => Lots.Sum(x => x.Qty);
+
+            public string Unit => Lots.FirstOrDefault()?.Unit ?? "個";
         }
 
         public class StockTransferSearchParam : EvangJsonModel
@@ -1771,6 +1708,11 @@ namespace EvangPL.Views.InventoryTransferPageDetails
         {
             public int? id { get; set; }
             public string? name { get; set; }
+        }
+        public class IslotInfo
+        {
+            public string islot { get; set; } = "3";
+            public string unit { get; set; } = "";
         }
     }
 }
