@@ -80,14 +80,15 @@ namespace EvangPL.Views.InventoryAdjustment
 
         private List<ItemMaster>? _currentItems;
         private CancellationTokenSource? _itemSearchCts;
+        private CancellationTokenSource? _keywordCts;
         private bool _suppressItemSearch;
         private bool _suppressLocationChanged;
-        private const int ItemSearchDebounceMs = 300;
+        private const int ItemSearchDebounceMs = 1000;
         private List<LocationItem> _locationList = new List<LocationItem>();
         private Grid? mainGrid;
         private int _currentStockValue = 0;
 
-        // ★★★ 数量単位表示用
+        
         private Label? _qtyUnitLabel;
         private string _currentItemUnit = "個";
 
@@ -176,6 +177,7 @@ namespace EvangPL.Views.InventoryAdjustment
         {
             try
             {
+                await SearchItemMasterAsync(null, null, "", null, 0, "");
                 if (_adjustItems.Count > 0)
                     OnDetailRowSelected(_adjustItems[0]);
             }
@@ -1186,7 +1188,19 @@ namespace EvangPL.Views.InventoryAdjustment
         {
             if (!_isNewDetail && IsEditMode) return;
             if (_suppressItemSearch) return;
-            await SearchItemByKeywordAsync(e.NewTextValue);
+
+            //     （在庫振替ページの OnItemTextChanged と同じ方式）
+            _keywordCts?.Cancel();
+            _keywordCts = new CancellationTokenSource();
+            var token = _keywordCts.Token;
+
+            try
+            {
+                await Task.Delay(ItemSearchDebounceMs, token);
+                if (token.IsCancellationRequested) return;
+                await SearchItemByKeywordAsync(e.NewTextValue);
+            }
+            catch (TaskCanceledException) { }
         }
 
         private async Task SearchItemByKeywordAsync(string? keyword)
@@ -1205,7 +1219,6 @@ namespace EvangPL.Views.InventoryAdjustment
 
             try
             {
-                await Task.Delay(ItemSearchDebounceMs, cts.Token);
 
                 string? id = _selectedItem != null && _selectedItem.Id > 0 ? _selectedItem.Id.ToString() : null;
                 string? lineNo = _selectedItem != null && _selectedItem.LineNo > 0 ? _selectedItem.LineNo.ToString() : null;
