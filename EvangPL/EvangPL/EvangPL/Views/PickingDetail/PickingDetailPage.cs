@@ -1450,8 +1450,8 @@ namespace EvangPL.Views.PickingDetail
             public string LocationId { get; set; } = string.Empty;
             public string LocationName { get; set; } = string.Empty;
 
-            public int OrderedQty { get; set; }     // 受注数量（SO上の数量）
-            public int UnshippedQty { get; set; }   // 未出荷数量（受注数量 - 既出荷数量）
+            public int OrderedQty { get; set; }     
+            public int UnshippedQty { get; set; }   
             public string Customer { get; set; } = string.Empty;
             public string ShipDate { get; set; } = string.Empty;
             public List<PackageDetail> Details { get; set; } = new List<PackageDetail>();
