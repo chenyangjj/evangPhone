@@ -370,7 +370,7 @@ namespace EvangPL.Views.StockIn
         {
             // ✅ 受領可能な品目が無い伝票（ItemCount<=0）かどうかを判定。
             //    この場合はカード自体をタップ不可にし、詳細画面へは遷移させない。
-            bool isReceivable = item.ItemCount > 0;
+            bool isReceivable = item.ItemCount > 0 && item.TotalQty > 0;
 
             var cardFrame = new Frame
             {
@@ -452,6 +452,9 @@ namespace EvangPL.Views.StockIn
 
             // 品目数 / 数量（集計後の実統計値）
             // ✅ 受領不可（ItemCount<=0）の場合は、件数表示の代わりに注意メッセージを赤字で表示する
+            //    ※将来「受領不可でも件数/数量を出したい」場合の戻し方：
+            //      上 の isReceivable から「&& item.TotalQty > 0」を外すだけで、
+            //      数量0のカードも数字表示＆タップ可に戻ります。
             var lblSummary = new Label
             {
                 Text = isReceivable
