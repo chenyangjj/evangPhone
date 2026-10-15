@@ -85,6 +85,10 @@ namespace EvangPL.Views.InventoryAdjustment
         private Grid? mainGrid;
         private int _currentStockValue = 0;
 
+        // ★★★ 数量单位表示用
+        private Label? _qtyUnitLabel;
+        private string _currentItemUnit = "個";
+
         private bool IsEditMode => _adjustItems.Count > 0 && _adjustItems.Any(i => i.Id > 0);
 
         private static readonly Color DiffEnabledBg = Colors.White;
@@ -346,6 +350,11 @@ namespace EvangPL.Views.InventoryAdjustment
                 reasonPicker.SelectedIndex = -1;
                 reasonPicker.Title = "調整理由を選択";
             }
+
+            // ★★★ 単位を初期値 "個" に戻す
+            _currentItemUnit = "個";
+            if (_qtyUnitLabel != null) _qtyUnitLabel.Text = "個";
+
             _currentItems = null;
             _currentStockValue = 0;
             UpdateFormEditability();
@@ -371,7 +380,8 @@ namespace EvangPL.Views.InventoryAdjustment
                     LotNo = l.LotNo,
                     Qty = l.Qty,
                     IsNew = l.IsNew,
-                    LineNo = l.LineNo
+                    LineNo = l.LineNo,
+                    Unit = l.Unit   // ★★★ 単位も復元
                 })
                 .ToList();
 
@@ -632,7 +642,9 @@ namespace EvangPL.Views.InventoryAdjustment
                         LotNo = lot.LotNo,
                         Qty = lot.Qty,
                         IsNew = true,
-                        LineNo = currentLineNo
+                        LineNo = currentLineNo,
+                        // ★★★ 単位を引き継ぐ
+                        Unit = string.IsNullOrEmpty(lot.Unit) ? _currentItemUnit : lot.Unit
                     });
                 }
             }
@@ -644,7 +656,9 @@ namespace EvangPL.Views.InventoryAdjustment
                     LotNo = "",
                     Qty = diff,
                     IsNew = true,
-                    LineNo = currentLineNo
+                    LineNo = currentLineNo,
+                    // ★★★ 単位を引き継ぐ
+                    Unit = string.IsNullOrEmpty(_currentItemUnit) ? "個" : _currentItemUnit
                 });
             }
 
@@ -977,12 +991,14 @@ namespace EvangPL.Views.InventoryAdjustment
 
             var qtyBorder = CreateInputBorder(_qtyEntry, Colors.White);
             qtyRow.Add(qtyBorder, 0, 0);
-            qtyRow.Add(new Label
+            // ★★★ 数量の単位ラベル（item ごとに動的に切り替える。空なら "個"）
+            _qtyUnitLabel = new Label
             {
                 Text = "個",
                 VerticalOptions = LayoutOptions.Center,
                 HorizontalTextAlignment = TextAlignment.Center
-            }, 1, 0);
+            };
+            qtyRow.Add(_qtyUnitLabel, 1, 0);
             _lotSectionContainer.Children.Add(qtyRow);
 
             _pendingLotTableHost = new ContentView { IsVisible = false };
@@ -1112,7 +1128,8 @@ namespace EvangPL.Views.InventoryAdjustment
                 tableGrid.Add(new Label { Text = lot.ItemCode, FontSize = 11, Padding = new Thickness(4) }, 0, dataRow);
                 // 非 lot 品目は LotNo が空欄になる（空文字表示）
                 tableGrid.Add(new Label { Text = lot.LotNo ?? "", FontSize = 11, Padding = new Thickness(4) }, 1, dataRow);
-                tableGrid.Add(new Label { Text = $"{lot.Qty}個", FontSize = 11, Padding = new Thickness(4) }, 2, dataRow);
+                // ★★★ 単位を反映（空なら "個"）
+                tableGrid.Add(new Label { Text = $"{lot.Qty}{lot.Unit ?? "個"}", FontSize = 11, Padding = new Thickness(4) }, 2, dataRow);
             }
 
             var tableBorder = new Border
@@ -1241,7 +1258,9 @@ namespace EvangPL.Views.InventoryAdjustment
                                     LotNo = it.LotNo,
                                     Qty = it.LotQuantity,
                                     IsNew = false,
-                                    LineNo = _selectedItem?.LineNo ?? 0
+                                    LineNo = _selectedItem?.LineNo ?? 0,
+                                    // ★★★ 単位を引き継ぐ
+                                    Unit = string.IsNullOrEmpty(it.Unit) ? "個" : it.Unit
                                 });
                             }
                         }
@@ -1288,6 +1307,13 @@ namespace EvangPL.Views.InventoryAdjustment
             int stock = 0;
             if (first != null)
                 int.TryParse(first.HandQuantity?.ToString(), out stock);
+
+            // ★★★ 数量の単位を更新（item なし or Unit 空 なら "個"）
+            _currentItemUnit = string.IsNullOrEmpty(first?.Unit) ? "個" : first!.Unit!;
+            if (_qtyUnitLabel != null)
+            {
+                _qtyUnitLabel.Text = _currentItemUnit;
+            }
 
             if (_lotSectionContainer != null)
                 _lotSectionContainer.IsVisible = isLotItem;
@@ -1708,7 +1734,9 @@ namespace EvangPL.Views.InventoryAdjustment
                 LotNo = lotNo,
                 Qty = qty,
                 IsNew = true,
-                LineNo = _selectedItem?.LineNo ?? 0
+                LineNo = _selectedItem?.LineNo ?? 0,
+                // ★★★ 現在の単位を引き継ぐ
+                Unit = string.IsNullOrEmpty(_currentItemUnit) ? "個" : _currentItemUnit
             });
 
             _hasUnsavedLotChanges = true;
@@ -1814,7 +1842,8 @@ namespace EvangPL.Views.InventoryAdjustment
                     tableGrid.Add(new Label { Text = item.ItemCode, FontSize = 11, Padding = new Thickness(4) }, col++, dataRow);
 
                 tableGrid.Add(new Label { Text = item.LotNo, FontSize = 11, Padding = new Thickness(4) }, col++, dataRow);
-                tableGrid.Add(new Label { Text = $"{item.Qty}個", FontSize = 11, Padding = new Thickness(4) }, col++, dataRow);
+                // ★★★ 単位を反映（空なら "個"）
+                tableGrid.Add(new Label { Text = $"{item.Qty}{item.Unit ?? "個"}", FontSize = 11, Padding = new Thickness(4) }, col++, dataRow);
 
                 var deleteLabel = new Label
                 {
@@ -1917,6 +1946,10 @@ namespace EvangPL.Views.InventoryAdjustment
             [JsonPropertyName("Memo")]
             public string? Memo { get; set; }
 
+            // ★★★ 品目の数量単位（pluralAbbreviation）。空なら前端で "個" を表示
+            [JsonPropertyName("Unit")]
+            public string? Unit { get; set; }
+
             // ★ ヘルパー: Lot管理品目かどうか（"1"または"2"）
             [JsonIgnore]
             public bool IsAnyLotItem => IsLotItem == "1" || IsLotItem == "2";
@@ -1933,6 +1966,8 @@ namespace EvangPL.Views.InventoryAdjustment
             public int? Qty { get; set; }
             public bool IsNew { get; set; } = false;
             public int LineNo { get; set; } = 0;
+
+            public string Unit { get; set; } = "個";
         }
 
         public class StockAdjustSearchParam : EvangJsonModel
