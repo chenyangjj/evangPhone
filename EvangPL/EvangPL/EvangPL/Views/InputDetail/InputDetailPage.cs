@@ -200,12 +200,24 @@ namespace EvangPL.Views.InputDetail
                 if (_detailInfo != null)
                 {
                     // ✅ ヘッダー情報（仕入先/入荷予定日/PO番号）はPO明細行の先頭から取得
-                    var firstLine = _poLines.FirstOrDefault();
+                                        var firstLine = _poLines.FirstOrDefault();
                     if (firstLine != null)
                     {
                         if (!string.IsNullOrEmpty(firstLine.tranid))
                             _detailInfo.PoNo = firstLine.tranid;
-                        if (!string.IsNullOrEmpty(firstLine.entityName))
+                        // ✅ [追加] 振替入庫（移動伝票）の場合、ヘッダーには「仕入先」ではなく
+                        //    「移動元 / 移動先」を表示する。BuildHeader() の ParseTransferLocations が
+                        //    分解できるよう、PickingDetail.cs の TR 分岐と同じ
+                        //    「移動元:xxx → 移動先:yyy」形式に整形して SupplierName へ格納する。
+                        bool isTransferReceipt = _detailInfo.InboundType != null
+                            && _detailInfo.InboundType.IndexOf("振替") >= 0;
+                        if (isTransferReceipt && (!string.IsNullOrEmpty(firstLine.transferFromLocationName)
+                                               || !string.IsNullOrEmpty(firstLine.transferToLocationName)))
+                        {
+                            _detailInfo.SupplierName =
+                                $"移動元:{firstLine.transferFromLocationName} → 移動先:{firstLine.transferToLocationName}";
+                        }
+                        else if (!string.IsNullOrEmpty(firstLine.entityName))
                             _detailInfo.SupplierName = firstLine.entityName;
                         if (!string.IsNullOrEmpty(firstLine.scheduledDate))
                             _detailInfo.ArrivalPlanDate = firstLine.scheduledDate;
@@ -408,14 +420,22 @@ namespace EvangPL.Views.InputDetail
 
         private Border BuildHeader()
         {
+            // ✅ [追加] 振替入庫（移動伝票）の场合の判定。
+            //    PickingDetail.BuildHeader() の isTransfer と同じ流儀で、入庫区分の文字列で判定する。
+            bool isTransferReceipt = _detailInfo?.InboundType != null && _detailInfo.InboundType.IndexOf("振替") >= 0;
+
+            // ✅ 新增：返品入庫(RtnAuth)の場合は「仕入先」ではなく「顧客」ラベルを表示する。
+            //    InboundType に「返品」が含まれるかどうかで判定（他の入庫区分は従来どおり「仕入先」）。
+            //    ※ 振替入庫は下述の「移動元/移動先」表示に切り替えるため、顧客ラベルとの同時発火を避ける。
+            bool isReturnReceipt = !isTransferReceipt
+                && _detailInfo?.InboundType != null && _detailInfo.InboundType.IndexOf("返品") >= 0;
+            string partnerLabelText = isReturnReceipt ? "顧客" : "仕入先";
+
             var innerGrid = new Grid
             {
-                RowDefinitions =
-                {
-                    new RowDefinition(),
-                    new RowDefinition(),
-                    new RowDefinition()
-                },
+                RowDefinitions = isTransferReceipt
+                    ? new RowDefinitionCollection { new RowDefinition(), new RowDefinition(), new RowDefinition(), new RowDefinition(), new RowDefinition() }
+                    : new RowDefinitionCollection { new RowDefinition(), new RowDefinition(), new RowDefinition() },
                 ColumnDefinitions =
                  {
                     new ColumnDefinition(),
@@ -425,46 +445,109 @@ namespace EvangPL.Views.InputDetail
                 BackgroundColor = Color.FromArgb("#edeff3")
             };
 
-            // ✅ 新增：返品入庫(RtnAuth)の場合は「仕入先」ではなく「顧客」ラベルを表示する。
-            //    InboundType に「返品」が含まれるかどうかで判定（他の入庫区分は従来どおり「仕入先」）。
-            bool isReturnReceipt = _detailInfo?.InboundType != null && _detailInfo.InboundType.IndexOf("返品") >= 0;
-            string partnerLabelText = isReturnReceipt ? "顧客" : "仕入先";
-
-            innerGrid.Add(new Label { Text = partnerLabelText, FontSize = 11, TextColor = Colors.Black, Padding = new Thickness(4, 0, 0, 0) }, 0, 0);
-            innerGrid.Add(new Label { Text = "入荷予定日", FontSize = 11, TextColor = Colors.Black, Padding = new Thickness(6, 0, 0, 0) }, 1, 0);
-
             string supplier = _detailInfo?.SupplierName ?? "";
             string planDate = _detailInfo?.ArrivalPlanDate ?? "";
 
-            var vendorBorder = new Border
+            if (isTransferReceipt)
             {
-                Stroke = Color.FromArgb("#cdd2dc"),
-                StrokeThickness = 1,
-                StrokeShape = new RoundRectangle { CornerRadius = 6 },
-                Background = Color.FromArgb("#edeff3"),
-                Padding = new Thickness(5, 5, 2, 4),
-                Margin = new Thickness(0, 4, 2, 15)
-            };
-            vendorBorder.Content = new Label { Text = supplier, FontSize = 12, TextColor = Color.FromArgb("#6b727c"), FontAttributes = FontAttributes.Bold };
-            innerGrid.Add(vendorBorder, 0, 1);
+                // ★ 振替入庫（移動伝票）の場合、SupplierName には既に
+                //   「移動元:xxx → 移動先:xxx」の形式の文字列が渡ってくるため、
+                //   「仕入先」という見出しラベルは表示しない（PickingDetail の TR 表示と合わせる）。
+                //   表示順は上から
+                //     row0: 移動元/移動先（2列）
+                //     row1: 移動元/移動先の値ボックス（2列）
+                //     row2: 「入荷予定日」見出し（2列フル幅）
+                //     row3: 入荷予定日の値ボックス（2列フル幅）
+                //     row4: 未受領PO明細選択テーブル
+                //   とし、受注入庫側の「仕入先/入荷予定日を横並び」のレイアウトとは別構成にする。
+                ParseTransferLocations(supplier, out var fromLocation, out var toLocation);
 
-            var dateBorder = new Border
+                innerGrid.Add(new Label { Text = "移動元", FontSize = 11, TextColor = Colors.Black, Padding = new Thickness(4, 0, 0, 0) }, 0, 0);
+                innerGrid.Add(new Label { Text = "移動先", FontSize = 11, TextColor = Colors.Black, Padding = new Thickness(6, 0, 0, 0) }, 1, 0);
+
+                var fromBorder = new Border
+                {
+                    Stroke = Color.FromArgb("#cdd2dc"),
+                    StrokeThickness = 1,
+                    StrokeShape = new RoundRectangle { CornerRadius = 6 },
+                    Background = Color.FromArgb("#edeff3"),
+                    Padding = new Thickness(5, 5, 2, 4),
+                    Margin = new Thickness(0, 4, 2, 4)
+                };
+                fromBorder.Content = new Label { Text = fromLocation, FontSize = 11, TextColor = Color.FromArgb("#6b727c"), FontAttributes = FontAttributes.Bold };
+                innerGrid.Add(fromBorder, 0, 1);
+
+                var toBorder = new Border
+                {
+                    Stroke = Color.FromArgb("#cdd2dc"),
+                    StrokeThickness = 1,
+                    StrokeShape = new RoundRectangle { CornerRadius = 6 },
+                    Background = Color.FromArgb("#edeff3"),
+                    Padding = new Thickness(5, 5, 2, 4),
+                    Margin = new Thickness(2, 4, 0, 4)
+                };
+                toBorder.Content = new Label { Text = toLocation, FontSize = 12, TextColor = Color.FromArgb("#6b727c"), FontAttributes = FontAttributes.Bold };
+                innerGrid.Add(toBorder, 1, 1);
+
+                var planDateHeader = new Label { Text = "入荷予定日", FontSize = 12, TextColor = Colors.Black, Padding = new Thickness(4, 0, 0, 0) };
+                Grid.SetColumnSpan(planDateHeader, 2);
+                Grid.SetRow(planDateHeader, 2);
+                innerGrid.Add(planDateHeader);
+
+                var dateBorder = new Border
+                {
+                    Stroke = Color.FromArgb("#cdd2dc"),
+                    StrokeThickness = 1,
+                    StrokeShape = new RoundRectangle { CornerRadius = 6 },
+                    Background = Color.FromArgb("#edeff3"),
+                    Padding = new Thickness(5, 5, 2, 4),
+                    Margin = new Thickness(0, 4, 0, 15)
+                };
+                dateBorder.Content = new Label { Text = planDate, FontSize = 12, TextColor = Color.FromArgb("#6b727c"), FontAttributes = FontAttributes.Bold };
+                Grid.SetColumnSpan(dateBorder, 2);
+                Grid.SetRow(dateBorder, 3);
+                innerGrid.Add(dateBorder);
+
+                var poLineTableTr = BuildPoLineSelectionTable();
+                Grid.SetRow(poLineTableTr, 4);
+                Grid.SetColumnSpan(poLineTableTr, 2);
+                innerGrid.Add(poLineTableTr);
+            }
+            else
             {
-                Stroke = Color.FromArgb("#cdd2dc"),
-                StrokeThickness = 1,
-                StrokeShape = new RoundRectangle { CornerRadius = 6 },
-                Background = Color.FromArgb("#edeff3"),
-                Padding = new Thickness(5, 5, 2, 4),
-                Margin = new Thickness(2, 4, 0, 15)
-            };
-            dateBorder.Content = new Label { Text = planDate, FontSize = 12, TextColor = Color.FromArgb("#6b727c"), FontAttributes = FontAttributes.Bold };
-            innerGrid.Add(dateBorder, 1, 1);
+                innerGrid.Add(new Label { Text = partnerLabelText, FontSize = 11, TextColor = Colors.Black, Padding = new Thickness(4, 0, 0, 0) }, 0, 0);
+                innerGrid.Add(new Label { Text = "入荷予定日", FontSize = 11, TextColor = Colors.Black, Padding = new Thickness(6, 0, 0, 0) }, 1, 0);
 
-            // ✅ 修正：「入庫済みロット」実績表 → タップで選択できる「未受領PO明細」テーブルに変更
-            var poLineTable = BuildPoLineSelectionTable();
-            Grid.SetRow(poLineTable, 2);
-            Grid.SetColumnSpan(poLineTable, 2);
-            innerGrid.Add(poLineTable);
+                var vendorBorder = new Border
+                {
+                    Stroke = Color.FromArgb("#cdd2dc"),
+                    StrokeThickness = 1,
+                    StrokeShape = new RoundRectangle { CornerRadius = 6 },
+                    Background = Color.FromArgb("#edeff3"),
+                    Padding = new Thickness(5, 5, 2, 4),
+                    Margin = new Thickness(0, 4, 2, 15)
+                };
+                vendorBorder.Content = new Label { Text = supplier, FontSize = 12, TextColor = Color.FromArgb("#6b727c"), FontAttributes = FontAttributes.Bold };
+                innerGrid.Add(vendorBorder, 0, 1);
+
+                var dateBorder = new Border
+                {
+                    Stroke = Color.FromArgb("#cdd2dc"),
+                    StrokeThickness = 1,
+                    StrokeShape = new RoundRectangle { CornerRadius = 6 },
+                    Background = Color.FromArgb("#edeff3"),
+                    Padding = new Thickness(5, 5, 2, 4),
+                    Margin = new Thickness(2, 4, 0, 15)
+                };
+                dateBorder.Content = new Label { Text = planDate, FontSize = 12, TextColor = Color.FromArgb("#6b727c"), FontAttributes = FontAttributes.Bold };
+                innerGrid.Add(dateBorder, 1, 1);
+
+                // ✅ 修正：「入庫済みロット」実績表 → タップで選択できる「未受領PO明細」テーブルに変更
+                var poLineTable = BuildPoLineSelectionTable();
+                Grid.SetRow(poLineTable, 2);
+                Grid.SetColumnSpan(poLineTable, 2);
+                innerGrid.Add(poLineTable);
+            }
 
             var headerBorder = new Border
             {
@@ -477,6 +560,39 @@ namespace EvangPL.Views.InputDetail
             headerBorder.Content = innerGrid;
 
             return headerBorder;
+        }
+
+        // ==================== [追加] 移動元/移動先パース ====================
+        /// <summary>
+        /// SupplierName に入っている「移動元:xxx → 移動先:yyy」形式の文字列を
+        /// fromLocation="xxx" / toLocation="yyy" に分解する。
+        /// 想定と異なる形式（区切り文字が見つからない等）の場合は、
+        /// fromLocation に元の文字列全体を入れ、toLocation は空文字にする。
+        /// </summary>
+        private void ParseTransferLocations(string supplierName, out string fromLocation, out string toLocation)
+        {
+            fromLocation = "";
+            toLocation = "";
+            if (string.IsNullOrEmpty(supplierName)) return;
+
+            const string fromPrefix = "移動元:";
+            const string toPrefix = "移動先:";
+            const string arrow = "→";
+
+            var fromIdx = supplierName.IndexOf(fromPrefix, StringComparison.Ordinal);
+            var arrowIdx = supplierName.IndexOf(arrow, StringComparison.Ordinal);
+            var toIdx = supplierName.IndexOf(toPrefix, StringComparison.Ordinal);
+
+            if (fromIdx >= 0 && arrowIdx > fromIdx && toIdx > arrowIdx)
+            {
+                fromLocation = supplierName.Substring(fromIdx + fromPrefix.Length, arrowIdx - (fromIdx + fromPrefix.Length)).Trim();
+                toLocation = supplierName.Substring(toIdx + toPrefix.Length).Trim();
+            }
+            else
+            {
+                // 想定外の形式のときはそのまま移動元側に表示し、移動先は空にする
+                fromLocation = supplierName;
+            }
         }
 
         // ✅ 新增：「未受領PO明細」テーブル（品目 / 残数量 / 発注数量）。
@@ -1467,6 +1583,8 @@ namespace EvangPL.Views.InputDetail
             //    ロケーション自動セットに使用する
             public string locationId { get; set; } = "";
             public string locationName { get; set; } = "";
+            public string transferFromLocationName { get; set; } = "";
+            public string transferToLocationName { get; set; } = "";
             public int orderedQty { get; set; }
             public int receivedQty { get; set; }
             public int remainingQty { get; set; }
