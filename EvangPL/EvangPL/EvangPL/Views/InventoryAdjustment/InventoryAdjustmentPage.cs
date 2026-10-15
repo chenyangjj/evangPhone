@@ -70,6 +70,8 @@ namespace EvangPL.Views.InventoryAdjustment
         private Button? saveDetailButton;
 
         private VerticalStackLayout? _lotSectionContainer;
+        // ★★★ [新規] ロット/シリアル入力セクションを包む浅藍色カード（lot 品目選択時のみ表示）
+        private Border? _lotSectionCard;
         private Entry? _lotEntry;
         private Entry? _qtyEntry;
 
@@ -85,7 +87,7 @@ namespace EvangPL.Views.InventoryAdjustment
         private Grid? mainGrid;
         private int _currentStockValue = 0;
 
-        // ★★★ 数量单位表示用
+        // ★★★ 数量単位表示用
         private Label? _qtyUnitLabel;
         private string _currentItemUnit = "個";
 
@@ -98,6 +100,11 @@ namespace EvangPL.Views.InventoryAdjustment
         private static readonly Color DisabledBg = Color.FromArgb("#e0e0e0");
         private static readonly Color DisabledFg = Colors.Gray;
         private static readonly Color SelectedRowColor = Color.FromArgb("#d7e8fa");
+
+        // ★★★ [新規] カード共通カラー（在庫振替ページと同一色）
+        private static readonly Color CardStrokeColor = Color.FromArgb("#b4cee8");
+        private static readonly Color CardBackgroundColor = Color.FromArgb("#e6f0fa");
+        private static readonly Color CardTitleBarColor = Color.FromArgb("#245a96");
 
         private StockAdjustItem? GetExistingBlankItem()
         {
@@ -727,16 +734,19 @@ namespace EvangPL.Views.InventoryAdjustment
                 formContainer.Children.Add(_headerInfoLabel);
             }
 
+            // ================================================================
+            // ★★★ [変更] 上段：明細選択テーブル（カード・タイトル無し、テーブルを直接配置）
+            //        ※ 前バージョンの浅藍色カード + 「明細選択」見出しを削除
+            // ================================================================
             _detailSelectionTableHost = new ContentView();
             _detailSelectionTableHost.Content = BuildDetailSelectionTable();
             formContainer.Children.Add(_detailSelectionTableHost);
 
-            formContainer.Children.Add(new BoxView
-            {
-                HeightRequest = 2,
-                Color = Color.FromArgb("#245a96"),
-                Margin = new Thickness(0, 4, 0, 8)
-            });
+            // ================================================================
+            // ★★★ 中段：入力フォームを包む浅藍色カード（タイトル無し）
+            //        ※ 上段と同色のカード。ただし「明細登録」のタイトル行は描画しない
+            // ================================================================
+            var midFormLayout = new VerticalStackLayout { Spacing = 8 };
 
             var itemLabel = new Label { Text = "品目(スキャン可)", FontSize = 12, TextColor = Colors.Black };
             var itemRow = new Grid
@@ -771,8 +781,8 @@ namespace EvangPL.Views.InventoryAdjustment
 
             itemRow.Add(_itemBorder, 0, 0);
             itemRow.Add(scanButtonBorder, 1, 0);
-            formContainer.Children.Add(itemLabel);
-            formContainer.Children.Add(itemRow);
+            midFormLayout.Children.Add(itemLabel);
+            midFormLayout.Children.Add(itemRow);
 
             var locStockGrid = new Grid
             {
@@ -817,7 +827,7 @@ namespace EvangPL.Views.InventoryAdjustment
             stockLayout.Children.Add(stockBorder);
             locStockGrid.Add(locLayout, 0, 0);
             locStockGrid.Add(stockLayout, 2, 0);
-            formContainer.Children.Add(locStockGrid);
+            midFormLayout.Children.Add(locStockGrid);
 
             var diffAdjGrid = new Grid
             {
@@ -862,7 +872,7 @@ namespace EvangPL.Views.InventoryAdjustment
             adjLayout.Children.Add(adjBorder);
             diffAdjGrid.Add(diffLayout, 0, 0);
             diffAdjGrid.Add(adjLayout, 2, 0);
-            formContainer.Children.Add(diffAdjGrid);
+            midFormLayout.Children.Add(diffAdjGrid);
 
             var reasonLabel = new Label { Text = "調整理由", FontSize = 12, TextColor = Colors.Black, Margin = new Thickness(0, 5, 0, 0) };
             reasonPicker = new Picker
@@ -885,10 +895,25 @@ namespace EvangPL.Views.InventoryAdjustment
                     reasonPicker.Title = "調整理由を選択";
             };
             var reasonBorder = CreateInputBorder(reasonPicker, Colors.White);
-            formContainer.Children.Add(reasonLabel);
-            formContainer.Children.Add(reasonBorder);
+            midFormLayout.Children.Add(reasonLabel);
+            midFormLayout.Children.Add(reasonBorder);
 
-            _lotSectionContainer = new VerticalStackLayout { Spacing = 8, IsVisible = false };
+            var midFormCard = new Border
+            {
+                Stroke = CardStrokeColor,
+                Background = CardBackgroundColor,
+                StrokeShape = new RoundRectangle { CornerRadius = 6 },
+                Padding = new Thickness(5),
+                StrokeThickness = 2
+            };
+            midFormCard.Content = midFormLayout;
+            formContainer.Children.Add(midFormCard);
+
+            // ================================================================
+            // ★★★ ロット/シリアル入力セクションを包む浅藍色カード（タイトル無し）
+            //        ※ lot 品目を選択した時のみ表示（_lotSectionCard.IsVisible で制御）
+            // ================================================================
+            _lotSectionContainer = new VerticalStackLayout { Spacing = 8 };
             _lotSectionContainer.Children.Add(new Label
             {
                 Text = "ロット / シリアル (スキャン可)",
@@ -1017,7 +1042,18 @@ namespace EvangPL.Views.InventoryAdjustment
             addLotBtn.Clicked += OnAddLotButtonClicked;
             _lotSectionContainer.Children.Add(addLotBtn);
 
-            formContainer.Children.Add(_lotSectionContainer);
+            // ★★★ ロット/シリアル入力セクションをカードで包む
+            _lotSectionCard = new Border
+            {
+                Stroke = CardStrokeColor,
+                Background = CardBackgroundColor,
+                StrokeShape = new RoundRectangle { CornerRadius = 6 },
+                Padding = new Thickness(5),
+                StrokeThickness = 2,
+                IsVisible = false,           // 初期は非表示（lot 品目選択で ApplyItemDetail が true にする）
+                Content = _lotSectionContainer
+            };
+            formContainer.Children.Add(_lotSectionCard);
 
             _allLotsSummaryHost = new ContentView();
             formContainer.Children.Add(_allLotsSummaryHost);
@@ -1315,8 +1351,9 @@ namespace EvangPL.Views.InventoryAdjustment
                 _qtyUnitLabel.Text = _currentItemUnit;
             }
 
-            if (_lotSectionContainer != null)
-                _lotSectionContainer.IsVisible = isLotItem;
+            // ★★★ [変更] ロット入力セクションの表示制御を、外側のカードの IsVisible で行う
+            if (_lotSectionCard != null)
+                _lotSectionCard.IsVisible = isLotItem;
 
             RefreshPendingLotTable();
 
