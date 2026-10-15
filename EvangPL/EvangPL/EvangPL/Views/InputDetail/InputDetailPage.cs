@@ -200,7 +200,7 @@ namespace EvangPL.Views.InputDetail
                 if (_detailInfo != null)
                 {
                     // ✅ ヘッダー情報（仕入先/入荷予定日/PO番号）はPO明細行の先頭から取得
-                                        var firstLine = _poLines.FirstOrDefault();
+                    var firstLine = _poLines.FirstOrDefault();
                     if (firstLine != null)
                     {
                         if (!string.IsNullOrEmpty(firstLine.tranid))
@@ -414,6 +414,16 @@ namespace EvangPL.Views.InputDetail
                     indicator.IsRunning = false;
                 }
             }
+        }
+
+        // ==================== 単位表示ヘルパー ====================
+
+        // ✅ [追加] 単位表示の統一ヘルパー。
+        //    RESTlet の PO_LINES から返る units が空/未取得の場合は「個」を表示する。
+        //    テーブル・数量欄など、全ての単位表示箇所でこのメソッドを通す。
+        private static string GetUnitDisplay(string? unit)
+        {
+            return string.IsNullOrWhiteSpace(unit) ? "個" : unit!;
         }
 
         // ==================== ヘッダー（仕入先/入荷予定日 + PO明細選択テーブル） ====================
@@ -650,8 +660,11 @@ namespace EvangPL.Views.InputDetail
                     Padding = new Thickness(4),
                     BackgroundColor = rowBg
                 };
-                var remainLabel = new Label { Text = line.remainingQty.ToString(), FontSize = 11, Padding = new Thickness(4), BackgroundColor = rowBg };
-                var orderedLabel = new Label { Text = line.orderedQty.ToString(), FontSize = 11, Padding = new Thickness(4), BackgroundColor = rowBg };
+
+                // ✅ [変更] 残数量・発注数量：単位（line.units）を付ける。空なら「個」。
+                var unitText = GetUnitDisplay(line.units);
+                var remainLabel = new Label { Text = $"{line.remainingQty}{unitText}", FontSize = 11, Padding = new Thickness(4), BackgroundColor = rowBg };
+                var orderedLabel = new Label { Text = $"{line.orderedQty}{unitText}", FontSize = 11, Padding = new Thickness(4), BackgroundColor = rowBg };
 
                 tableGrid.Add(itemLabel, 0, dataRowIndex);
                 tableGrid.Add(remainLabel, 1, dataRowIndex);
@@ -939,9 +952,14 @@ namespace EvangPL.Views.InputDetail
             lotRow.Add(lotBarcodeIcon, 1, 1);
             layout.Children.Add(lotRow);
 
+            // ✅ [変更] 数量欄：単位表示を品目単位に合わせるため、2列目の幅を Auto に変更
             var qtyRow = new Grid
             {
-                ColumnDefinitions = { new ColumnDefinition { Width = GridLength.Star }, new ColumnDefinition { Width = 60 } }
+                ColumnDefinitions =
+                {
+                    new ColumnDefinition { Width = GridLength.Star },
+                    new ColumnDefinition { Width = GridLength.Auto }   // ✅ [変更] 単位文字列の長さに追従
+                }
             };
             // ✅ [変更] 発注入庫の場合、PO明細行の残数量(remainingQty)を数量欄の初期値としてセットする。
             //    ユーザーはそのまま使うことも、必要に応じて手動で変更することもできる。
@@ -978,7 +996,17 @@ namespace EvangPL.Views.InputDetail
                 }
             };
             qtyRow.Add(WrapInputControl(_qtyEntry), 0, 0);
-            qtyRow.Add(new Label { Text = "個", VerticalOptions = LayoutOptions.Center, HorizontalTextAlignment = TextAlignment.Center }, 1, 0);
+
+            // ✅ [変更] 数量欄の単位：PO明細行の units を優先。空なら「個」。
+            var currentUnitText = GetUnitDisplay(currentItem?.units);
+            qtyRow.Add(new Label
+            {
+                Text = currentUnitText,
+                VerticalOptions = LayoutOptions.Center,
+                HorizontalTextAlignment = TextAlignment.Center,
+                Padding = new Thickness(6, 0, 0, 0)
+            }, 1, 0);
+
             layout.Children.Add(new Label { Text = "入庫数量", FontSize = 12, TextColor = Colors.Black });
             layout.Children.Add(qtyRow);
 
@@ -1114,6 +1142,8 @@ namespace EvangPL.Views.InputDetail
                 LineId = currentItem.lineId, // ✅ [追加] PO明細行ID（同一品目が複数行ある場合の識別用）
                 ItemId = currentItem.itemId,
                 ItemCode = currentItem.itemCode,
+                // ✅ [追加] この明細行の単位（表示用。空なら GetUnitDisplay 側で「個」にフォールバック）
+                Unit = currentItem.units,
                 LocationId = matchedLocation?.Id ?? "",
                 LocationName = selectedLocationName,
                 LotNo = lotNo,
@@ -1288,7 +1318,10 @@ namespace EvangPL.Views.InputDetail
                 // ✅ ロット未入力（管理対象外品目）の場合は "-" を表示
                 var lotDisplayText = string.IsNullOrEmpty(item.LotNo) ? "-" : item.LotNo;
                 tableGrid.Add(new Label { Text = lotDisplayText, FontSize = 11, Padding = new Thickness(4) }, col++, dataRowIndex);
-                tableGrid.Add(new Label { Text = $"{item.Qty}個", FontSize = 11, Padding = new Thickness(4) }, col++, dataRowIndex);
+
+                // ✅ [変更] 数量表示：単位（item.Unit）を付ける。空なら「個」。
+                var qtyText = $"{item.Qty}{GetUnitDisplay(item.Unit)}";
+                tableGrid.Add(new Label { Text = qtyText, FontSize = 11, Padding = new Thickness(4) }, col++, dataRowIndex);
 
                 var deleteLabel = new Label
                 {
@@ -1505,6 +1538,12 @@ namespace EvangPL.Views.InputDetail
             public string LineId { get; set; } = "";
             public string ItemId { get; set; } = "";
             public string ItemCode { get; set; } = "";
+
+            // ✅ [追加] この明細が属する PO 明細行の単位（表示用）。
+            //    RESTlet の PO_LINES.units から取得した値をそのまま保持する。
+            //    空/未取得の場合は表示側 GetUnitDisplay() が「個」を返す。
+            public string Unit { get; set; } = "";
+
             public string LocationId { get; set; } = "";
             public string LocationName { get; set; } = "";
             public string LotNo { get; set; } = "";
@@ -1562,6 +1601,12 @@ namespace EvangPL.Views.InputDetail
             public string itemId { get; set; } = "";
             public string itemCode { get; set; } = "";
             public string itemName { get; set; } = "";
+
+            // ✅ [追加] 単位（RESTlet の PO_LINES.units。空文字の場合あり）。
+            //    数量表示の単位ラベルとして使用する。空の場合は GetUnitDisplay() が「個」を返す。
+            //    RESTlet側 JSON のキーが "units" のため、C# プロパティも小文字 "units" で合わせている。
+            public string units { get; set; } = "";
+
             // ✅ [追加] Kit 親品目コード（Kit 成員行のみ値あり。通常品目は空）
             public string parentItemCode { get; set; } = "";
             // ✅ [追加] 表示名。Kit 成員は「親 : 子」（例: kit_package_test : 114988K）、通常品目は品目名
