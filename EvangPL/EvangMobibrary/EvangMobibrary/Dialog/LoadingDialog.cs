@@ -21,37 +21,47 @@ namespace EvangSol.Mobibrary.Dialog
             ActivityIndicator activityIndicator = new ActivityIndicator
             {
                 IsRunning = true,
+                Color = Color.FromArgb("#245a96"),
+                HorizontalOptions = LayoutOptions.Center,  
+                VerticalOptions = LayoutOptions.Center
             };
 
-            var label = new Label
-            {
-                FontSize = CommonViewSetting.LABEL_FONTSIZE,
-                TextColor = GetColor("Black"),
-                HorizontalTextAlignment = TextAlignment.Start,
-                VerticalTextAlignment = TextAlignment.Start,
-                FontAttributes = FontAttributes.Bold,
-                Text = S("lblLoading"),
-                Padding = new Thickness(10)
-            };
+            //            var label = new Label
+            //            {
+            //                FontSize = CommonViewSetting.LABEL_FONTSIZE,
+            //                TextColor = GetColor("Black"),
+            //                //HorizontalTextAlignment = TextAlignment.Start,
+            //                //VerticalTextAlignment = TextAlignment.Start,
+            //                HorizontalTextAlignment = TextAlignment.Center,  
+            //                VerticalTextAlignment = TextAlignment.Center,
+            //                FontAttributes = FontAttributes.Bold,
+            //                Text = S("lblLoading"),
+            //                Padding = new Thickness(10),
+            //                HorizontalOptions = LayoutOptions.Center,       
+            //                VerticalOptions = LayoutOptions.Center
+            //            };
 
-            var grid = new Grid
-            {
-                ColumnDefinitions =
-                {
-                    new ColumnDefinition { Width = GridLength.Auto },
-#if ANDROID
-                    new ColumnDefinition { Width = GridLength.Auto },
-#elif WINDOWS
-                    new ColumnDefinition { Width = 210 },
-#endif
-                },
-                RowDefinitions = { new RowDefinition() }
-            };
+            //            var grid = new Grid
+            //            {
+            //                ColumnDefinitions =
+            //                {
+            //                    new ColumnDefinition { Width = GridLength.Auto },
+            //#if ANDROID
+            //                    new ColumnDefinition { Width = GridLength.Auto },
+            //#elif WINDOWS
+            //                    new ColumnDefinition { Width = 210 },
+            //#endif
+            //                },
+            //                RowDefinitions = { new RowDefinition() },
+            //                HorizontalOptions = LayoutOptions.Center, 
+            //                VerticalOptions = LayoutOptions.Center
+            //            };
 
-            grid.Add(activityIndicator);
-            grid.Add(label, column: 1);
+            //            grid.Add(activityIndicator);
+            //            grid.Add(label, column: 1);
 
-            return grid;
+            //            return grid;
+            return activityIndicator;
         }
         #endregion
 
