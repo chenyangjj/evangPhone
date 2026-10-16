@@ -57,10 +57,9 @@ namespace EvangPL.Views.PickingDetail
         //    画面7-1から引き継いだ _packageItems から構築する。
         private Dictionary<string, string> _itemInternalIdMap = new Dictionary<string, string>();
 
-        // ✅ [追加] ItemCode(表示テキスト) → 明細数量合計 のマップ。
-        //    画面7-1で登録された、この品目に紐づく全明細（ロット/シリアル行）の数量合計。
-        //    数量欄の自動セット・追加時の超過チェックに使用する。
-        private Dictionary<string, int> _itemDetailQtyMap = new Dictionary<string, int>();
+        // ✅ [修正] ItemCode → LineIdリスト のマップ。
+        //    同一品目コードが複数行(LineId)ある場合に、各行を識別するために使用する。
+        private Dictionary<string, List<string>> _lineByItemCode = new Dictionary<string, List<string>>();
 
         // ✅ [追加] 現在入力中の品目の内部ID（非表示）。完了時にRESTletへ送信するItemInternalIdの元データ。
         private Label? _hiddenItemInternalIdLabel;
@@ -79,18 +78,18 @@ namespace EvangPL.Views.PickingDetail
                 .Distinct()
                 .ToList();
 
-            // ✅ [追加] 品目コード → 内部IDのマップを構築（同一品目コードが複数あっても内部IDは先頭のものを採用）
+            // ✅ [追加] 品目コード → 内部IDのマップを構築
             _itemInternalIdMap = _packageItems
                 .Where(p => p.Details != null && p.Details.Count > 0)
                 .GroupBy(p => p.ItemCode)
                 .ToDictionary(g => g.Key, g => g.First().ItemInternalId ?? "");
 
-            // ✅ [追加] 品目コード → 明細数量合計のマップを構築
-            //    （同一品目コードが複数のPackageItemに分かれている場合も、全明細の数量を合算する）
-            _itemDetailQtyMap = _packageItems
-                .Where(p => p.Details != null && p.Details.Count > 0)
+            // ✅ [修正] 品目コード → 行(LineId)リスト のマップを構築。
+            //    同一品目が複数行ある場合でも、各行の数量を独立して保持する。
+            _lineByItemCode = _packageItems
+                .Where(p => p.Details != null && p.Details.Count > 0 && !string.IsNullOrEmpty(p.LineId))
                 .GroupBy(p => p.ItemCode)
-                .ToDictionary(g => g.Key, g => g.Sum(p => p.Details.Sum(d => d.DetailQty)));
+                .ToDictionary(g => g.Key, g => g.Select(p => p.LineId).ToList());
             Title = string.IsNullOrEmpty(_detailInfo?.OrderNo) ? "梱包情報を追加" : _detailInfo!.OrderNo;
             BuildUI();
         }
@@ -384,11 +383,22 @@ namespace EvangPL.Views.PickingDetail
             if (_entryQty == null) return;
 
             var code = _entryItemCode?.Text?.Trim();
-            if (!string.IsNullOrEmpty(code) && _itemDetailQtyMap.TryGetValue(code, out var totalQty))
+            if (!string.IsNullOrEmpty(code) && _lineByItemCode.TryGetValue(code, out var lineIds))
             {
-                var alreadyAdded = AddedPackageList.Where(p => p.ItemCode == code).Sum(p => p.Qty);
-                var remaining = totalQty - alreadyAdded;
-                _entryQty.Text = remaining > 0 ? remaining.ToString() : "0";
+                // ✅ [修正] 同一品目が複数行ある場合、各行ごとに残数量を計算し、
+                //    最も残量が多い行を自動選択する（1行が埋まると自動的に行が進む）
+                int maxRemaining = 0;
+                foreach (var lid in lineIds)
+                {
+                    var line = _packageItems.FirstOrDefault(p => p.LineId == lid);
+                    if (line == null) continue;
+                    var alreadyAdded = AddedPackageList
+                        .Where(p => p.ItemInternalId == line.ItemInternalId)
+                        .Sum(p => p.Qty);
+                    var remaining = line.UnshippedQty - alreadyAdded;
+                    if (remaining > maxRemaining) maxRemaining = remaining;
+                }
+                _entryQty.Text = maxRemaining > 0 ? maxRemaining.ToString() : "0";
             }
             else
             {
@@ -431,15 +441,24 @@ namespace EvangPL.Views.PickingDetail
                 if (!proceed) return;
             }
 
-            // ✅ [追加] 明細の残数量を超えていないかチェック
-            //    （画面7-1で登録済みの明細数量合計 - この画面で既に追加済みの合計 が「残数量」）
-            if (_itemDetailQtyMap.TryGetValue(itemCode, out var totalQtyForItem))
+            // ✅ [修正] 行(LineId)ごとの残数量を超えていないかチェック
+            //    同一品目が複数行ある場合は、各行の残数量の最大値をチェックする
+            if (!string.IsNullOrEmpty(itemCode) && _lineByItemCode.TryGetValue(itemCode, out var checkLineIds))
             {
-                var alreadyAdded = AddedPackageList.Where(p => p.ItemCode == itemCode).Sum(p => p.Qty);
-                var remaining = totalQtyForItem - alreadyAdded;
-                if (qty > remaining)
+                int maxRemainingForItem = 0;
+                foreach (var lid in checkLineIds)
                 {
-                    await DisplayAlert("エラー", $"数量（{qty}）が明細の残数量（{remaining}）を超えています。", "OK");
+                    var checkLine = _packageItems.FirstOrDefault(p => p.LineId == lid);
+                    if (checkLine == null) continue;
+                    var alreadyAddedForLine = AddedPackageList
+                        .Where(p => p.ItemInternalId == checkLine.ItemInternalId)
+                        .Sum(p => p.Qty);
+                    var remainingForLine = checkLine.UnshippedQty - alreadyAddedForLine;
+                    if (remainingForLine > maxRemainingForItem) maxRemainingForItem = remainingForLine;
+                }
+                if (qty > maxRemainingForItem)
+                {
+                    await DisplayAlert("エラー", $"数量（{qty}）が明細の残数量（{maxRemainingForItem}）を超えています。", "OK");
                     return;
                 }
             }
