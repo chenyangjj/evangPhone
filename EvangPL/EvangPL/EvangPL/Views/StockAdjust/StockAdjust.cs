@@ -347,49 +347,46 @@ namespace EvangPL.Views.StockAdjust
             {
                 ColumnDefinitions =
         {
-            new ColumnDefinition { Width = GridLength.Star },   
-            new ColumnDefinition { Width = GridLength.Auto },   
-            new ColumnDefinition { Width = GridLength.Star }    
+            new ColumnDefinition { Width = GridLength.Auto },
+            new ColumnDefinition { Width = GridLength.Star },
+            new ColumnDefinition { Width = GridLength.Auto }
         },
-                ColumnSpacing = 10,                                      
-                Margin = new Thickness(0, 5, 0, 0),                      
+                ColumnSpacing = 15,
+                Margin = new Thickness(0, 5, 0, 0),
                 VerticalOptions = LayoutOptions.Center
             };
 
             prevPageBtn = new Button
             {
                 Text = "◀ 前へ",
-                FontSize = 12,
+                WidthRequest = 110,
+                HeightRequest = 40,
                 BackgroundColor = Color.FromArgb("#e0e0e0"),
                 TextColor = Colors.Gray,
-                CornerRadius = 5,
-                HeightRequest = 35,
-                IsEnabled = false,
+                BorderColor = Colors.Transparent,
+                BorderWidth = 0,
                 VerticalOptions = LayoutOptions.Center
             };
             prevPageBtn.Clicked += async (s, e) => await PrevPage();
 
             pageInfoLabel = new Label
             {
-                Text = "1 / 1",                                          
-                FontSize = 13,                                            
-                TextColor = Colors.Black,                                 
-                HorizontalTextAlignment = TextAlignment.Center,           
-                VerticalTextAlignment = TextAlignment.Center,             
+                Text = "1/1",
                 HorizontalOptions = LayoutOptions.Center,
-                VerticalOptions = LayoutOptions.Center
+                VerticalOptions = LayoutOptions.Center,
+                FontSize = 12,
+                FontAttributes = FontAttributes.Bold
             };
 
             nextPageBtn = new Button
             {
                 Text = "次へ ▶",
-                FontSize = 12,
+                WidthRequest = 110,
+                HeightRequest = 40,
                 BackgroundColor = Colors.White,
-                TextColor = Color.FromArgb("#1f3854"),
                 BorderColor = Color.FromArgb("#1f3854"),
                 BorderWidth = 1,
-                CornerRadius = 5,
-                HeightRequest = 35,
+                TextColor = Color.FromArgb("#1f3854"),
                 VerticalOptions = LayoutOptions.Center
             };
             nextPageBtn.Clicked += async (s, e) => await NextPage();
@@ -523,7 +520,7 @@ namespace EvangPL.Views.StockAdjust
         private void RefreshPageUI()
         {
             if (pageInfoLabel != null)
-                pageInfoLabel.Text = $"{_currentPage} / {_totalPage}";   // 可选：加空格与 IT 一致
+                pageInfoLabel.Text = $"{_currentPage}/{_totalPage}";
 
             if (prevPageBtn != null)
             {
