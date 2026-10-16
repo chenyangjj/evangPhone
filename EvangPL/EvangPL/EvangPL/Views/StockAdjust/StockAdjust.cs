@@ -120,8 +120,8 @@ namespace EvangPL.Views.StockAdjust
                 Text = "+ 新規登録",
                 BackgroundColor = Color.FromArgb("#245a96"),
                 TextColor = Colors.White,
-                HeightRequest = 50,
-                FontSize = 15,
+                HeightRequest = 40,
+                FontSize = 14,
                 CornerRadius = 6,
                 FontAttributes = FontAttributes.Bold
             };
