@@ -902,6 +902,12 @@ namespace EvangPL.Views.PickingDetail
             //    （Picker/Entry が作成済みのこのタイミングで呼び出す）
             ApplyDefaultsForSalesOrder(currentPackage);
 
+            // ✅ [新增] 所有出库类型(SO/TR/RTV等)选中品目后，数量框都自动带入剩余数量
+            ApplyDefaultQuantityForAllTypes(currentPackage);
+
+            // ✅ [新增] 所有出库类型选中品目后，出荷元ロケーション也自动带入
+            ApplyDefaultLocationForAllTypes(currentPackage);
+
             // 4. 選択中品目に紐づく明細プレビュー表（登録済み明細）
             var detailTable = BuildEditableDetailTableForCurrentPackage();
             layout.Children.Add(detailTable);
@@ -959,6 +965,93 @@ namespace EvangPL.Views.PickingDetail
                 }
                 if (remaining > 0) _entryQty.Text = remaining.ToString();
             }
+        }
+
+        // ==================== [新增] 全出库类型：选中品目后数量自动带入 ====================
+        /// <summary>
+        /// 不分出库类型(SO/TR/RTV)，选中品目时把「未出荷数量 - 已登记明细合计」
+        /// 自动带入数量框。
+        /// ・SO 已由 ApplyDefaultsForSalesOrder 设置过数量时不会覆盖（仅在数量框为空时设置）。
+        /// ・序列号管理品目每行数量只能为1，所以自动带入值最大为1（与现有校验保持一致）。
+        /// ・剩余数量 <= 0 时不设置。
+        /// ・延后到界面构建完成后赋值，并捕获异常，避免影响点击进入明细登录画面。
+        /// </summary>
+        private void ApplyDefaultQuantityForAllTypes(PackageItem pkg)
+        {
+            // 延后到界面构建完成后再赋值，避免在构建过程中修改Entry导致异常
+            Dispatcher.Dispatch(() =>
+            {
+                try
+                {
+                    if (_entryQty == null) return;
+                    if (!string.IsNullOrEmpty(_entryQty.Text)) return; // 已被SO处理设置，不覆盖
+
+                    var remaining = pkg.UnshippedQty - pkg.Details.Sum(d => d.DetailQty);
+                    if (pkg.IsSerial)
+                    {
+                        remaining = Math.Min(remaining, 1);
+                    }
+                    if (remaining > 0) _entryQty.Text = remaining.ToString();
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"ApplyDefaultQuantityForAllTypes: {ex.Message}");
+                }
+            });
+        }
+
+        // ==================== [新增] 全出库类型：选中品目后场所自动带入 ====================
+        /// <summary>
+        /// 不分出库类型(SO/TR/RTV)，选中品目时自动选中出荷元ロケーション。
+        /// ・已有选择时不覆盖（SO 已由 ApplyDefaultsForSalesOrder 设置过）。
+        /// ・优先使用 PACKAGE_ITEMS 返回的 LocationId。
+        /// ・没有 LocationId 且是 TR 时，用表头「移動元」名称匹配场所列表。
+        /// ・延后到界面构建完成后赋值，并捕获异常，避免影响点击进入明细登录画面。
+        /// </summary>
+        private void ApplyDefaultLocationForAllTypes(PackageItem pkg)
+        {
+            Dispatcher.Dispatch(() =>
+            {
+                try
+                {
+                    if (_locationPicker == null) return;
+                    if (_locationPicker.SelectedIndex >= 0) return; // 已有选择，不覆盖
+
+                    var names = _locationPicker.ItemsSource?.Cast<string>().ToList() ?? new List<string>();
+                    if (names.Count == 0) return;
+
+                    string? targetName = null;
+
+                    // 1. 明细行自带的场所
+                    if (!string.IsNullOrEmpty(pkg.LocationId))
+                    {
+                        targetName = _locationList.FirstOrDefault(l => l.Id == pkg.LocationId)?.Name;
+                    }
+                    if (string.IsNullOrEmpty(targetName) && !string.IsNullOrEmpty(pkg.LocationName))
+                    {
+                        targetName = pkg.LocationName;
+                    }
+
+                    // 2. TR：用表头的移動元名称匹配
+                    if (string.IsNullOrEmpty(targetName) && (_detailInfo?.OutboundType ?? "SO") == "TR")
+                    {
+                        ParseTransferLocations(_detailInfo?.CustomerName ?? "", out var fromLocation, out _);
+                        if (!string.IsNullOrEmpty(fromLocation))
+                        {
+                            targetName = names.FirstOrDefault(n => n == fromLocation)
+                                      ?? names.FirstOrDefault(n => n.Contains(fromLocation) || fromLocation.Contains(n));
+                        }
+                    }
+
+                    if (string.IsNullOrEmpty(targetName)) return;
+                    var idx = names.IndexOf(targetName);
+                    if (idx >= 0) _locationPicker.SelectedIndex = idx;
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"ApplyDefaultLocationForAllTypes: {ex.Message}");
+                }
+            });
         }
 
         // ==================== ロット（シリアル）入力欄フォーカスアウト時の処理 ====================
@@ -1450,8 +1543,8 @@ namespace EvangPL.Views.PickingDetail
             public string LocationId { get; set; } = string.Empty;
             public string LocationName { get; set; } = string.Empty;
 
-            public int OrderedQty { get; set; }     
-            public int UnshippedQty { get; set; }   
+            public int OrderedQty { get; set; }
+            public int UnshippedQty { get; set; }
             public string Customer { get; set; } = string.Empty;
             public string ShipDate { get; set; } = string.Empty;
             public List<PackageDetail> Details { get; set; } = new List<PackageDetail>();
