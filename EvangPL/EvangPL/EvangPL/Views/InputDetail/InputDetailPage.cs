@@ -105,10 +105,17 @@ namespace EvangPL.Views.InputDetail
         }
 
         private string? _orderId;
-        public InputDetail(InputDetailInfo detailInfo) : base("strInputDetail")
+
+        // ✅ [追加] 一覧画面（StockIn）が詳細画面へ遷移する前の存在確認で既に取得済みの
+        //    GetStockInDetail(SEARCH) 応答。これが渡された場合、LoadDataFromApi() は
+        //    RESTletを再度呼ばずにこの応答をそのまま使う（ローディング2回・白画面の解消）。
+        //    一度使ったら null に戻す（再読み込み時は通常どおりサーバーへ問い合わせる）。
+        private ResponseData<EvangJsonModel, EvangJsonModel>? _preloadedResult;
+        public InputDetail(InputDetailInfo detailInfo, ResponseData<EvangJsonModel, EvangJsonModel>? preloadedResult = null) : base("strInputDetail")
         {
             // ✅ RESTlet URLは Menu.cs 側で一元登録済みのため、ここでは登録処理を行わない。
             _detailInfo = detailInfo;
+            _preloadedResult = preloadedResult; // ✅ [追加] 取得済み応答があれば再リクエストを省略する
             if (_detailInfo != null)
             {
                 _orderId = _detailInfo.OrderId;
@@ -161,7 +168,9 @@ namespace EvangPL.Views.InputDetail
                     InboundType = _detailInfo?.InboundType
                 };
 
-                ResponseData<EvangJsonModel, EvangJsonModel>? result = null;
+                // ✅ [追加] 取得済みの応答があればそれを使い、RESTletの再呼び出しを省略する
+                ResponseData<EvangJsonModel, EvangJsonModel>? result = _preloadedResult;
+                _preloadedResult = null;
                 try
                 {
                     // ✅ [追加] 自前のローディング遮罩を表示。
@@ -170,8 +179,11 @@ namespace EvangPL.Views.InputDetail
                     //    実際には何も表示されない。初期表示時の"画面全体が薄暗く見える"症状の原因は、
                     //    このRESTlet呼び出し自体ではなく、他の箇所（画面遷移アニメーションや
                     //    EvangContentVM側の共通処理）にある可能性が高い。
-                    ShowLoading();
-                    result = await this.Post<StockInDetailParam, EvangJsonModel, EvangJsonModel, EvangJsonModel>(request);
+                    if (result == null)
+                    {
+                        ShowLoading();
+                        result = await this.Post<StockInDetailParam, EvangJsonModel, EvangJsonModel, EvangJsonModel>(request);
+                    }
                 }
                 finally
                 {
@@ -824,9 +836,15 @@ namespace EvangPL.Views.InputDetail
             var currentItem = _selectedPoLine;
             // ✅ [追加] この品目がロット/シリアル管理対象かどうか
             bool requiresLot = RequiresLotOrSerial(currentItem);
-            // ✅ [追加] 発注入庫(PO Item Receipt)の場合のみ、PO明細行が持つロケーション/残数量を
-            //    ロケーション欄・数量欄に自動セットする（振替入庫/返品入庫では従来どおり空欄のまま）。
-            bool isPurchaseOrderReceipt = _detailInfo?.InboundType != null && _detailInfo.InboundType.IndexOf("発注") >= 0;
+
+            // ✅ [変更] 発注入庫 / 返品入庫 / 振替入庫の【3つの入庫区分すべて】で、
+            //    PO明細行が持つロケーション/残数量を、ロケーション欄・数量欄に自動セットする。
+            //    （従来は「発注」のみ自動セットし、返品/振替は空欄だったため、区分判定による分岐を廃止した）
+            //    振替入庫のみ、入庫先ロケーションの既定値を「移動先ロケーション」にする。
+            bool isTransferReceipt = _detailInfo?.InboundType != null && _detailInfo.InboundType.IndexOf("振替") >= 0;
+            string preferredLocationName = (isTransferReceipt && !string.IsNullOrEmpty(currentItem.transferToLocationName))
+                ? currentItem.transferToLocationName
+                : currentItem.locationName;
 
             var border = new Border
             {
@@ -852,8 +870,8 @@ namespace EvangPL.Views.InputDetail
                 .Where(n => !string.IsNullOrEmpty(n))
                 .ToList();
 
-            // ✅ [デバッグ用] ロケーション一覧が空の場合はここで気づけるようにログを残す
-            System.Diagnostics.Debug.WriteLine($"BuildDetailInputArea: locationNames件数={locationNames.Count}, isPurchaseOrderReceipt={isPurchaseOrderReceipt}, currentItem.locationName='{currentItem?.locationName}', isLotItem={currentItem?.isLotItem}, isSerialItem={currentItem?.isSerialItem}");
+            // ✅ [デバッグ用] ロケーション一覧が空の場合や、数量が自動セットされない場合にここで気づけるようにログを残す
+            System.Diagnostics.Debug.WriteLine($"BuildDetailInputArea: locationNames件数={locationNames.Count}, InboundType='{_detailInfo?.InboundType}', preferredLocationName='{preferredLocationName}', remainingQty={currentItem.remainingQty}, isLotItem={currentItem.isLotItem}, isSerialItem={currentItem.isSerialItem}");
 
             // ✅ [修正] Picker の SelectedIndex を ItemsSource より先に設定すると、MAUIのPickerで
             //    選択が反映されないケースがあるため、まず ItemsSource を設定してからオブジェクト生成後に
@@ -865,13 +883,12 @@ namespace EvangPL.Views.InputDetail
                 ItemsSource = locationNames
             };
 
-            // ✅ [変更] 発注入庫の場合、PO明細行が持つロケーション名と一致するものを初期選択にする。
-            //    見つからない場合（振替/返品入庫、またはPO側にロケーション未設定など）は
-            //    従来どおり先頭にフォールバックする（候補が1件も無い場合は未選択のまま）。
-            if (isPurchaseOrderReceipt && currentItem != null && !string.IsNullOrEmpty(currentItem.locationName)
-                && locationNames.Contains(currentItem.locationName))
+            // ✅ [変更] 入庫区分に関係なく、既定のロケーション名（振替入庫は移動先、それ以外はPO明細行のロケーション）と
+            //    一致するものを初期選択にする。見つからない場合は従来どおり先頭にフォールバックする
+            //    （候補が1件も無い場合は未選択のまま）。
+            if (!string.IsNullOrEmpty(preferredLocationName) && locationNames.Contains(preferredLocationName))
             {
-                _locationPicker.SelectedItem = currentItem.locationName;
+                _locationPicker.SelectedItem = preferredLocationName;
             }
             else if (locationNames.Count > 0)
             {
@@ -961,16 +978,18 @@ namespace EvangPL.Views.InputDetail
                     new ColumnDefinition { Width = GridLength.Auto }   // ✅ [変更] 単位文字列の長さに追従
                 }
             };
-            // ✅ [変更] 発注入庫の場合、PO明細行の残数量(remainingQty)を数量欄の初期値としてセットする。
+
+            // ✅ [変更] 数量欄の初期値：入庫区分（発注/返品/振替）に関係なく、PO明細行の残数量(remainingQty)をセットする。
             //    ユーザーはそのまま使うことも、必要に応じて手動で変更することもできる。
             //    ★[追加] ただしシリアル管理品目は「1件＝数量1」固定のため、初期値も常に"1"にする
             //    （残数量が2以上あっても、シリアル番号ごとに1件ずつ「+明細を追加」してもらう運用のため）。
+            //    残数量が0以下の場合は空欄のままにする。
             string initialQtyText;
-            if (currentItem != null && currentItem.isSerialItem)
+            if (currentItem.isSerialItem)
             {
                 initialQtyText = "1";
             }
-            else if (isPurchaseOrderReceipt && currentItem != null)
+            else if (currentItem.remainingQty > 0)
             {
                 initialQtyText = currentItem.remainingQty.ToString();
             }
@@ -998,7 +1017,7 @@ namespace EvangPL.Views.InputDetail
             qtyRow.Add(WrapInputControl(_qtyEntry), 0, 0);
 
             // ✅ [変更] 数量欄の単位：PO明細行の units を優先。空なら「個」。
-            var currentUnitText = GetUnitDisplay(currentItem?.units);
+            var currentUnitText = GetUnitDisplay(currentItem.units);
             qtyRow.Add(new Label
             {
                 Text = currentUnitText,
