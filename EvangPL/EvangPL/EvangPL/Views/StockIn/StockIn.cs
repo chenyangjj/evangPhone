@@ -218,10 +218,10 @@ namespace EvangPL.Views.StockIn
                 Text = "次へ ▶",
                 WidthRequest = 110,
                 HeightRequest = 40,
-                BackgroundColor = Colors.White,                 
-                BorderColor = Color.FromArgb("#1f3854"),        
+                BackgroundColor = Colors.White,
+                BorderColor = Color.FromArgb("#1f3854"),
                 BorderWidth = 1,
-                TextColor = Color.FromArgb("#1f3854"),          
+                TextColor = Color.FromArgb("#1f3854"),
                 VerticalOptions = LayoutOptions.Center
             };
             nextPageBtn.Clicked += async (s, e) => await NextPage();
@@ -487,10 +487,14 @@ namespace EvangPL.Views.StockIn
                         //    PO_LINES が0件で返ってくるケースがある（データの整合性ズレ等）。
                         //    詳細画面へ遷移する前にここで実データの有無を確認し、
                         //    無ければ遷移させず、メッセージのみ表示する（カードの見た目は変更しない）。
-                        //    ※ここでは常にサーバーへ実際に問い合わせて判定する（前端側の推測キャッシュは使用しない）。
-                        bool hasItems = await CheckHasReceivableItems(item.OrderId, item.InboundType);
+                        //
+                        // ✅ [変更] 確認のために取得した GetStockInDetail の応答(preloaded)を、
+                        //    そのまま InputDetail へ渡す。これにより InputDetail 側で同じRESTletを
+                        //    もう一度呼ぶ必要がなくなり、「ローディングが2回出る」「詳細画面が
+                        //    一瞬白画面になる」現象が解消される（移動伝票は集計が重く特に目立っていた）。
+                        var preloaded = await FetchReceivableDetail(item.OrderId, item.InboundType);
 
-                        if (!hasItems)
+                        if (preloaded == null)
                         {
                             await DisplayAlert("お知らせ", "対象の入庫明細（品目）が見つかりませんでした。", "OK");
 
@@ -513,7 +517,8 @@ namespace EvangPL.Views.StockIn
                             ItemName = item.ItemName
                         };
 
-                        var detailPage = new EvangPL.Views.InputDetail.InputDetail(detailInfo);
+                        // ✅ [変更] 取得済みの応答を渡して詳細画面を生成（再リクエストなし）
+                        var detailPage = new EvangPL.Views.InputDetail.InputDetail(detailInfo, preloaded);
                         await Navigation.PushAsync(detailPage);
 
                         // ✅ 詳細画面から戻ってきた場合に備えて、正常だったのでジェスチャーを再度付与しておく
@@ -532,14 +537,15 @@ namespace EvangPL.Views.StockIn
             return cardFrame;
         }
 
-        // ✅ 詳細画面用RESTlet（GetStockInDetail）を叩いて、対象伝票に
-        //    実際に受領可能な品目（PO_LINES）が存在するかどうかを確認する。
-        //    一覧のItemCount（検索結果の集計値）だけでは実データとズレる可能性があるための保険。
-        //    ※このメソッドは常にサーバーへ問い合わせて真の状態を返す。前端側で結果を推測・キャッシュしない。
-        private async Task<bool> CheckHasReceivableItems(string? orderId, string? inboundType)
+        // ✅ [変更] 旧 CheckHasReceivableItems（bool を返す）を置き換え。
+        //    詳細画面用RESTlet（GetStockInDetail）を叩いて、対象伝票に実際に受領可能な品目（PO_LINES）が
+        //    存在するかを確認し、存在する場合は【応答そのもの】を返す。存在しない／通信エラーの場合は null。
+        //    返した応答は InputDetail のコンストラクタへ渡され、そこでの再リクエストを省略するために使われる。
+        //    ※常にサーバーへ問い合わせて真の状態を返す。前端側で結果を推測・キャッシュしない。
+        private async Task<ResponseData<EvangJsonModel, EvangJsonModel>?> FetchReceivableDetail(string? orderId, string? inboundType)
         {
             if (string.IsNullOrEmpty(orderId))
-                return false;
+                return null;
 
             try
             {
@@ -554,24 +560,24 @@ namespace EvangPL.Views.StockIn
                 var result = await this.Post<EvangPL.Views.InputDetail.InputDetail.StockInDetailParam, EvangJsonModel, EvangJsonModel, EvangJsonModel>(request);
 
                 if (result == null || !result.Success || result.SubData == null)
-                    return false;
+                    return null;
 
                 foreach (var subData in result.SubData)
                 {
                     if (subData.SubName == "PO_LINES")
                     {
                         var lines = BaseUtils.JsonToClass<List<EvangPL.Views.InputDetail.InputDetail.PoLineItem>>(subData.SubJson!);
-                        return lines != null && lines.Count > 0;
+                        return (lines != null && lines.Count > 0) ? result : null;
                     }
                 }
 
-                return false;
+                return null;
             }
             catch (Exception ex)
             {
                 // ✅ 通信エラー等が発生した場合も「受領不可」として扱い、詳細画面へは進ませない
-                System.Diagnostics.Debug.WriteLine($"CheckHasReceivableItems Error: {ex.Message}");
-                return false;
+                System.Diagnostics.Debug.WriteLine($"FetchReceivableDetail Error: {ex.Message}");
+                return null;
             }
         }
 
