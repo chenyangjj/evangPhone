@@ -85,7 +85,7 @@ namespace EvangPL.Views.InventoryInquiry
                     new RowDefinition { Height = GridLength.Auto }, // 検索条件
                     new RowDefinition { Height = GridLength.Star }  // 結果一覧
                 },
-                BackgroundColor = Color.FromArgb("#eff1f5")
+                BackgroundColor = Color.FromArgb("#eff0f0")
             };
 
             // 検索条件エリア
@@ -101,7 +101,7 @@ namespace EvangPL.Views.InventoryInquiry
                 Padding = new Thickness(0),
                 Margin = new Thickness(0),
                 StrokeThickness = 0,
-                BackgroundColor = Color.FromArgb("#eff1f5"),
+                BackgroundColor = Color.FromArgb("#eff0f0"),
                 Content = mainGrid
             };
         }
@@ -232,10 +232,11 @@ namespace EvangPL.Views.InventoryInquiry
                 Text = "検　索",
                 BackgroundColor = Color.FromArgb("#245a96"),
                 TextColor = Colors.White,
-                HeightRequest = 45,
-                CornerRadius = 5,
+                HeightRequest = 40,
+                CornerRadius = 6,
+                FontSize = 14,
                 FontAttributes = FontAttributes.Bold,
-                Margin = new Thickness(0, 10, 0, 0)
+                Margin = new Thickness(0, 5, 0, 0)
             };
             // 【確認】イベントハンドラが正しく登録されているか
             searchButton.Clicked += async (sender, e) => await OnbtnSearchClicked(sender, e);
