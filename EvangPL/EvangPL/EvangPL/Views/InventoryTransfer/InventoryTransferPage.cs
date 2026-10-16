@@ -104,7 +104,7 @@ namespace EvangPL.Views.InventoryTransfer
                     new RowDefinition { Height = GridLength.Auto },
                     new RowDefinition { Height = GridLength.Star }
                 },
-                BackgroundColor = Color.FromArgb("#eff1f5")
+                BackgroundColor = Color.FromArgb("#eff0f0")
             };
 
             // 上部: 検索条件 + ボタン + ページング
@@ -113,8 +113,8 @@ namespace EvangPL.Views.InventoryTransfer
 
             contentLayout = new VerticalStackLayout
             {
-                Padding = new Thickness(15, 10, 15, 20),
-                Spacing = 10
+                Padding = new Thickness(10),
+                Spacing = 8
             };
 
             var scrollView = new ScrollView
@@ -129,7 +129,7 @@ namespace EvangPL.Views.InventoryTransfer
                 Padding = new Thickness(0),
                 Margin = new Thickness(0),
                 StrokeThickness = 0,
-                BackgroundColor = Color.FromArgb("#eff1f5"),
+                BackgroundColor = Color.FromArgb("#eff0f0"),
                 Content = mainGrid
             };
             await GetMockData("data");
@@ -142,7 +142,7 @@ namespace EvangPL.Views.InventoryTransfer
         {
             var layout = new VerticalStackLayout
             {
-                Padding = new Thickness(15, 10),
+                Padding = new Thickness(10, 10),
                 Spacing = 10,
                 BackgroundColor = Colors.Transparent
             };
@@ -399,48 +399,50 @@ namespace EvangPL.Views.InventoryTransfer
             paginationLayout = new Grid
             {
                 ColumnDefinitions =
-                {
-                    new ColumnDefinition { Width = GridLength.Star },
-                    new ColumnDefinition { Width = GridLength.Auto },
-                    new ColumnDefinition { Width = GridLength.Star }
-                },
-                ColumnSpacing = 10,
-                Margin = new Thickness(0, 5, 0, 0)
+        {
+            new ColumnDefinition { Width = GridLength.Auto },
+            new ColumnDefinition { Width = GridLength.Star },
+            new ColumnDefinition { Width = GridLength.Auto }
+        },
+                ColumnSpacing = 15,
+                Padding = new Thickness(0, 0),
+                VerticalOptions = LayoutOptions.Center
             };
 
             prevButton = new Button
             {
                 Text = "◀ 前へ",
-                FontSize = 12,
+                WidthRequest = 110,
+                HeightRequest = 40,
                 BackgroundColor = Color.FromArgb("#e0e0e0"),
                 TextColor = Colors.Gray,
-                CornerRadius = 5,
-                HeightRequest = 35,
-                IsEnabled = false
+                BorderColor = Colors.Transparent,
+                BorderWidth = 0,
+                VerticalOptions = LayoutOptions.Center
             };
             prevButton.Clicked += OnPrevClicked;
             paginationLayout.Add(prevButton, 0, 0);
 
             pageLabel = new Label
             {
-                Text = "1 / 1",
-                FontSize = 13,
-                TextColor = Colors.Black,
-                HorizontalTextAlignment = TextAlignment.Center,
-                VerticalTextAlignment = TextAlignment.Center
+                Text = "1/1",
+                HorizontalOptions = LayoutOptions.Center,
+                VerticalOptions = LayoutOptions.Center,
+                FontSize = 12,
+                FontAttributes = FontAttributes.Bold
             };
             paginationLayout.Add(pageLabel, 1, 0);
 
             nextButton = new Button
             {
                 Text = "次へ ▶",
-                FontSize = 12,
+                WidthRequest = 110,
+                HeightRequest = 40,
                 BackgroundColor = Colors.White,
-                TextColor = Color.FromArgb("#1f3854"),
                 BorderColor = Color.FromArgb("#1f3854"),
                 BorderWidth = 1,
-                CornerRadius = 5,
-                HeightRequest = 35
+                TextColor = Color.FromArgb("#1f3854"),
+                VerticalOptions = LayoutOptions.Center
             };
             nextButton.Clicked += OnNextClicked;
             paginationLayout.Add(nextButton, 2, 0);
@@ -677,7 +679,7 @@ namespace EvangPL.Views.InventoryTransfer
         {
             if (pageLabel == null || prevButton == null || nextButton == null) return;
 
-            pageLabel.Text = $"{currentPage + 1} / {totalPages}";
+            pageLabel.Text = $"{currentPage + 1}/{totalPages}";
 
             prevButton.IsEnabled = currentPage > 0;
             nextButton.IsEnabled = currentPage < totalPages - 1;
