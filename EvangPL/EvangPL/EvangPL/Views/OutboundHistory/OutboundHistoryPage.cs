@@ -99,7 +99,8 @@ namespace EvangPL.Views.OutboundHistory
                 {
                     new RowDefinition { Height = GridLength.Auto },
                     new RowDefinition { Height = GridLength.Star }
-                }
+                },
+                BackgroundColor = Color.FromArgb("#eff0f0")
             };
 
             // 検索条件エリア
@@ -115,7 +116,7 @@ namespace EvangPL.Views.OutboundHistory
                 Padding = new Thickness(0),
                 Margin = new Thickness(0),
                 StrokeThickness = 0,
-                BackgroundColor = Color.FromArgb("#eff1f5"),
+                BackgroundColor = Color.FromArgb("#eff0f0"),
                 Content = mainGrid
             };
         }
@@ -127,7 +128,8 @@ namespace EvangPL.Views.OutboundHistory
         {
             contentLayout = new VerticalStackLayout
             {
-                Padding = new Thickness(2),
+                Padding = new Thickness(10),
+                Spacing = 8,
                 Margin = new Thickness(0)
             };
 
@@ -144,12 +146,13 @@ namespace EvangPL.Views.OutboundHistory
         {
             var searchFilterGrid = new Grid
             {
-                BackgroundColor = Color.FromArgb("#f5f5f5"),
+                BackgroundColor = Colors.Transparent
             };
 
             var filterLayout = new VerticalStackLayout
             {
-                Spacing = 8
+                Padding = new Thickness(10, 10),
+                Spacing = 10
             };
 
             // --- 対象期間 & ロケーション ---
@@ -325,9 +328,10 @@ namespace EvangPL.Views.OutboundHistory
                 Text = "検　索",
                 BackgroundColor = Color.FromArgb("#245a96"),
                 TextColor = Colors.White,
-                HeightRequest = 45,
-                CornerRadius = 5,
+                HeightRequest = 40,          
+                CornerRadius = 6,            
                 FontAttributes = FontAttributes.Bold,
+                FontSize = 14,               
                 Margin = new Thickness(0, 5, 0, 0)
             };
             searchButton.Clicked += async (sender, e) => await OnbtnSearchClicked(sender, e);
@@ -377,102 +381,58 @@ namespace EvangPL.Views.OutboundHistory
             paginationLayout = new Grid
             {
                 IsVisible = false,
-                RowDefinitions =
-                {
-                    new RowDefinition { Height = GridLength.Auto },
-                    new RowDefinition { Height = GridLength.Auto }
-                },
-                HorizontalOptions = LayoutOptions.Fill,
-                VerticalOptions = LayoutOptions.Center,
-                RowSpacing = 3,
-                Padding = new Thickness(10, 0)
-            };
-
-            var buttonRow = new Grid
-            {
                 ColumnDefinitions =
-                {
-                    new ColumnDefinition { Width = GridLength.Star },
-                    new ColumnDefinition { Width = GridLength.Auto },
-                    new ColumnDefinition { Width = GridLength.Star }
-                },
+        {
+            new ColumnDefinition { Width = GridLength.Auto },
+            new ColumnDefinition { Width = GridLength.Star },
+            new ColumnDefinition { Width = GridLength.Auto }
+        },
                 ColumnSpacing = 15,
+                Padding = new Thickness(0, 0),
                 HorizontalOptions = LayoutOptions.Fill,
                 VerticalOptions = LayoutOptions.Center
             };
 
-            // 前へボタン
+            // ===== 前へボタン =====
             prevButton = new Button
             {
                 Text = "◀ 前へ",
-                FontSize = 12,
-                BackgroundColor = Colors.White,
-                TextColor = Color.FromArgb("#1f3854"),
-                BorderColor = Color.FromArgb("#1f3854"),
-                BorderWidth = 1,
-                CornerRadius = 5,
-                HeightRequest = 35,
-                MinimumHeightRequest = 30,
-                IsEnabled = false,
-                HorizontalOptions = LayoutOptions.Fill,
-                Padding = new Thickness(2)
+                WidthRequest = 110,
+                HeightRequest = 40,
+                BackgroundColor = Color.FromArgb("#e0e0e0"),
+                TextColor = Colors.Gray,
+                BorderColor = Colors.Transparent,
+                BorderWidth = 0,
+                VerticalOptions = LayoutOptions.Center
             };
             prevButton.Clicked += OnPrevButtonClicked;
-            Grid.SetColumn(prevButton, 0);
+            paginationLayout.Add(prevButton, 0, 0);
 
-            // ページ数ラベル
+            // ===== ページ数ラベル =====
             pageLabel = new Label
             {
-                FontSize = 12,
-                TextColor = Colors.Black,
+                Text = "1/1",
                 HorizontalOptions = LayoutOptions.Center,
-                HorizontalTextAlignment = TextAlignment.Center,
-                VerticalTextAlignment = TextAlignment.Center,
-                Margin = new Thickness(0, 5, 0, 5),
-                Padding = new Thickness(0, 5, 0, 0)
+                VerticalOptions = LayoutOptions.Center,
+                FontSize = 12,
+                FontAttributes = FontAttributes.Bold
             };
-            Grid.SetColumn(pageLabel, 1);
+            paginationLayout.Add(pageLabel, 1, 0);
 
-            // 次へボタン
+            // ===== 次へボタン =====
             nextButton = new Button
             {
                 Text = "次へ ▶",
-                FontSize = 12,
+                WidthRequest = 110,
+                HeightRequest = 40,
                 BackgroundColor = Colors.White,
-                TextColor = Color.FromArgb("#1f3854"),
                 BorderColor = Color.FromArgb("#1f3854"),
                 BorderWidth = 1,
-                CornerRadius = 5,
-                HeightRequest = 35,
-                MinimumHeightRequest = 30,
-                IsEnabled = false,
-                HorizontalOptions = LayoutOptions.Fill,
-                Padding = new Thickness(2)
+                TextColor = Color.FromArgb("#1f3854"),
+                VerticalOptions = LayoutOptions.Center
             };
             nextButton.Clicked += OnNextButtonClicked;
-            Grid.SetColumn(nextButton, 2);
-
-            buttonRow.Children.Add(prevButton);
-            buttonRow.Children.Add(pageLabel);
-            buttonRow.Children.Add(nextButton);
-
-            // 合計件数ラベル (画像指示により合計数量は表示しないが、ページング情報のみ残す場合はここを調整)
-            // 画像のデザインでは合計行がないため、totalLabelは非表示またはページ情報のみに使用
-            totalLabel = new Label
-            {
-                FontSize = 12,
-                TextColor = Colors.Gray,
-                HorizontalOptions = LayoutOptions.Center,
-                HorizontalTextAlignment = TextAlignment.Center,
-                Margin = new Thickness(0),
-                IsVisible = false // 合計数量を削除するため非表示
-            };
-
-            Grid.SetRow(buttonRow, 0);
-            Grid.SetRow(totalLabel, 1);
-
-            paginationLayout.Children.Add(buttonRow);
-            paginationLayout.Children.Add(totalLabel);
+            paginationLayout.Add(nextButton, 2, 0);
         }
 
         // ==========================================
@@ -689,21 +649,26 @@ namespace EvangPL.Views.OutboundHistory
         /// </summary>
         private void UpdatePaginationControls()
         {
-            if (paginationLayout == null || pageLabel == null || totalLabel == null ||
+            if (paginationLayout == null || pageLabel == null ||
                 prevButton == null || nextButton == null || allOutboundData == null)
                 return;
 
-            pageLabel.Text = $"{currentPage + 1} / {totalPages}";
-
-            // 合計数量は表示しないため、totalLabelは更新しないか非表示のまま
+            pageLabel.Text = $"{currentPage + 1}/{totalPages}";
 
             prevButton.IsEnabled = currentPage > 0;
             nextButton.IsEnabled = currentPage < totalPages - 1;
 
-            prevButton.TextColor = prevButton.IsEnabled ? Color.FromArgb("#1f3854") : Colors.Gray;
-            nextButton.TextColor = nextButton.IsEnabled ? Color.FromArgb("#1f3854") : Colors.Gray;
-            prevButton.BorderColor = prevButton.IsEnabled ? Color.FromArgb("#1f3854") : Colors.Gray;
-            nextButton.BorderColor = nextButton.IsEnabled ? Color.FromArgb("#1f3854") : Colors.Gray;
+            // ===== 前へボタン =====
+            prevButton.BackgroundColor = prevButton.IsEnabled ? Colors.White : Color.FromArgb("#e0e0e0");
+            prevButton.TextColor       = prevButton.IsEnabled ? Color.FromArgb("#1f3854") : Colors.Gray;
+            prevButton.BorderColor     = prevButton.IsEnabled ? Color.FromArgb("#1f3854") : Colors.Transparent;
+            prevButton.BorderWidth     = prevButton.IsEnabled ? 1 : 0;
+
+            // ===== 次へボタン =====
+            nextButton.BackgroundColor = nextButton.IsEnabled ? Colors.White : Color.FromArgb("#e0e0e0");
+            nextButton.TextColor       = nextButton.IsEnabled ? Color.FromArgb("#1f3854") : Colors.Gray;
+            nextButton.BorderColor     = nextButton.IsEnabled ? Color.FromArgb("#1f3854") : Colors.Transparent;
+            nextButton.BorderWidth     = nextButton.IsEnabled ? 1 : 0;
         }
 
         private void ShowPagination()
