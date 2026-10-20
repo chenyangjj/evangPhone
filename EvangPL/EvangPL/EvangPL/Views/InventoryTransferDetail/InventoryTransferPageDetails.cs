@@ -51,7 +51,7 @@ namespace EvangPL.Views.InventoryTransferPageDetails
         private bool _currentItemIsLot;
         private bool _currentItemIsSerial;
         private Label? _qtyUnitLabel;
-        private string _currentItemUnit = "個";
+        private string _currentItemUnit = "";
 
         private static readonly Color InputBorderColor = Color.FromArgb("#cdd2dc");
         private static readonly Color InputBackgroundColor = Colors.White;
@@ -482,7 +482,7 @@ namespace EvangPL.Views.InventoryTransferPageDetails
             qtyRow.Add(_qtyEntryBorder, 0, 0);
             _qtyUnitLabel = new Label
             {
-                Text = "個",
+                Text = "",
                 VerticalOptions = LayoutOptions.Center,
                 HorizontalTextAlignment = TextAlignment.Center
             };
@@ -693,7 +693,7 @@ namespace EvangPL.Views.InventoryTransferPageDetails
                         ItemCode = itemCode,
                         LotNo = "",
                         Qty = nonLotQty,
-                        Unit = string.IsNullOrEmpty(_currentItemUnit) ? "個" : _currentItemUnit
+                        Unit = _currentItemUnit
                     });
                 }
 
@@ -761,8 +761,8 @@ namespace EvangPL.Views.InventoryTransferPageDetails
             _currentItemIsSerial = false;
             islotflag = false;
 
-            _currentItemUnit = "個";
-            if (_qtyUnitLabel != null) _qtyUnitLabel.Text = "個";
+            _currentItemUnit = "";
+            if (_qtyUnitLabel != null) _qtyUnitLabel.Text = "";
 
             if (_lotSectionContainer != null)
                 _lotSectionContainer.IsVisible = true;
@@ -839,7 +839,7 @@ namespace EvangPL.Views.InventoryTransferPageDetails
                 };
                 var qtyLabel = new Label
                 {
-                    Text = $"{detail.TotalQty}{detail.Unit ?? "個"}",
+                    Text = $"{detail.TotalQty}{detail.Unit}",
                     FontSize = 11,
                     Padding = new Thickness(4),
                     BackgroundColor = rowBg,
@@ -944,7 +944,7 @@ namespace EvangPL.Views.InventoryTransferPageDetails
             _currentItemIsSerial = false;
             islotflag = detail.IsLotItem;
 
-            _currentItemUnit = string.IsNullOrEmpty(detail.Unit) ? "個" : detail.Unit;
+            _currentItemUnit = detail.Unit ?? "";
             if (_qtyUnitLabel != null)
                 _qtyUnitLabel.Text = _currentItemUnit;
 
@@ -1069,7 +1069,7 @@ namespace EvangPL.Views.InventoryTransferPageDetails
                             ItemCode = currentItemCode,
                             LotNo = "",
                             Qty = qtyVal,
-                            Unit = string.IsNullOrEmpty(_currentItemUnit) ? "個" : _currentItemUnit
+                            Unit = _currentItemUnit
                         });
                     }
 
@@ -1210,7 +1210,7 @@ namespace EvangPL.Views.InventoryTransferPageDetails
 
             if (string.IsNullOrEmpty(text))
             {
-                _currentItemUnit = "個";
+                _currentItemUnit = "";
                 ApplyItemDetail(false, false);
                 return;
             }
@@ -1257,7 +1257,7 @@ namespace EvangPL.Views.InventoryTransferPageDetails
                                     isSerial = true;
                                 }
 
-                                _currentItemUnit = string.IsNullOrEmpty(islotInfo.unit) ? "個" : islotInfo.unit;
+                                _currentItemUnit = islotInfo.unit ?? "";
                             }
                             break;
                         }
@@ -1295,7 +1295,7 @@ namespace EvangPL.Views.InventoryTransferPageDetails
 
             if (_qtyUnitLabel != null)
             {
-                _qtyUnitLabel.Text = string.IsNullOrEmpty(_currentItemUnit) ? "個" : _currentItemUnit;
+                _qtyUnitLabel.Text = _currentItemUnit;
             }
 
             RefreshPendingLotTable();
@@ -1353,7 +1353,7 @@ namespace EvangPL.Views.InventoryTransferPageDetails
                     ItemCode = _currentItemCode,
                     LotNo = lotNo,
                     Qty = qty,
-                    Unit = string.IsNullOrEmpty(_currentItemUnit) ? "個" : _currentItemUnit
+                    Unit = _currentItemUnit
                 });
 
                 if (_lotEntry != null) _lotEntry.Text = string.Empty;
@@ -1526,7 +1526,7 @@ namespace EvangPL.Views.InventoryTransferPageDetails
 
                 tableGrid.Add(new Label
                 {
-                    Text = $"{item.Qty}{item.Unit ?? "個"}",
+                    Text = $"{item.Qty}{item.Unit}",
                     FontSize = 11,
                     Padding = new Thickness(4),
                     HorizontalOptions = LayoutOptions.Fill,
@@ -1677,7 +1677,7 @@ namespace EvangPL.Views.InventoryTransferPageDetails
             public string ItemCode { get; set; } = "";
             public string LotNo { get; set; } = "";
             public int Qty { get; set; }
-            public string Unit { get; set; } = "個";
+            public string Unit { get; set; } = "";
         }
 
         public class TransferDetailItem
@@ -1690,7 +1690,7 @@ namespace EvangPL.Views.InventoryTransferPageDetails
 
             public int TotalQty => Lots.Sum(x => x.Qty);
 
-            public string Unit => Lots.FirstOrDefault()?.Unit ?? "個";
+            public string Unit => Lots.FirstOrDefault()?.Unit ?? "";
         }
 
         public class StockTransferSearchParam : EvangJsonModel
