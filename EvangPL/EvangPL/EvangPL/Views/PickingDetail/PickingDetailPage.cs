@@ -372,7 +372,7 @@ namespace EvangPL.Views.PickingDetail
         //    テーブル・数量欄など、全ての単位表示箇所でこのメソッドを通す。
         private static string GetUnitDisplay(string? unit)
         {
-            return string.IsNullOrWhiteSpace(unit) ? "個" : unit!;
+            return string.IsNullOrWhiteSpace(unit) ? "" : unit!;
         }
 
         // ==================== UI構築 ====================
