@@ -371,6 +371,34 @@ namespace EvangPL.Views.PickingDetail
             RefreshQtyForCurrentItem();
         }
 
+        // ✅ [追加] 按明细画面的登录顺序，找出下一条还没被梱包分配完的明细。
+        //    已追加的梱包数量按品目(ItemInternalId)依次冲抵各条明细，返回第一条仍有剩余的明细。
+        //    onlyItemCode 不为空时，只在该品目内查找。
+        private (string ItemCode, int Remaining)? GetNextOpenDetail(string? onlyItemCode = null)
+        {
+            var budget = AddedPackageList
+                .GroupBy(p => p.ItemInternalId ?? "")
+                .ToDictionary(g => g.Key, g => g.Sum(p => p.Qty));
+
+            foreach (var item in _packageItems)
+            {
+                if (item.Details == null || item.Details.Count == 0) continue;
+                var key = item.ItemInternalId ?? "";
+
+                foreach (var d in item.Details)
+                {
+                    budget.TryGetValue(key, out var left);
+                    var take = Math.Min(left, d.DetailQty);
+                    if (take > 0) budget[key] = left - take;
+
+                    var remain = d.DetailQty - take;
+                    if (remain > 0 && (onlyItemCode == null || item.ItemCode == onlyItemCode))
+                        return (item.ItemCode, remain);
+                }
+            }
+            return null;
+        }
+
         // ==================== [追加] 現在入力中の品目の残数量を数量欄へ反映する ====================
         /// <summary>
         /// 現在 _entryItemCode に入力されている品目コードについて、
@@ -383,22 +411,11 @@ namespace EvangPL.Views.PickingDetail
             if (_entryQty == null) return;
 
             var code = _entryItemCode?.Text?.Trim();
-            if (!string.IsNullOrEmpty(code) && _lineByItemCode.TryGetValue(code, out var lineIds))
+            if (!string.IsNullOrEmpty(code) && _lineByItemCode.ContainsKey(code))
             {
-                // ✅ [修正] 同一品目が複数行ある場合、各行ごとに残数量を計算し、
-                //    最も残量が多い行を自動選択する（1行が埋まると自動的に行が進む）
-                int maxRemaining = 0;
-                foreach (var lid in lineIds)
-                {
-                    var line = _packageItems.FirstOrDefault(p => p.LineId == lid);
-                    if (line == null) continue;
-                    var alreadyAdded = AddedPackageList
-                        .Where(p => p.ItemInternalId == line.ItemInternalId)
-                        .Sum(p => p.Qty);
-                    var remaining = line.UnshippedQty - alreadyAdded;
-                    if (remaining > maxRemaining) maxRemaining = remaining;
-                }
-                _entryQty.Text = maxRemaining > 0 ? maxRemaining.ToString() : "0";
+                // ✅ [修正] 带出的是下一条未分配完的"单条明细"的剩余数量，而不是品目合计
+                var next = GetNextOpenDetail(code);
+                _entryQty.Text = next.HasValue ? next.Value.Remaining.ToString() : "0";
             }
             else
             {
@@ -453,7 +470,8 @@ namespace EvangPL.Views.PickingDetail
                     var alreadyAddedForLine = AddedPackageList
                         .Where(p => p.ItemInternalId == checkLine.ItemInternalId)
                         .Sum(p => p.Qty);
-                    var remainingForLine = checkLine.UnshippedQty - alreadyAddedForLine;
+                    // ✅ [修正] 基準を UnshippedQty から、明細画面で追加登録した明細(Details)の数量合計に変更
+                    var remainingForLine = checkLine.Details.Sum(d => d.DetailQty) - alreadyAddedForLine;
                     if (remainingForLine > maxRemainingForItem) maxRemainingForItem = remainingForLine;
                 }
                 if (qty > maxRemainingForItem)
@@ -482,7 +500,17 @@ namespace EvangPL.Views.PickingDetail
             // ✅ 品目はクリアせず現在の入力を維持（連続登録の利便性向上）
 
             // ✅ [修正] 数量欄はクリアではなく、追加後の新しい残数量を再セットする
-            if (_entryItemCode != null) _entryItemCode.Text = string.Empty;
+            // ✅ [修正] 添加后自动带出下一条未分配完的明细（品目＋数量）
+            if (_entryItemCode != null)
+            {
+                var next = GetNextOpenDetail();
+                var nextCode = next?.ItemCode ?? string.Empty;
+
+                if (_entryItemCode.Text == nextCode)
+                    RefreshQtyForCurrentItem();          // 文本没变时 TextChanged 不触发，手动刷新数量
+                else
+                    _entryItemCode.Text = nextCode;      // 触发 OnItemCodeTextChanged，同步内部ID和数量
+            }
 
             RefreshAddedCount();
 
