@@ -435,7 +435,7 @@ namespace EvangPL.Views.InputDetail
         //    テーブル・数量欄など、全ての単位表示箇所でこのメソッドを通す。
         private static string GetUnitDisplay(string? unit)
         {
-            return string.IsNullOrWhiteSpace(unit) ? "個" : unit!;
+            return string.IsNullOrWhiteSpace(unit) ? "" : unit!;
         }
 
         // ==================== ヘッダー（仕入先/入荷予定日 + PO明細選択テーブル） ====================
