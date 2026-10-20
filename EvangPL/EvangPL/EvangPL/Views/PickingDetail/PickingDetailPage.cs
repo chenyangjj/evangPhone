@@ -49,33 +49,24 @@ namespace EvangPL.Views.PickingDetail
     /// ✅ [今回の修正分・追加]
     ///   7. シリアル管理品目（IsSerialItem=true）はロット管理対象外（IsLotItem=false）であっても、
     ///      入力欄自体は「シリアル番号」を入力するために編集可能にする必要がある。
-    ///      これまでは LotEditable（=IsLotItem）だけで編集可否を判定していたため、
-    ///      「ロット管理対象外 かつ シリアル管理対象」の品目でロット欄（実質シリアル欄）が
-    ///      誤って編集不可になっていた。LotOrSerialEditable を追加し、
-    ///      「ロット管理対象」または「シリアル管理対象」のいずれかであれば編集可とするよう修正。
-    ///      あわせてラベル・プレースホルダー・バリデーションメッセージもシリアル品目向けの文言に切り替える。
+    ///      LotOrSerialEditable を追加し、「ロット管理対象」または「シリアル管理対象」のいずれかであれば
+    ///      編集可とするよう修正。あわせてラベル・プレースホルダー・バリデーションメッセージも
+    ///      シリアル品目向けの文言に切り替える。
     ///
     /// ✅ [今回の修正分・追加2]
     ///   8. ★振替出荷(TR)の場合、ヘッダーに「顧客」欄ではなく「移動元:xxx → 移動先:xxx」を表示する
     ///      （画面5のTO一覧修正と合わせる）。
-    ///      CustomerName には画面5(StockOut.cs)側で既にこの形式の文字列が整形済みで渡ってくるため、
-    ///      本画面では見出しラベル「顧客」を出さない。空の見出し行自体も描画しない
-    ///      （前バージョンでは isTransfer でテキストだけ空にしていたため、空白の見出し行が
-    ///      無駄にレイアウトへ残ってしまっていた点も合わせて修正）。
-    ///      また、振替の移動元/移動先テキストは項目名が長くなりやすいため、
-    ///      顧客名(SO)用の太字14ptに固定せず、TRの場合はやや小さめ(12pt/非Bold)の
-    ///      表示に切り替えて画面5のカード表示と見た目を揃える。
     ///
     /// ✅ [今回の修正分・追加3・単位表示]
-    ///   9. 入庫詳細画面(InputDetail.cs)と同じ流儀で、RESTlet②(SEARCH)の PACKAGE_ITEMS が返す
-    ///      Units（単位文字列。空の場合あり）を、以下の全箇所で数量に付けて表示する：
-    ///        ・未出荷品目選択テーブルの「未出荷数量」「受注数量」
-    ///        ・明細登録エリアの数量欄の単位ラベル
-    ///        ・選択中品目の登録済み明細プレビュー表の「数量」
-    ///        ・底部の全品目分の登録済み明細一覧の「数量」
-    ///      Units が空/未取得の場合は GetUnitDisplay() が「個」を返す（既存表示と同じ）。
-    ///      ※ RESTlet②の PACKAGE_ITEMS に Units フィールドを追加してもらう必要がある
-    ///        （RESTlet側は Units: stringformat(r.units) の形で返却する想定）。
+    ///   9. RESTlet②(SEARCH)の PACKAGE_ITEMS が返す Units を、数量表示の全箇所で付けて表示する。
+    ///      Units が空/未取得の場合は GetUnitDisplay() が「個」を返す。
+    ///
+    /// ✅ [今回の修正分・追加4・Kit 表示]
+    ///   10. ★Kit 子行の品目表示を入庫と同じ「親 : 子」形式にする。
+    ///      RESTlet②の PACKAGE_ITEMS が返す ItemDisplayName / ParentItemCode を使い、
+    ///      品目選択表・明細登録エリアの見出し・底部の登録済み明細一覧で
+    ///      PackageItem.DisplayName（ItemDisplayName が空なら ItemCode）を表示する。
+    ///      ※ 保存時に RESTlet へ送る ItemCode / ItemInternalId は従来どおり（表示専用の変更）。
     /// </summary>
     public class PickingDetail : EvangContentVM
     {
@@ -245,7 +236,8 @@ namespace EvangPL.Views.PickingDetail
         }
 
         // ✅ SubData の中から SubName="PACKAGE_ITEMS" を取り出してパースする
-        //    RESTlet側は {LineId, ItemCode, ItemInternalId, IsLotItem, IsSerialItem, Units, LocationId, LocationName, OrderedQty, UnshippedQty} を返す
+        //    RESTlet側は {LineId, ItemCode, ParentItemCode, ItemDisplayName, ItemInternalId, IsLotItem, IsSerialItem,
+        //                 Units, LocationId, LocationName, OrderedQty, UnshippedQty} を返す
         //    （未出荷数量が0以下の行は含まれない）
         private List<PackageItem> ParsePackageItems(ResponseData<EvangJsonModel, EvangJsonModel> apiResult)
         {
@@ -273,6 +265,8 @@ namespace EvangPL.Views.PickingDetail
                         p.LocationId ??= "";
                         p.LocationName ??= "";
                         p.Units ??= "";          // ✅ [追加] RESTletが Units を未返却の場合の保険
+                        p.ParentItemCode ??= ""; // ✅ [追加] Kit 表示用。RESTletが未返却の場合の保険
+                        p.ItemDisplayName ??= "";// ✅ [追加] Kit 表示用。空なら DisplayName が ItemCode にフォールバック
                         p.Details ??= new List<PackageDetail>();
                         newList.Add(p);
                     }
@@ -372,7 +366,7 @@ namespace EvangPL.Views.PickingDetail
         //    テーブル・数量欄など、全ての単位表示箇所でこのメソッドを通す。
         private static string GetUnitDisplay(string? unit)
         {
-            return string.IsNullOrWhiteSpace(unit) ? "" : unit!;
+            return string.IsNullOrWhiteSpace(unit) ? "個" : unit!;
         }
 
         // ==================== UI構築 ====================
@@ -652,7 +646,8 @@ namespace EvangPL.Views.PickingDetail
                 var rowBg = isSelected ? SelectedRowColor : Colors.White;
 
                 // 列0=品目 / 列1=未出荷数量 / 列2=受注数量
-                var itemCodeLabel = new Label { Text = item.ItemCode, FontSize = 11, Padding = new Thickness(4), BackgroundColor = rowBg };
+                // ★Kit 対応：表示は DisplayName（Kit 子行は「親 : 子」、それ以外は ItemCode）
+                var itemCodeLabel = new Label { Text = item.DisplayName, FontSize = 11, Padding = new Thickness(4), BackgroundColor = rowBg };
 
                 // 品目の内部ID（非表示）。画面7-2 → RLでのライン照合に使うため、
                 // UI上は表示しないが品目名の隣に隠しラベルとして持たせておく。
@@ -743,7 +738,8 @@ namespace EvangPL.Views.PickingDetail
             var layout = new VerticalStackLayout { Spacing = 10 };
             layout.Children.Add(new Label
             {
-                Text = $"明細登録（{currentPackage.ItemCode}）",
+                // ★Kit 対応：見出しも DisplayName（Kit 子行は「親 : 子」）
+                Text = $"明細登録（{currentPackage.DisplayName}）",
                 FontSize = 13,
                 FontAttributes = FontAttributes.Bold
             });
@@ -1377,7 +1373,8 @@ namespace EvangPL.Views.PickingDetail
                 tableGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
                 var item = allDetails[r];
-                tableGrid.Add(new Label { Text = item.Package.ItemCode, FontSize = 11, Padding = new Thickness(4) }, 0, dataRowIndex);
+                // ★Kit 対応：品目列は DisplayName（Kit 子行は「親 : 子」）
+                tableGrid.Add(new Label { Text = item.Package.DisplayName, FontSize = 11, Padding = new Thickness(4) }, 0, dataRowIndex);
                 tableGrid.Add(new Label { Text = item.Detail.DetailNo, FontSize = 11, Padding = new Thickness(4) }, 1, dataRowIndex);
 
                 // ✅ [変更] 数量表示：単位（item.Detail.Unit）を付ける。空なら「個」。
@@ -1501,7 +1498,7 @@ namespace EvangPL.Views.PickingDetail
 
         /// <summary>
         /// 未出荷品目1行分。RESTlet②(SEARCH)のPACKAGE_ITEMSと1:1対応
-        /// （ItemCode/ItemInternalId/IsLotItem/IsSerialItem/Units/LocationId/LocationName/OrderedQty/UnshippedQty）。
+        /// （ItemCode/ParentItemCode/ItemDisplayName/ItemInternalId/IsLotItem/IsSerialItem/Units/LocationId/LocationName/OrderedQty/UnshippedQty）。
         /// Details は画面7-1でユーザーが入力したロット/ロケーション/数量の登録済み明細で、サーバーには送らず
         /// クライアント側で保持したまま画面7-2へ引き渡す。
         /// </summary>
@@ -1512,6 +1509,13 @@ namespace EvangPL.Views.PickingDetail
             //    ※ RESTlet(GetPickingDetail)の PACKAGE_ITEMS が "LineId" を返す必要がある。
             public string LineId { get; set; } = string.Empty;
             public string ItemCode { get; set; } = string.Empty;
+
+            // ★追加（Kit 表示）：Kit 子行は「親 : 子」。RESTlet 未返却（空）の場合は ItemCode にフォールバックする。
+            //    ※ 表示専用。保存時に RESTlet へ送る値（ItemCode / ItemInternalId）は変更しない。
+            public string ParentItemCode { get; set; } = string.Empty;
+            public string ItemDisplayName { get; set; } = string.Empty;
+            public string DisplayName => string.IsNullOrEmpty(ItemDisplayName) ? ItemCode : ItemDisplayName;
+
             // 品目の内部ID（NetSuiteのitem内部ID）。
             // RL保存時にItemCode(表示テキスト)ではなくこちらでラインを照合するために使用する。
             public string ItemInternalId { get; set; } = string.Empty;
