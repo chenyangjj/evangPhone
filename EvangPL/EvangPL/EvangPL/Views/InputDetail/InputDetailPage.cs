@@ -13,6 +13,11 @@ using Microsoft.Maui.Graphics.Text;
 using System.Collections.Generic;
 using System.Text.Json;
 using static System.Net.Mime.MediaTypeNames;
+using CommunityToolkit.Mvvm.Messaging;      // [追加] SafePostAsync（タイムアウトメッセージ送信）用
+using EvangSol.Mobibrary.Dialog;            // [追加] LoadingDialog 用
+using EvangSol.Mobibrary.Utilities.Message; // [追加] NetsuiteTimeoutMessage 用
+using System.Net.Http;                      // [追加] HttpClient 用
+using System.Text;                          // [追加] StringContent 用
 using InputDetailInfo = EvangPL.Utils.InputDetailInfo;
 
 namespace EvangPL.Views.InputDetail
@@ -171,39 +176,28 @@ namespace EvangPL.Views.InputDetail
                 // ✅ [追加] 取得済みの応答があればそれを使い、RESTletの再呼び出しを省略する
                 ResponseData<EvangJsonModel, EvangJsonModel>? result = _preloadedResult;
                 _preloadedResult = null;
-                try
+                bool apiSuccess = true;
+                string? apiErrorMessage = null;
+                if (result == null)
                 {
-                    // ✅ [追加] 自前のローディング遮罩を表示。
-                    //    ※注意：LoadDataFromApi() は BuildCompleteUI() より前に呼ばれるため、
-                    //    このタイミングでは _loadingOverlay がまだ null（画面自体が未構築）であり、
-                    //    実際には何も表示されない。初期表示時の"画面全体が薄暗く見える"症状の原因は、
-                    //    このRESTlet呼び出し自体ではなく、他の箇所（画面遷移アニメーションや
-                    //    EvangContentVM側の共通処理）にある可能性が高い。
-                    if (result == null)
-                    {
-                        ShowLoading();
-                        result = await this.Post<StockInDetailParam, EvangJsonModel, EvangJsonModel, EvangJsonModel>(request);
-                    }
-                }
-                finally
-                {
-                    // ✅ [修正] 確実にローディング遮罩を閉じる（例外・エラー時も含めて必ず通る）
-                    HideLoading();
+                    // ✅ [削除] 自前の ShowLoading()/HideLoading() は不要になった。
+                    //    SafePostAsync 内の共通 LoadingDialog が開閉を担当する。
+                    (apiSuccess, apiErrorMessage, result) = await SafePostAsync(RESTLET_GET_DETAIL, request);
                 }
 
                 if (result == null)
                 {
-                    System.Diagnostics.Debug.WriteLine("LoadDataFromApi: サーバーからの応答がありません。");
+                    System.Diagnostics.Debug.WriteLine($"LoadDataFromApi: サーバーからの応答がありません。({apiErrorMessage})");
                     await MainThread.InvokeOnMainThreadAsync(() =>
-                        DisplayAlert("エラー", "サーバーからの応答がありません。", "OK"));
+                        DisplayAlert("エラー", apiErrorMessage ?? "サーバーからの応答がありません。", "OK"));
                     return;
                 }
 
-                if (!result.Success)
+                if (!apiSuccess || !result.Success)
                 {
-                    System.Diagnostics.Debug.WriteLine($"LoadDataFromApi: API Error - {result.ErrorMessage}");
+                    System.Diagnostics.Debug.WriteLine($"LoadDataFromApi: API Error - {result.ErrorMessage ?? apiErrorMessage}");
                     await MainThread.InvokeOnMainThreadAsync(() =>
-                        DisplayAlert("エラー", result.ErrorMessage ?? "データ取得に失敗しました。", "OK"));
+                        DisplayAlert("エラー", result.ErrorMessage ?? apiErrorMessage ?? "データ取得に失敗しました。", "OK"));
                     return;
                 }
 
@@ -1402,10 +1396,6 @@ namespace EvangPL.Views.InputDetail
 
                 // ✅ [追加] 保存直前の最終防衛ライン（その2）：品目ごとに _pendingLots の合計数量が
                 //    残数量(remainingQty)を超えていないか再チェックする（超過許可がfalseの場合のみ）。
-                //    通常は「+ロットを追加」時点でチェック済みだが、
-                //    ・PO明細の残数量がAPI再取得等で変わっていた
-                //    ・将来的な実装変更で他の経路から_pendingLotsに追加された
-                //    といったケースに備えた保険的チェック。
                 if (!_allowOverReceipt)
                 {
                     // ✅ [変更] 同一品目が複数行ある場合に備え、ItemId ではなく LineId（PO明細行）単位でグルーピングし、
@@ -1435,11 +1425,6 @@ namespace EvangPL.Views.InputDetail
 
                 // ✅ [追加] 保存直前の最終防衛ライン（その3）：シリアル管理品目について、
                 //    _pendingLots内の番号が既存在庫（_existingSerials）と重複していないかを再チェックする。
-                //    通常は「+ロットを追加」時点でチェック済みだが、
-                //    ・他端末/他ユーザーが同じ番号で先に受領していた（本画面表示後にNetSuite側の在庫が変化した）
-                //    ・将来的な実装変更で他の経路から_pendingLotsに追加された
-                //    といったケースに備えた保険的チェック。ここで検知できなかった場合でも、
-                //    RESTlet側のsave()実行時にNetSuiteの一意性制約で最終的にブロックされる。
                 var duplicateSerialLot = _pendingLots.FirstOrDefault(p =>
                     serialItemIds.Contains(p.ItemId) &&
                     _existingSerials.Any(s => s.ItemId == p.ItemId && string.Equals(s.SerialNo, p.LotNo, StringComparison.OrdinalIgnoreCase)));
@@ -1476,32 +1461,21 @@ namespace EvangPL.Views.InputDetail
                 var request = new RequestData<StockInSaveParam, EvangJsonModel>(RESTLET_SAVE_STOCKIN);
                 request.Info = saveParam;
 
-                ResponseData<EvangJsonModel, EvangJsonModel>? saveResult = null;
-                try
-                {
-                    // ✅ [追加] 保存中はローディング遮罩を表示し、二重タップ等を防止する。
-                    //    こちらは BuildCompleteUI() 実行後（画面表示後）に呼ばれるため、
-                    //    _loadingOverlay は生成済みで、実際に画面が暗転して表示される。
-                    ShowLoading();
-                    saveResult = await this.Post<StockInSaveParam, EvangJsonModel, EvangJsonModel, EvangJsonModel>(request);
-                }
-                finally
-                {
-                    // ✅ [修正] 確実にローディング遮罩を閉じる（例外・エラー時も含めて必ず通る）
-                    HideLoading();
-                }
+                // ✅ [変更] this.Post() → SafePostAsync に切り替えた（出荷側 PickingDetail と同じ方式）。
+                //    Post() は NetSuite が Success=false を返すと、その場で ErrorDialog（ShowPopup）を
+                //    表示した上で null を返す。そのため下記の DisplayAlert と衝突し、
+                //    「NetSuite側でエラー → フロントが無応答になる」症状になっていた。
+                //    SafePostAsync はローディング遮罩を finally で必ず閉じ、
+                //    エラーメッセージは戻り値だけで返すので、画面は操作可能なまま Alert だけ出る。
+                //    ※自前の ShowLoading()/HideLoading() は共通 LoadingDialog と二重になるため削除した。
+                var (saveOk, saveError, saveResult) = await SafePostAsync(RESTLET_SAVE_STOCKIN, request);
 
-                if (saveResult == null)
+                if (!saveOk || saveResult == null)
                 {
                     await MainThread.InvokeOnMainThreadAsync(() =>
-                        DisplayAlert("エラー", "サーバーからの応答がありません。", "OK"));
-                    return;
-                }
-
-                if (!saveResult.Success)
-                {
-                    await MainThread.InvokeOnMainThreadAsync(() =>
-                        DisplayAlert("エラー", saveResult.ErrorMessage ?? "入庫保存に失敗しました。", "OK"));
+                        DisplayAlert("エラー", saveError ?? "入庫保存に失敗しました。", "OK"));
+                    // ✅ [重要] 保存失敗時は _pendingLots を消さずにその場で終了する。
+                    //    入力量・ロットを直して、同じ画面からそのまま再保存できる状態を維持するため。
                     return;
                 }
 
@@ -1525,14 +1499,8 @@ namespace EvangPL.Views.InputDetail
                 await MainThread.InvokeOnMainThreadAsync(() =>
                     DisplayAlert("成功", $"入庫保存が完了しました。\n入庫伝票番号: {receiptNumber}", "OK"));
 
-                // ✅ [追加] 一覧画面（StockIn）に「この伝票の受領処理が完了した」ことを伝えておく。
-                //    一覧画面へ戻った際に再度このカードをタップしても、
-                //    「対象の入庫明細が見つかりません」という誤解を招くAlertが表示されないようにするため。
-                //EvangPL.Views.StockIn.StockIn.MarkOrderAsCompleted(_orderId);
-
                 // ✅ [変更] 保存成功後は本画面を再構築せず、呼び出し元の一覧画面（StockIn）へ戻る。
-                //    一覧画面側の OnAppearing で、保存済みの検索条件を使ってサーバーへ再検索をかけ、
-                //    最新のステータス/数量を反映する（詳細は StockIn.OnAppearing / RefreshSearchFromServer 参照）。
+                //    一覧画面側の OnAppearing で、保存済みの検索条件を使ってサーバーへ再検索をかける。
                 await MainThread.InvokeOnMainThreadAsync(async () =>
                 {
                     await Navigation.PopAsync();
@@ -1540,11 +1508,92 @@ namespace EvangPL.Views.InputDetail
             }
             catch (Exception ex)
             {
-                // ✅ [補足] ローディング遮罩は内側のtry/finally（HideLoading()）で既に閉じられているため、
-                //    ここで改めて呼ぶ必要はない。
+                // ✅ [変更] ローディング遮罩は SafePostAsync 内の finally で確実に閉じられているため、
+                //    ここで HideLoading() を呼ぶ必要はない。
 
                 await MainThread.InvokeOnMainThreadAsync(() =>
                     DisplayAlert("エラー", $"保存処理中にエラーが発生しました: {ex.Message}", "OK"));
+            }
+        }
+
+        // ✅ [追加] PickingDetail（出荷側）と同じ RESTlet呼び出し共通処理。
+        //    this.Post() は NetSuite が Success=false を返した瞬間に ErrorDialog（ShowPopup）を
+        //    先に出して null を返すため、呼び出し側の DisplayAlert が Popup と衝突して無応答になる。
+        //    さらに restlet 未登録・トークン取得失敗の経路は finally を通らず、
+        //    グローバルな loading 遮罩と runninglist が開きっぱなしになり、
+        //    以降同じ RESTlet への要求が全て二重起動チェックで弾かれる（＝画面が永久に固まる）。
+        //    ・LoadingDialog は try/finally で必ず閉じる（成功/失敗/例外/タイムアウトいずれでも）
+        //    ・Success=false では共通エラーページを出さず、ErrorMessage を戻り値で返す
+        //      （呼び出し側が DisplayAlert で表示する）
+        //    ・ErrorMessage が空の場合も、必ず空でないメッセージを返す
+        //    ※loading / oauth2_client は共通ライブラリの静的メンバをそのまま使い、
+        //      既存の LoadingDialog とインスタンスを共有する。
+        private async Task<(bool Success, string? ErrorMessage, ResponseData<EvangJsonModel, EvangJsonModel>? Data)> SafePostAsync(string restletName, object request)
+        {
+            if (NetsuiteClient.loading == null) NetsuiteClient.loading = new LoadingDialog();
+            await MainThread.InvokeOnMainThreadAsync(() => NetsuiteClient.loading?.LoadingShow(this));
+
+            try
+            {
+                var (token, errMsg) = await NetsuiteClient.oauth2_client.GetValidAccessTokenAsync().ConfigureAwait(false);
+                if (string.IsNullOrEmpty(token))
+                    return (false, errMsg ?? "認証トークンの取得に失敗しました。", null);
+
+                var json = System.Text.Json.JsonSerializer.Serialize(request, request.GetType());
+
+                using var client = new HttpClient();
+                client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+
+                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(60));
+                var response = await client.PostAsync(
+                    LocalMemory.restlets[restletName],
+                    new StringContent(json, Encoding.UTF8, "application/json"),
+                    cts.Token).ConfigureAwait(false);
+
+                var content = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+
+                if (!response.IsSuccessStatusCode)
+                    return (false, $"サーバーエラー ({(int)response.StatusCode}): {content}", null);
+
+                ResponseData<EvangJsonModel, EvangJsonModel>? result;
+                try
+                {
+                    result = System.Text.Json.JsonSerializer.Deserialize<ResponseData<EvangJsonModel, EvangJsonModel>>(content);
+                }
+                catch (Exception parseEx)
+                {
+                    return (false, $"サーバー応答の解析に失敗しました。\n{parseEx.Message}", null);
+                }
+
+                if (result == null)
+                    return (false, "サーバーからの応答がありません。", null);
+
+                if (!result.Success)
+                {
+                    var msg = string.IsNullOrWhiteSpace(result.ErrorMessage)
+                        ? "サーバー側で処理に失敗しました。詳細はNetSuiteのスクリプト実行ログを確認してください。"
+                        : result.ErrorMessage;
+                    return (false, msg, result);
+                }
+
+                return (true, null, result);
+            }
+            catch (OperationCanceledException)
+            {
+                WeakReferenceMessenger.Default.Send(new NetsuiteTimeoutMessage(NetsuiteClient.oauth2_client.ClientId, LocalMemory.restlets[restletName]));
+                return (false, "リクエストがタイムアウトしました。ネットワーク接続を確認してください。", null);
+            }
+            catch (Exception ex)
+            {
+                return (false, ex.Message, null);
+            }
+            finally
+            {
+                await MainThread.InvokeOnMainThreadAsync(() =>
+                {
+                    if (NetsuiteClient.loading != null && NetsuiteClient.loading.LoadingClose())
+                        NetsuiteClient.loading = null;
+                });
             }
         }
 
