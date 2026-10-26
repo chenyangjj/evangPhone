@@ -106,6 +106,9 @@ namespace EvangPL.Views.PickingDetail
         private static readonly Color InputBackgroundColor = Colors.White;
         private const int InputCornerRadius = 6;
         private static readonly Color SelectedRowColor = Color.FromArgb("#d7e8fa");
+        private static readonly Color InputDisabledBackgroundColor = Color.FromArgb("#e0e0e0");
+        private static readonly Color DisabledBorder = Color.FromArgb("#c0c0c0");
+        private static readonly Color DisabledFg = Colors.Gray;
 
 
         // ==================== コンストラクター ====================
@@ -603,7 +606,7 @@ namespace EvangPL.Views.PickingDetail
         // ==================== 未出荷品目選択テーブル（品目 / 未出荷数量 / 受注数量） ====================
         private Border BuildPackageSelectionTable()
         {
-            var headers = new List<string> { "品目", "未出荷数量", "受注数量" };
+            var headers = new List<string> { "品目", "残数量", "受注数量" };
             var columnWidths = new List<GridLength>
             {
                 new GridLength(2, GridUnitType.Star),
@@ -739,7 +742,7 @@ namespace EvangPL.Views.PickingDetail
             layout.Children.Add(new Label
             {
                 // ★Kit 対応：見出しも DisplayName（Kit 子行は「親 : 子」）
-                Text = $"明細登録（{currentPackage.DisplayName}）",
+                Text = $"明細登録",
                 FontSize = 13,
                 FontAttributes = FontAttributes.Bold
             });
@@ -791,9 +794,11 @@ namespace EvangPL.Views.PickingDetail
             }
             else
             {
-                lotLabelText = lotEditable ? "ロット (スキャン可)" : "ロット (この品目はロット管理対象外)";
+                lotLabelText = lotEditable ? "ロット (スキャン可)" : "ロット/シリアル";
             }
-            layout.Children.Add(new Label { Text = lotLabelText, FontSize = 12, TextColor = isSerial || lotEditable ? Colors.Black : Color.FromArgb("#a3a9b3") });
+
+            
+            layout.Children.Add(new Label { Text = lotLabelText, FontSize = 12, TextColor = isSerial || lotEditable ? Colors.Black : DisabledFg });
 
             var lotRow = new Grid
             {
@@ -809,7 +814,9 @@ namespace EvangPL.Views.PickingDetail
                     ? (isSerial ? "シリアル番号をスキャンまたは入力" : "スキャンまたは入力")
                     : "入力不要（管理対象外の品目）",
                 BackgroundColor = Colors.Transparent,
-                IsEnabled = lotEditable // ロット・シリアルいずれの管理対象外でもない場合のみ編集不可にする
+                IsEnabled = lotEditable,
+                TextColor = lotEditable ? Colors.Black : DisabledFg,
+                PlaceholderColor = lotEditable ? Colors.Gray : DisabledFg
             };
             if (lotEditable)
             {
@@ -817,8 +824,29 @@ namespace EvangPL.Views.PickingDetail
                 // （TextChanged で1文字ごとに判定すると誤検知しやすいため Unfocused を採用）
                 _entryLot.Unfocused += OnLotEntryUnfocused;
             }
-            lotRow.Add(WrapInputControl(_entryLot), 0, 0);
+
+            
+            lotRow.Add(WrapInputControl(_entryLot, disabled: !lotEditable), 0, 0);
+
             var lotScanBorder = BuildBarcodeIcon();
+            lotScanBorder.IsEnabled = lotEditable;
+
+            if (!lotEditable)
+            {
+                lotScanBorder.BackgroundColor = InputDisabledBackgroundColor;
+                lotScanBorder.Stroke = DisabledBorder;
+                if (lotScanBorder.Content is HorizontalStackLayout barcodeStack)
+                {
+                    foreach (var child in barcodeStack.Children)
+                    {
+                        if (child is BoxView bar)
+                        {
+                            bar.Color = DisabledFg;
+                        }
+                    }
+                }
+            }
+
             if (lotEditable)
             {
                 var lotScanTap = new TapGestureRecognizer();
@@ -841,18 +869,10 @@ namespace EvangPL.Views.PickingDetail
                 };
                 lotScanBorder.GestureRecognizers.Add(lotScanTap);
             }
-            else
-            {
-                // ロット・シリアル管理対象外の品目ではアイコンを無効化
-                lotScanBorder.Opacity = 0.5;
-                lotScanBorder.InputTransparent = true;
-            }
+
             lotRow.Add(lotScanBorder, 1, 0);
-            if (!lotEditable)
-            {
-                // ロット・シリアルいずれの管理対象外でもない場合は行全体をグレーアウトして「触れない」ことを視覚的に示す
-                lotRow.Opacity = 0.5;
-            }
+
+
             layout.Children.Add(lotRow);
 
             // 3. 数量
@@ -1119,29 +1139,13 @@ namespace EvangPL.Views.PickingDetail
         private Border BuildEditableDetailTableForCurrentPackage()
         {
             var currentPackage = _selectedPackage;
-            if (currentPackage == null || currentPackage.Details.Count == 0)
+            if (currentPackage == null)
             {
-                var emptyLabel = new Label
-                {
-                    Text = "登録済み明細(0件)",
-                    FontSize = 12,
-                    TextColor = Colors.Gray,
-                    Margin = new Thickness(0, 4, 0, 0)
-                };
-                var border = new Border
-                {
-                    Background = Colors.White,
-                    Padding = new Thickness(8),
-                    Stroke = InputBorderColor,
-                    StrokeThickness = 1,
-                    StrokeShape = new RoundRectangle { CornerRadius = 4 }
-                };
-                border.Content = emptyLabel;
-                return border;
+                return new Border { IsVisible = false };
             }
 
             var items = currentPackage.Details;
-            var lotColumnHeader = currentPackage.IsSerial ? "シリアル" : "ロット";
+            var lotColumnHeader = currentPackage.IsSerial ? "シリアル" : "登録済みロット";
             var headers = new List<string> { lotColumnHeader, "数量", "" };
             var columnWidths = new List<GridLength>
             {
@@ -1166,6 +1170,7 @@ namespace EvangPL.Views.PickingDetail
                     Padding = new Thickness(2)
                 }, c, 0);
             }
+
 
             for (int r = 0; r < items.Count; r++)
             {
@@ -1336,7 +1341,7 @@ namespace EvangPL.Views.PickingDetail
                 FontAttributes = FontAttributes.Bold
             });
 
-            var headers = new List<string> { "品目", "ロット/シリアル", "数量" };
+            var headers = new List<string> { "品目", "ロット", "数量" };
             var columnWidths = new List<GridLength>
             {
                 new GridLength(3, GridUnitType.Star),
@@ -1405,7 +1410,7 @@ namespace EvangPL.Views.PickingDetail
 
         // ==================== ヘルパー：入力コントロールをBorderでラップ ====================
         // ✅ showDropdownArrow=true で Picker 用の「▼」を右側に重ねて表示する（InputDetail.cs と同一の流儀）
-        private Border WrapInputControl(View control, bool showDropdownArrow = false)
+        private Border WrapInputControl(View control, bool showDropdownArrow = false, bool disabled = false)
         {
             View content = control;
 
@@ -1437,10 +1442,10 @@ namespace EvangPL.Views.PickingDetail
 
             return new Border
             {
-                Stroke = InputBorderColor,
+                Stroke = disabled ? DisabledBorder : InputBorderColor,               
                 StrokeThickness = 1,
                 StrokeShape = new RoundRectangle { CornerRadius = InputCornerRadius },
-                BackgroundColor = InputBackgroundColor,
+                BackgroundColor = disabled ? InputDisabledBackgroundColor : InputBackgroundColor, 
                 Padding = new Thickness(8, 0),
                 Content = content
             };
