@@ -221,7 +221,7 @@ namespace EvangPL.Views.InventoryTransfer
 
             // 対象期間
             var dateLayout = new VerticalStackLayout { Spacing = 4 };
-            dateLayout.Children.Add(new Label { Text = "対象期間:", FontSize = 11, TextColor = Colors.Black });
+            dateLayout.Children.Add(new Label { Text = "対象期間", FontSize = 11, TextColor = Colors.Black });
 
             var dateRangeGrid = new Grid
             {
@@ -289,7 +289,7 @@ namespace EvangPL.Views.InventoryTransfer
 
             // 品目キーワード
             var kwLayout = new VerticalStackLayout { Spacing = 4 };
-            kwLayout.Children.Add(new Label { Text = "品目キーワード", FontSize = 11, TextColor = Colors.Black });
+            kwLayout.Children.Add(new Label { Text = "品目キーワード (スキャン可)", FontSize = 11, TextColor = Colors.Black });
             itemKeywordEntry = new Entry
             {
                 Placeholder = "検索キーワード",
