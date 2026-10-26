@@ -246,7 +246,7 @@ namespace EvangPL.Views.StockAdjust
             UpdateDateRange(); // 初期値セット
 
             // --- 品目キーワード ---
-            var lblKeywordTitle = new Label { Text = "品目キーワード", FontSize = 11, TextColor = Colors.Black };
+            var lblKeywordTitle = new Label { Text = "品目キーワード (スキャン可)", FontSize = 11, TextColor = Colors.Black };
             keywordEntry = new Entry
             {
                 Placeholder = "検索キーワード",
