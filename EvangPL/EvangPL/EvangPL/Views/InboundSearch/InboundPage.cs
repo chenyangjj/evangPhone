@@ -235,7 +235,7 @@ namespace EvangPL.Views.InboundSearch
             };
             var dateLabel = new Label
             {
-                Text = "入庫予定日",
+                Text = "入荷予定日",
                 FontSize = 12,
                 TextColor = Colors.Black
             };
