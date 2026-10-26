@@ -90,7 +90,9 @@ namespace EvangPL.Views.InputDetail
         // ✅ 入力コントロール（Picker/Entry）の統一スタイル用定数
         private static readonly Color InputBorderColor = Color.FromArgb("#cdd2dc");
         private static readonly Color InputBackgroundColor = Colors.White;
-        private static readonly Color InputDisabledBackgroundColor = Color.FromArgb("#eceef1");
+        private static readonly Color InputDisabledBackgroundColor = Color.FromArgb("#e0e0e0");
+        private static readonly Color DisabledBorder = Color.FromArgb("#c0c0c0");
+        private static readonly Color DisabledFg = Colors.Gray;
         private const int InputCornerRadius = 6;
 
         // ✅ 選択中の行をハイライトする背景色
@@ -788,13 +790,12 @@ namespace EvangPL.Views.InputDetail
 
             return new Border
             {
-                Stroke = InputBorderColor,
+                Stroke = disabled ? DisabledBorder : InputBorderColor,
                 StrokeThickness = 1,
                 StrokeShape = new RoundRectangle { CornerRadius = InputCornerRadius },
                 BackgroundColor = disabled ? InputDisabledBackgroundColor : InputBackgroundColor,
                 Padding = new Thickness(8, 0),
-                Content = content,
-                Opacity = disabled ? 0.7 : 1.0
+                Content = content
             };
         }
 
@@ -857,7 +858,7 @@ namespace EvangPL.Views.InputDetail
                 ColumnDefinitions = { new ColumnDefinition { Width = GridLength.Star }, new ColumnDefinition { Width = 50 } }
             };
             locRow.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            layout.Children.Add(new Label { Text = "入庫先ロケーション (スキャン可)", FontSize = 12, TextColor = Colors.Black });
+            layout.Children.Add(new Label { Text = "入庫先ロケーション", FontSize = 12, TextColor = Colors.Black });
 
             var locationNames = _locationList
                 .Select(l => l.Name)
@@ -897,7 +898,7 @@ namespace EvangPL.Views.InputDetail
             string lotLabelText;
             if (!requiresLot)
             {
-                lotLabelText = "ロット / シリアル";
+                lotLabelText = "ロット / シリアル (スキャン可)";
             }
             else if (currentItem.isSerialItem)
             {
@@ -912,7 +913,7 @@ namespace EvangPL.Views.InputDetail
             {
                 Text = lotLabelText,
                 FontSize = 12,
-                TextColor = requiresLot ? Colors.Black : Color.FromArgb("#a3a9b3")
+                TextColor = requiresLot ? Colors.Black : DisabledFg
             });
 
             var lotRow = new Grid
@@ -926,7 +927,9 @@ namespace EvangPL.Views.InputDetail
             {
                 Placeholder = requiresLot ? "ロット/シリアルをスキャンまたは入力" : "入力不要（管理対象外の品目）",
                 BackgroundColor = Colors.Transparent,
-                IsEnabled = requiresLot
+                IsEnabled = requiresLot,
+                TextColor = requiresLot ? Colors.Black : DisabledFg,
+                PlaceholderColor = requiresLot ? Colors.Gray : DisabledFg
             };
             if (requiresLot)
             {
@@ -936,7 +939,22 @@ namespace EvangPL.Views.InputDetail
 
             var lotBarcodeIcon = BuildBarcodeIcon();
             lotBarcodeIcon.IsEnabled = requiresLot;
-            lotBarcodeIcon.Opacity = requiresLot ? 1.0 : 0.5;
+            if (!requiresLot)
+            {
+                lotBarcodeIcon.BackgroundColor = InputDisabledBackgroundColor; 
+                lotBarcodeIcon.Stroke = DisabledBorder;                        
+
+                if (lotBarcodeIcon.Content is HorizontalStackLayout barcodeStack)
+                {
+                    foreach (var child in barcodeStack.Children)
+                    {
+                        if (child is BoxView bar)
+                        {
+                            bar.Color = DisabledFg; // Colors.Gray
+                        }
+                    }
+                }
+            }
             if (requiresLot)
             {
                 var barcodeTap = new TapGestureRecognizer();
@@ -1020,7 +1038,7 @@ namespace EvangPL.Views.InputDetail
                 Padding = new Thickness(6, 0, 0, 0)
             }, 1, 0);
 
-            layout.Children.Add(new Label { Text = "入庫数量", FontSize = 12, TextColor = Colors.Black });
+            layout.Children.Add(new Label { Text = "数量", FontSize = 12, TextColor = Colors.Black });
             layout.Children.Add(qtyRow);
 
             // ✅ 選択中品目に絞った、未保存分のプレビュー表（ロット/数量のみ、品目列なし）
@@ -1274,12 +1292,11 @@ namespace EvangPL.Views.InputDetail
             List<GridLength> columnWidths;
             if (showItemColumn)
             {
-                headers = new List<string> { "品目", "ロット", "数量", "" };
+                headers = new List<string> { "品目", "ロット", "数量" };
                 columnWidths = new List<GridLength>
                 {
                     new GridLength(3, GridUnitType.Star),
                     new GridLength(3, GridUnitType.Star),
-                    new GridLength(1, GridUnitType.Star),
                     new GridLength(1, GridUnitType.Star)
                 };
             }
@@ -1328,26 +1345,28 @@ namespace EvangPL.Views.InputDetail
                 {
                     tableGrid.Add(new Label { Text = item.ItemCode, FontSize = 11, Padding = new Thickness(4) }, col++, dataRowIndex);
                 }
-                // ✅ ロット未入力（管理対象外品目）の場合は "-" を表示
+
                 var lotDisplayText = string.IsNullOrEmpty(item.LotNo) ? "-" : item.LotNo;
                 tableGrid.Add(new Label { Text = lotDisplayText, FontSize = 11, Padding = new Thickness(4) }, col++, dataRowIndex);
 
-                // ✅ [変更] 数量表示：単位（item.Unit）を付ける。空なら「個」。
                 var qtyText = $"{item.Qty}{GetUnitDisplay(item.Unit)}";
                 tableGrid.Add(new Label { Text = qtyText, FontSize = 11, Padding = new Thickness(4) }, col++, dataRowIndex);
 
-                var deleteLabel = new Label
+                if (!showItemColumn)
                 {
-                    Text = "❌",
-                    FontSize = 11,
-                    Padding = new Thickness(4),
-                    HorizontalOptions = LayoutOptions.Center
-                };
-                var capturedItem = item; // ✅ クロージャ用（実体参照なのでインデックスずれの心配がない）
-                var tapGesture = new TapGestureRecognizer();
-                tapGesture.Tapped += (s, e) => OnDeletePendingLot(capturedItem);
-                deleteLabel.GestureRecognizers.Add(tapGesture);
-                tableGrid.Add(deleteLabel, col, dataRowIndex);
+                    var deleteLabel = new Label
+                    {
+                        Text = "❌",
+                        FontSize = 11,
+                        Padding = new Thickness(4),
+                        HorizontalOptions = LayoutOptions.Center
+                    };
+                    var capturedItem = item;
+                    var tapGesture = new TapGestureRecognizer();
+                    tapGesture.Tapped += (s, e) => OnDeletePendingLot(capturedItem);
+                    deleteLabel.GestureRecognizers.Add(tapGesture);
+                    tableGrid.Add(deleteLabel, col, dataRowIndex);
+                }
             }
 
             var tableBorder = new Border
@@ -1360,7 +1379,6 @@ namespace EvangPL.Views.InputDetail
             tableBorder.Content = tableGrid;
             return tableBorder;
         }
-
         // ✅ 入力中の _pendingLots（全品目分）をまとめてRESTletへ送る。ActionType="SAVE" を明示
         private async void OnSaveButtonClicked(object sender, EventArgs e)
         {
