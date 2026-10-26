@@ -225,7 +225,7 @@ namespace EvangPL.Views.OutboundHistory
             Grid.SetColumn(dateLayout, 0);
 
             var locLayout = new VerticalStackLayout { Spacing = 4 };
-            locLayout.Children.Add(new Label { Text = "ロケーション:", FontSize = 12, TextColor = Colors.Black });
+            locLayout.Children.Add(new Label { Text = "ロケーション", FontSize = 12, TextColor = Colors.Black });
 
             locationPicker = new Picker
             {
@@ -271,7 +271,7 @@ namespace EvangPL.Views.OutboundHistory
             // --- 品目 (キーワード) ---
             // --- 品目 (キーワード) ---
             var itemLayout = new VerticalStackLayout { Spacing = 4 };
-            itemLayout.Children.Add(new Label { Text = "品目 (スキャン可):", FontSize = 12, TextColor = Colors.Black });
+            itemLayout.Children.Add(new Label { Text = "品目 (スキャン可)", FontSize = 12, TextColor = Colors.Black });
 
             itemKeywordEntry = new Entry
             {
