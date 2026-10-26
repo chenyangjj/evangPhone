@@ -30,6 +30,7 @@ namespace EvangPL.Views.InventoryTransferPageDetails
         private Border? _lotBarcodeBorder;
         private HorizontalStackLayout? _lotBarcodeBars;
         private Button? _addLotButton;
+        private Label? _lotLabel;
 
         private readonly List<PendingLotItem> _pendingLots = new List<PendingLotItem>();
         private readonly List<TransferDetailItem> _details = new List<TransferDetailItem>();
@@ -368,12 +369,13 @@ namespace EvangPL.Views.InventoryTransferPageDetails
                 IsVisible = true
             };
 
-            _lotSectionContainer.Children.Add(new Label
+            _lotLabel = new Label
             {
                 Text = "ロット / シリアル (スキャン可)",
                 FontSize = 12,
-                TextColor = Colors.Black
-            });
+                TextColor = Colors.Black 
+            };
+            _lotSectionContainer.Children.Add(_lotLabel);
 
             var lotRow = new Grid
             {
@@ -389,6 +391,7 @@ namespace EvangPL.Views.InventoryTransferPageDetails
                 Placeholder = "ロット/シリアルをスキャンまたは入力",
                 BackgroundColor = Colors.Transparent,
                 TextColor = Colors.Black,
+                FontSize = 13,
                 PlaceholderColor = Colors.Gray
             };
             _lotEntryBorder = WrapInputControl(_lotEntry);
@@ -514,6 +517,10 @@ namespace EvangPL.Views.InventoryTransferPageDetails
 
         private void SetLotInputEnabled(bool enabled)
         {
+            if (_lotLabel != null)
+            {
+                _lotLabel.TextColor = enabled ? Colors.Black : DisabledFg;
+            }
             if (_lotEntry != null)
             {
                 _lotEntry.IsEnabled = enabled;
