@@ -851,7 +851,14 @@ namespace EvangPL.Views.InputDetail
             };
 
             var layout = new VerticalStackLayout { Spacing = 10 };
-            layout.Children.Add(new Label { Text = "明細登録", FontSize = 13, FontAttributes = FontAttributes.Bold });
+            var displayItem = string.IsNullOrEmpty(currentItem.parentItemCode) ? currentItem.itemCode : currentItem.itemDisplayName;
+
+            layout.Children.Add(new Label
+            {
+                Text = $"明細登録（{displayItem}）",
+                FontSize = 13,
+                FontAttributes = FontAttributes.Bold
+            });
 
             var locRow = new Grid
             {
@@ -1292,11 +1299,12 @@ namespace EvangPL.Views.InputDetail
             List<GridLength> columnWidths;
             if (showItemColumn)
             {
-                headers = new List<string> { "品目", "ロット", "数量" };
+                headers = new List<string> { "品目", "ロット", "数量", "" };
                 columnWidths = new List<GridLength>
                 {
                     new GridLength(3, GridUnitType.Star),
                     new GridLength(3, GridUnitType.Star),
+                    new GridLength(1, GridUnitType.Star),
                     new GridLength(1, GridUnitType.Star)
                 };
             }
@@ -1352,8 +1360,7 @@ namespace EvangPL.Views.InputDetail
                 var qtyText = $"{item.Qty}{GetUnitDisplay(item.Unit)}";
                 tableGrid.Add(new Label { Text = qtyText, FontSize = 11, Padding = new Thickness(4) }, col++, dataRowIndex);
 
-                if (!showItemColumn)
-                {
+                
                     var deleteLabel = new Label
                     {
                         Text = "❌",
@@ -1366,7 +1373,7 @@ namespace EvangPL.Views.InputDetail
                     tapGesture.Tapped += (s, e) => OnDeletePendingLot(capturedItem);
                     deleteLabel.GestureRecognizers.Add(tapGesture);
                     tableGrid.Add(deleteLabel, col, dataRowIndex);
-                }
+                
             }
 
             var tableBorder = new Border
