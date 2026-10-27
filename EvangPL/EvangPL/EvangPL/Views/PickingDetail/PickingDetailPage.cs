@@ -742,7 +742,7 @@ namespace EvangPL.Views.PickingDetail
             layout.Children.Add(new Label
             {
                 // ★Kit 対応：見出しも DisplayName（Kit 子行は「親 : 子」）
-                Text = $"明細登録",
+                Text = $"明細登録（{currentPackage.DisplayName}）",
                 FontSize = 13,
                 FontAttributes = FontAttributes.Bold
             });
@@ -794,7 +794,7 @@ namespace EvangPL.Views.PickingDetail
             }
             else
             {
-                lotLabelText = lotEditable ? "ロット (スキャン可)" : "ロット/シリアル";
+                lotLabelText = lotEditable ? "ロット (スキャン可)" : "ロット/シリアル (スキャン可)";
             }
 
             
@@ -1341,11 +1341,12 @@ namespace EvangPL.Views.PickingDetail
                 FontAttributes = FontAttributes.Bold
             });
 
-            var headers = new List<string> { "品目", "ロット", "数量" };
+            var headers = new List<string> { "品目", "ロット", "数量", "" };
             var columnWidths = new List<GridLength>
             {
                 new GridLength(3, GridUnitType.Star),
                 new GridLength(3, GridUnitType.Star),
+                new GridLength(1, GridUnitType.Star),
                 new GridLength(1, GridUnitType.Star)
             };
 
@@ -1385,6 +1386,23 @@ namespace EvangPL.Views.PickingDetail
                 // ✅ [変更] 数量表示：単位（item.Detail.Unit）を付ける。空なら「個」。
                 var qtyText = $"{item.Detail.DetailQty}{GetUnitDisplay(item.Detail.Unit)}";
                 tableGrid.Add(new Label { Text = qtyText, FontSize = 11, Padding = new Thickness(4) }, 2, dataRowIndex);
+                var deleteLabel = new Label
+                {
+                    Text = "❌",
+                    FontSize = 11,
+                    Padding = new Thickness(4),
+                    HorizontalOptions = LayoutOptions.Center
+                };
+                var capturedItem = item;
+                var tapGesture = new TapGestureRecognizer();
+                tapGesture.Tapped += (s, e) =>
+                {
+                    capturedItem.Package.Details.Remove(capturedItem.Detail);
+                    RefreshHeaderAndDetailArea(); 
+                    RefreshBottomPendingTable();  
+                };
+                deleteLabel.GestureRecognizers.Add(tapGesture);
+                tableGrid.Add(deleteLabel, 3, dataRowIndex);
             }
 
             var tableBorder = new Border
